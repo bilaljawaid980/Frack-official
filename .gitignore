@@ -1,0 +1,92 @@
+# =========================
+# FRACKS Monorepo .gitignore
+# Covers: frontend, backend, contracts, scripts
+# =========================
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Node / JS / TS
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Next.js / web builds
+.next/
+out/
+build/
+dist/
+
+# Rust / Anchor / Solana
+target/
+**/target/
+.anchor/
+.cargo/
+.rustup/
+.rustc_info.json
+test-ledger/
+.local-validator-ledger/
+wasm32/
+pkg/
+*.profraw
+*.profdata
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.env.local
+*.secret
+*.key
+*.pem
+
+# App-specific generated/runtime files
+.last_code_id
+.last_contract_address
+tx_*.json
+*_resp.json
+*_resp_*.json
+post_exec_queries*.json
+
+# Local temp / backups
+tmp/
+*.tmp
+*.bak
+*.old
+backup/
+.repo-backups/
+
+# Vercel
+.vercel/
+
+# Keep important artifacts/docs/examples/scripts
+!artifacts/
+!schema/
+!docs/
+!examples/
+!scripts/
+!**/artifacts/
+!**/schema/
+!**/artifacts/*.wasm

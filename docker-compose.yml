@@ -1,0 +1,143 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: fracks-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-1234}
+      POSTGRES_DB: ${DB_NAME:-rwaPlatformDB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "7432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks:
+      - backend-db
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: fracks-migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-1234}@db:5432/${DB_NAME:-rwaPlatformDB}?schema=public
+    command: ["pnpm", "prisma", "migrate", "deploy"]
+    restart: "no"
+    networks:
+      - backend-db
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: fracks-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      PORT: 4082
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-1234}@db:5432/${DB_NAME:-rwaPlatformDB}?schema=public
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-011ad73351af6814a808ad96bf12627f}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-9be24ae2b9951d80c07137bd6663910a}
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      SOLANA_RPC_URL: ${SOLANA_RPC_URL:-https://api.testnet.solana.com}
+      SOLANA_CLUSTER: testnet
+      FRACKS_FACTORY: 3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M
+      FRACKS_TOKEN_MINT: 99eSVUsJKBHL7JMiVVjCBqMShxX74Nb7d5JkDn19NQAR
+      FRACKS_IRP: 6dDKwtRbGkHJhU9LztpDkBC3fUdM46WeKJdrASFikce6
+      FRACKS_IRS: CsrdR7QK3ma6hxU46Cp4DZHAdbGPWPiwmGjhKsR9VzdS
+      FRACKS_TIR: Am5W7oEe8NCU4jdLP8qyUT3gjUPCDsvTSxGhdCQp1ETS
+      FRACKS_CTR: B15EFQKwnfbNHXHhPVvVcw18PaBeTDsRLNRno3QS8Yna
+      FRACKS_COMPLIANCE: 9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d
+      INDEXER_REST_ENDPOINT: https://public-zigchain-testnet-lcd.numia.xyz
+      INDEXER_FACTORY: zig14f2w4p9gdgkdh66qg55cs6mlf0ya9grl7uytnc4aw8wz8keh6g9q6sxd7k
+      INDEXER_INTERVAL_MS: 120000
+    ports:
+      - "4082:4082"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4082/assets >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - backend-db
+      - frontend-public
+
+  indexer:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: fracks-indexer
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      backend:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-1234}@db:5432/${DB_NAME:-rwaPlatformDB}?schema=public
+      SOLANA_RPC_URL: ${SOLANA_RPC_URL:-https://api.testnet.solana.com}
+      INDEXER_FACTORY: zig14f2w4p9gdgkdh66qg55cs6mlf0ya9grl7uytnc4aw8wz8keh6g9q6sxd7k
+      INDEXER_REST_ENDPOINT: https://public-zigchain-testnet-lcd.numia.xyz
+      INDEXER_INTERVAL_MS: 120000
+    command: ["pnpm", "run", "indexer:once"]
+    networks:
+      - backend-db
+      - backend-egress
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-http://localhost:4082}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:4083}
+    container_name: fracks-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    environment:
+      BACKEND_URL: http://backend:4082
+      PORT: 4083
+      NEXT_PUBLIC_RPC_URL: https://api.testnet.solana.com
+      NEXT_PUBLIC_SOLANA_CLUSTER: testnet
+      NEXT_PUBLIC_SOLANA_EXPLORER: https://explorer.solana.com
+      NEXT_PUBLIC_FRACKS_FACTORY: 3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M
+      NEXT_PUBLIC_FRACKS_TOKEN_MINT: 99eSVUsJKBHL7JMiVVjCBqMShxX74Nb7d5JkDn19NQAR
+      NEXT_PUBLIC_FRACKS_IRP: 6dDKwtRbGkHJhU9LztpDkBC3fUdM46WeKJdrASFikce6
+      NEXT_PUBLIC_FRACKS_IRS: CsrdR7QK3ma6hxU46Cp4DZHAdbGPWPiwmGjhKsR9VzdS
+      NEXT_PUBLIC_FRACKS_TIR: Am5W7oEe8NCU4jdLP8qyUT3gjUPCDsvTSxGhdCQp1ETS
+      NEXT_PUBLIC_FRACKS_CTR: B15EFQKwnfbNHXHhPVvVcw18PaBeTDsRLNRno3QS8Yna
+      NEXT_PUBLIC_FRACKS_COMPLIANCE: 9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d
+      NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-http://localhost:4082}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:4083}
+    ports:
+      - "4083:4083"
+    networks:
+      - frontend-public
+
+volumes:
+  postgres_data:
+
+networks:
+  backend-db:
+  backend-egress:
+  frontend-public:

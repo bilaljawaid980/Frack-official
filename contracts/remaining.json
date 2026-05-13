@@ -1,0 +1,17 @@
+[
+  {
+    "pubkey": "525FGdM1X9jcHtsTrdnxzg99ApkQ7Y13R9icaXyqH4pb",
+    "isWritable": false,
+    "isSigner": false
+  },
+  {
+    "pubkey": "55jBsiUZZ38temigTPqVd7CLHADS1jQXU1PKFbwknj53",
+    "isWritable": false,
+    "isSigner": false
+  },
+  {
+    "pubkey": "HmRS2PtcF8qmaFFHmovsFbEMLPux7ev1Law1Gfi7wN1j",
+    "isWritable": false,
+    "isSigner": false
+  }
+]

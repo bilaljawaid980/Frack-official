@@ -1,0 +1,32 @@
+[workspace]
+members = [
+  "programs/fracks-factory",
+  "programs/fracks-token",
+  "programs/fracks-token-hook",
+  "programs/fracks-fid",
+  "programs/fracks-irp",
+  "programs/fracks-irs",
+  "programs/fracks-tir",
+  "programs/fracks-ctr",
+  "programs/fracks-compliance",
+  "programs/modules/mod-max-investors",
+  "programs/modules/mod-country-restrict",
+  "programs/modules/mod-max-balance",
+  "programs/modules/mod-max-transfer",
+  "programs/modules/mod-lockup",
+  "programs/modules/mod-daily-limit",
+  "programs/modules/mod-supply-cap",
+  "programs/modules/mod-country-cap",
+]
+resolver = "2"
+
+[workspace.dependencies]
+anchor-lang = { version = "0.32.1", features = ["init-if-needed", "interface-instructions"] }
+anchor-spl = "0.32.1"
+solana-instructions-sysvar = "3.1.0"
+solana-program = "2.3.0"
+
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1

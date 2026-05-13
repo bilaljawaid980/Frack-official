@@ -1,0 +1,35 @@
+FROM node:20-alpine AS builder
+
+RUN corepack enable && corepack prepare pnpm@10.23.0 --activate
+
+WORKDIR /app
+
+COPY frontend/package.json frontend/pnpm-lock.yaml* ./
+
+RUN pnpm install --frozen-lockfile
+
+COPY frontend/ .
+
+ARG NEXT_PUBLIC_BACKEND_URL=http://localhost:4082
+ARG NEXT_PUBLIC_SITE_URL=http://localhost:4083
+ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
+
+RUN pnpm run build
+
+FROM node:20-alpine
+
+RUN corepack enable && corepack prepare pnpm@10.23.0 --activate
+
+WORKDIR /app
+
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./
+
+ENV NODE_ENV=production
+
+EXPOSE 4083
+
+CMD ["pnpm", "run", "start"]

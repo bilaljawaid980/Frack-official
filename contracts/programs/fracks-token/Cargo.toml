@@ -1,0 +1,25 @@
+[package]
+name = "fracks-token"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "fracks_token"
+
+[features]
+no-entrypoint = []
+no-idl = []
+cpi = ["no-entrypoint"]
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+
+[dependencies]
+anchor-lang = { workspace = true }
+anchor-spl = { workspace = true }
+solana-program = { workspace = true }
+spl-transfer-hook-interface = "0.10.0"
+spl-tlv-account-resolution = "0.10.0"
+fracks-irp = { path = "../fracks-irp", features = ["cpi"] }
+fracks-compliance = { path = "../fracks-compliance", features = ["cpi"] }
+fracks-irs = { path = "../fracks-irs", features = ["cpi"] }
+fracks-token-hook = { path = "../fracks-token-hook", features = ["cpi"] }

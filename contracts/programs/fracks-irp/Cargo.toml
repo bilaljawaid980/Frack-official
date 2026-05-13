@@ -1,0 +1,20 @@
+[package]
+name = "fracks-irp"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "fracks_irp"
+
+[features]
+no-entrypoint = []
+no-idl = []
+cpi = ["no-entrypoint"]
+idl-build = ["anchor-lang/idl-build"]
+
+[dependencies]
+anchor-lang = { workspace = true }
+fracks-fid = { path = "../fracks-fid", features = ["cpi"] }
+fracks-irs = { path = "../fracks-irs", features = ["cpi"] }
+fracks-tir = { path = "../fracks-tir", features = ["cpi"] }

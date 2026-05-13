@@ -1,0 +1,7474 @@
+[
+  {
+    "program": "fracks_compliance",
+    "address": "9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d",
+    "instruction": "bind_module",
+    "script": "scripts/cli/fracks_compliance/bind_module.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "module_pubkey",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "compliance_state"
+        ]
+      },
+      {
+        "name": "compliance_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                99,
+                111,
+                109,
+                112,
+                108,
+                105,
+                97,
+                110,
+                99,
+                101,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "compliance_state.token_mint",
+              "account": "ComplianceState"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_compliance",
+    "address": "9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d",
+    "instruction": "call_module_function",
+    "script": "scripts/cli/fracks_compliance/call_module_function.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "data",
+        "type": "bytes"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "signer": true,
+        "relations": [
+          "compliance_state"
+        ]
+      },
+      {
+        "name": "compliance_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                99,
+                111,
+                109,
+                112,
+                108,
+                105,
+                97,
+                110,
+                99,
+                101,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "compliance_state.token_mint",
+              "account": "ComplianceState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "module_program"
+      }
+    ]
+  },
+  {
+    "program": "fracks_compliance",
+    "address": "9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d",
+    "instruction": "can_transfer",
+    "script": "scripts/cli/fracks_compliance/can_transfer.js",
+    "returns": "bool",
+    "args": [
+      {
+        "name": "_from",
+        "type": "pubkey"
+      },
+      {
+        "name": "_to",
+        "type": "pubkey"
+      },
+      {
+        "name": "amount",
+        "type": "u64"
+      },
+      {
+        "name": "_from_balance",
+        "type": "u64"
+      },
+      {
+        "name": "to_balance",
+        "type": "u64"
+      },
+      {
+        "name": "from_country",
+        "type": "u16"
+      },
+      {
+        "name": "to_country",
+        "type": "u16"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "compliance_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                99,
+                111,
+                109,
+                112,
+                108,
+                105,
+                97,
+                110,
+                99,
+                101,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "compliance_state.token_mint",
+              "account": "ComplianceState"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_compliance",
+    "address": "9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d",
+    "instruction": "created",
+    "script": "scripts/cli/fracks_compliance/created.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "_to",
+        "type": "pubkey"
+      },
+      {
+        "name": "amount",
+        "type": "u64"
+      },
+      {
+        "name": "to_balance_after",
+        "type": "u64"
+      },
+      {
+        "name": "_to_country",
+        "type": "u16"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "compliance_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                99,
+                111,
+                109,
+                112,
+                108,
+                105,
+                97,
+                110,
+                99,
+                101,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "compliance_state.token_mint",
+              "account": "ComplianceState"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_compliance",
+    "address": "9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d",
+    "instruction": "destroyed",
+    "script": "scripts/cli/fracks_compliance/destroyed.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "_from",
+        "type": "pubkey"
+      },
+      {
+        "name": "amount",
+        "type": "u64"
+      },
+      {
+        "name": "from_balance_after",
+        "type": "u64"
+      },
+      {
+        "name": "_from_country",
+        "type": "u16"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "compliance_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                99,
+                111,
+                109,
+                112,
+                108,
+                105,
+                97,
+                110,
+                99,
+                101,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "compliance_state.token_mint",
+              "account": "ComplianceState"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_compliance",
+    "address": "9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d",
+    "instruction": "initialize_compliance",
+    "script": "scripts/cli/fracks_compliance/initialize_compliance.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "token_mint",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "compliance_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                99,
+                111,
+                109,
+                112,
+                108,
+                105,
+                97,
+                110,
+                99,
+                101,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "arg",
+              "path": "token_mint"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "fracks_compliance",
+    "address": "9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d",
+    "instruction": "set_modules_paused",
+    "script": "scripts/cli/fracks_compliance/set_modules_paused.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "paused",
+        "type": "bool"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "compliance_state"
+        ]
+      },
+      {
+        "name": "compliance_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                99,
+                111,
+                109,
+                112,
+                108,
+                105,
+                97,
+                110,
+                99,
+                101,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "compliance_state.token_mint",
+              "account": "ComplianceState"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_compliance",
+    "address": "9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d",
+    "instruction": "transferred",
+    "script": "scripts/cli/fracks_compliance/transferred.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "_from",
+        "type": "pubkey"
+      },
+      {
+        "name": "_to",
+        "type": "pubkey"
+      },
+      {
+        "name": "amount",
+        "type": "u64"
+      },
+      {
+        "name": "from_balance_after",
+        "type": "u64"
+      },
+      {
+        "name": "to_balance_after",
+        "type": "u64"
+      },
+      {
+        "name": "_from_country",
+        "type": "u16"
+      },
+      {
+        "name": "_to_country",
+        "type": "u16"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "compliance_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                99,
+                111,
+                109,
+                112,
+                108,
+                105,
+                97,
+                110,
+                99,
+                101,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "compliance_state.token_mint",
+              "account": "ComplianceState"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_compliance",
+    "address": "9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d",
+    "instruction": "unbind_module",
+    "script": "scripts/cli/fracks_compliance/unbind_module.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "module_pubkey",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "compliance_state"
+        ]
+      },
+      {
+        "name": "compliance_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                99,
+                111,
+                109,
+                112,
+                108,
+                105,
+                97,
+                110,
+                99,
+                101,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "compliance_state.token_mint",
+              "account": "ComplianceState"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_ctr",
+    "address": "B15EFQKwnfbNHXHhPVvVcw18PaBeTDsRLNRno3QS8Yna",
+    "instruction": "add_claim_topic",
+    "script": "scripts/cli/fracks_ctr/add_claim_topic.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "topic_id",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "ctr_state"
+        ]
+      },
+      {
+        "name": "ctr_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                99,
+                116,
+                114,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "ctr_state.token_mint",
+              "account": "ClaimTopicsState"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_ctr",
+    "address": "B15EFQKwnfbNHXHhPVvVcw18PaBeTDsRLNRno3QS8Yna",
+    "instruction": "initialize_ctr",
+    "script": "scripts/cli/fracks_ctr/initialize_ctr.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "token_mint",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "ctr_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                99,
+                116,
+                114,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "arg",
+              "path": "token_mint"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "fracks_ctr",
+    "address": "B15EFQKwnfbNHXHhPVvVcw18PaBeTDsRLNRno3QS8Yna",
+    "instruction": "remove_claim_topic",
+    "script": "scripts/cli/fracks_ctr/remove_claim_topic.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "topic_id",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "ctr_state"
+        ]
+      },
+      {
+        "name": "ctr_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                99,
+                116,
+                114,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "ctr_state.token_mint",
+              "account": "ClaimTopicsState"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_factory",
+    "address": "3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M",
+    "instruction": "accept_factory_ownership",
+    "script": "scripts/cli/fracks_factory/accept_factory_ownership.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "pending_owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "factory_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                102,
+                97,
+                99,
+                116,
+                111,
+                114,
+                121,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_factory",
+    "address": "3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M",
+    "instruction": "create_token_mint",
+    "script": "scripts/cli/fracks_factory/create_token_mint.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "decimals",
+        "type": "u8"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "payer",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "token_state"
+      },
+      {
+        "name": "token_mint_account",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "hook_program",
+        "address": "CQwdsA97gSiPMUzNXjS22AUu6HmvzMK2XZVqhswYEHLi"
+      },
+      {
+        "name": "token_2022_program",
+        "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "fracks_factory",
+    "address": "3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M",
+    "instruction": "deploy_token_suite",
+    "script": "scripts/cli/fracks_factory/deploy_token_suite.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "args",
+        "type": {
+          "defined": {
+            "name": "DeployTokenSuiteArgs"
+          }
+        }
+      }
+    ],
+    "accounts": [
+      {
+        "name": "issuer",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "factory_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                102,
+                97,
+                99,
+                116,
+                111,
+                114,
+                121,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "deployment",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                100,
+                101,
+                112,
+                108,
+                111,
+                121,
+                109,
+                101,
+                110,
+                116
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "issuer"
+            },
+            {
+              "kind": "arg",
+              "path": "args.salt"
+            }
+          ]
+        }
+      },
+      {
+        "name": "token_state",
+        "writable": true
+      },
+      {
+        "name": "owner_state",
+        "writable": true
+      },
+      {
+        "name": "irs_state",
+        "writable": true
+      },
+      {
+        "name": "tir_state",
+        "writable": true
+      },
+      {
+        "name": "ctr_state",
+        "writable": true
+      },
+      {
+        "name": "irp_state",
+        "writable": true
+      },
+      {
+        "name": "compliance_state",
+        "writable": true
+      },
+      {
+        "name": "token_mint_account"
+      },
+      {
+        "name": "extra_account_metas",
+        "writable": true
+      },
+      {
+        "name": "token_program",
+        "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn"
+      },
+      {
+        "name": "hook_program",
+        "address": "CQwdsA97gSiPMUzNXjS22AUu6HmvzMK2XZVqhswYEHLi"
+      },
+      {
+        "name": "irp_program",
+        "address": "6dDKwtRbGkHJhU9LztpDkBC3fUdM46WeKJdrASFikce6"
+      },
+      {
+        "name": "irs_program",
+        "address": "CsrdR7QK3ma6hxU46Cp4DZHAdbGPWPiwmGjhKsR9VzdS"
+      },
+      {
+        "name": "tir_program",
+        "address": "Am5W7oEe8NCU4jdLP8qyUT3gjUPCDsvTSxGhdCQp1ETS"
+      },
+      {
+        "name": "ctr_program",
+        "address": "B15EFQKwnfbNHXHhPVvVcw18PaBeTDsRLNRno3QS8Yna"
+      },
+      {
+        "name": "compliance_program",
+        "address": "9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d"
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "fracks_factory",
+    "address": "3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M",
+    "instruction": "initialize_factory",
+    "script": "scripts/cli/fracks_factory/initialize_factory.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "factory_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                102,
+                97,
+                99,
+                116,
+                111,
+                114,
+                121,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "token_program",
+        "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn"
+      },
+      {
+        "name": "irp_program",
+        "address": "6dDKwtRbGkHJhU9LztpDkBC3fUdM46WeKJdrASFikce6"
+      },
+      {
+        "name": "irs_program",
+        "address": "CsrdR7QK3ma6hxU46Cp4DZHAdbGPWPiwmGjhKsR9VzdS"
+      },
+      {
+        "name": "tir_program",
+        "address": "Am5W7oEe8NCU4jdLP8qyUT3gjUPCDsvTSxGhdCQp1ETS"
+      },
+      {
+        "name": "ctr_program",
+        "address": "B15EFQKwnfbNHXHhPVvVcw18PaBeTDsRLNRno3QS8Yna"
+      },
+      {
+        "name": "compliance_program",
+        "address": "9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d"
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "fracks_factory",
+    "address": "3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M",
+    "instruction": "transfer_factory_ownership",
+    "script": "scripts/cli/fracks_factory/transfer_factory_ownership.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "new_owner",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "factory_state"
+        ]
+      },
+      {
+        "name": "factory_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                102,
+                97,
+                99,
+                116,
+                111,
+                114,
+                121,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_factory",
+    "address": "3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M",
+    "instruction": "update_program_ids",
+    "script": "scripts/cli/fracks_factory/update_program_ids.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "program_ids",
+        "type": {
+          "defined": {
+            "name": "ProgramIds"
+          }
+        }
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "factory_state"
+        ]
+      },
+      {
+        "name": "factory_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                102,
+                97,
+                99,
+                116,
+                111,
+                114,
+                121,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_fid",
+    "address": "7Y6WJtDmRMcRYgENfKATsGnQTQJ2wAQfF3LhoBt3KbBH",
+    "instruction": "add_claim",
+    "script": "scripts/cli/fracks_fid/add_claim.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "topic",
+        "type": "u64"
+      },
+      {
+        "name": "data_hash",
+        "type": {
+          "array": [
+            "u8",
+            32
+          ]
+        }
+      },
+      {
+        "name": "signature",
+        "type": {
+          "array": [
+            "u8",
+            64
+          ]
+        }
+      },
+      {
+        "name": "expires_at",
+        "type": "i64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "issuer_owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "issuer_fid",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                102,
+                105,
+                100
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "issuer_fid.owner",
+              "account": "FidAccount"
+            }
+          ]
+        }
+      },
+      {
+        "name": "target_fid",
+        "writable": true
+      },
+      {
+        "name": "claim",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                99,
+                108,
+                97,
+                105,
+                109
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "target_fid"
+            },
+            {
+              "kind": "account",
+              "path": "target_fid.claim_count",
+              "account": "FidAccount"
+            }
+          ]
+        }
+      },
+      {
+        "name": "instructions_sysvar"
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "fracks_fid",
+    "address": "7Y6WJtDmRMcRYgENfKATsGnQTQJ2wAQfF3LhoBt3KbBH",
+    "instruction": "create_fid",
+    "script": "scripts/cli/fracks_fid/create_fid.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "is_issuer",
+        "type": "bool"
+      },
+      {
+        "name": "country",
+        "type": "u16"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "fid",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                102,
+                105,
+                100
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "owner"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "fracks_fid",
+    "address": "7Y6WJtDmRMcRYgENfKATsGnQTQJ2wAQfF3LhoBt3KbBH",
+    "instruction": "remove_claim",
+    "script": "scripts/cli/fracks_fid/remove_claim.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "authority",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "fid"
+      },
+      {
+        "name": "claim",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                99,
+                108,
+                97,
+                105,
+                109
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "claim.fid",
+              "account": "ClaimAccount"
+            },
+            {
+              "kind": "account",
+              "path": "claim.claim_id",
+              "account": "ClaimAccount"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_fid",
+    "address": "7Y6WJtDmRMcRYgENfKATsGnQTQJ2wAQfF3LhoBt3KbBH",
+    "instruction": "revoke_claim",
+    "script": "scripts/cli/fracks_fid/revoke_claim.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "issuer_owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "issuer_fid",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                102,
+                105,
+                100
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "issuer_fid.owner",
+              "account": "FidAccount"
+            }
+          ]
+        }
+      },
+      {
+        "name": "claim",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                99,
+                108,
+                97,
+                105,
+                109
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "claim.fid",
+              "account": "ClaimAccount"
+            },
+            {
+              "kind": "account",
+              "path": "claim.claim_id",
+              "account": "ClaimAccount"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_fid",
+    "address": "7Y6WJtDmRMcRYgENfKATsGnQTQJ2wAQfF3LhoBt3KbBH",
+    "instruction": "set_management_key",
+    "script": "scripts/cli/fracks_fid/set_management_key.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "new_key",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "fid"
+        ]
+      },
+      {
+        "name": "fid",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                102,
+                105,
+                100
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "owner"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_fid",
+    "address": "7Y6WJtDmRMcRYgENfKATsGnQTQJ2wAQfF3LhoBt3KbBH",
+    "instruction": "set_signer_key",
+    "script": "scripts/cli/fracks_fid/set_signer_key.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "new_key",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "authority",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "fid",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                102,
+                105,
+                100
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "fid.owner",
+              "account": "FidAccount"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_irp",
+    "address": "6dDKwtRbGkHJhU9LztpDkBC3fUdM46WeKJdrASFikce6",
+    "instruction": "add_identity_agent",
+    "script": "scripts/cli/fracks_irp/add_identity_agent.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "agent",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "registry_state"
+        ]
+      },
+      {
+        "name": "registry_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                105,
+                114,
+                112,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "registry_state.token_mint",
+              "account": "IdentityRegistryState"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_irp",
+    "address": "6dDKwtRbGkHJhU9LztpDkBC3fUdM46WeKJdrASFikce6",
+    "instruction": "initialize_registry",
+    "script": "scripts/cli/fracks_irp/initialize_registry.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "token_mint",
+        "type": "pubkey"
+      },
+      {
+        "name": "irs",
+        "type": "pubkey"
+      },
+      {
+        "name": "tir",
+        "type": "pubkey"
+      },
+      {
+        "name": "ctr",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "registry_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                105,
+                114,
+                112,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "arg",
+              "path": "token_mint"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "fracks_irp",
+    "address": "6dDKwtRbGkHJhU9LztpDkBC3fUdM46WeKJdrASFikce6",
+    "instruction": "is_verified",
+    "script": "scripts/cli/fracks_irp/is_verified.js",
+    "returns": "bool",
+    "args": [
+      {
+        "name": "wallet",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "registry_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                105,
+                114,
+                112,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "registry_state.token_mint",
+              "account": "IdentityRegistryState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "irs_state"
+      },
+      {
+        "name": "tir_state"
+      },
+      {
+        "name": "ctr_state"
+      },
+      {
+        "name": "wallet_identity"
+      }
+    ]
+  },
+  {
+    "program": "fracks_irp",
+    "address": "6dDKwtRbGkHJhU9LztpDkBC3fUdM46WeKJdrASFikce6",
+    "instruction": "remove_identity_agent",
+    "script": "scripts/cli/fracks_irp/remove_identity_agent.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "agent",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "registry_state"
+        ]
+      },
+      {
+        "name": "registry_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                105,
+                114,
+                112,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "registry_state.token_mint",
+              "account": "IdentityRegistryState"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_irp",
+    "address": "6dDKwtRbGkHJhU9LztpDkBC3fUdM46WeKJdrASFikce6",
+    "instruction": "transfer_registry_ownership",
+    "script": "scripts/cli/fracks_irp/transfer_registry_ownership.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "new_owner",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "registry_state"
+        ]
+      },
+      {
+        "name": "registry_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                105,
+                114,
+                112,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "registry_state.token_mint",
+              "account": "IdentityRegistryState"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_irp",
+    "address": "6dDKwtRbGkHJhU9LztpDkBC3fUdM46WeKJdrASFikce6",
+    "instruction": "update_ctr_reference",
+    "script": "scripts/cli/fracks_irp/update_ctr_reference.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "new_ctr",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "registry_state"
+        ]
+      },
+      {
+        "name": "registry_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                105,
+                114,
+                112,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "registry_state.token_mint",
+              "account": "IdentityRegistryState"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_irp",
+    "address": "6dDKwtRbGkHJhU9LztpDkBC3fUdM46WeKJdrASFikce6",
+    "instruction": "update_irs_reference",
+    "script": "scripts/cli/fracks_irp/update_irs_reference.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "new_irs",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "registry_state"
+        ]
+      },
+      {
+        "name": "registry_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                105,
+                114,
+                112,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "registry_state.token_mint",
+              "account": "IdentityRegistryState"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_irp",
+    "address": "6dDKwtRbGkHJhU9LztpDkBC3fUdM46WeKJdrASFikce6",
+    "instruction": "update_tir_reference",
+    "script": "scripts/cli/fracks_irp/update_tir_reference.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "new_tir",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "registry_state"
+        ]
+      },
+      {
+        "name": "registry_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                105,
+                114,
+                112,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "registry_state.token_mint",
+              "account": "IdentityRegistryState"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_irs",
+    "address": "CsrdR7QK3ma6hxU46Cp4DZHAdbGPWPiwmGjhKsR9VzdS",
+    "instruction": "bind_registry",
+    "script": "scripts/cli/fracks_irs/bind_registry.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "irp_pubkey",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "irs_state"
+        ]
+      },
+      {
+        "name": "irs_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                105,
+                114,
+                115,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "owner"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_irs",
+    "address": "CsrdR7QK3ma6hxU46Cp4DZHAdbGPWPiwmGjhKsR9VzdS",
+    "instruction": "initialize_irs",
+    "script": "scripts/cli/fracks_irs/initialize_irs.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "irs_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                105,
+                114,
+                115,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "owner"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "fracks_irs",
+    "address": "CsrdR7QK3ma6hxU46Cp4DZHAdbGPWPiwmGjhKsR9VzdS",
+    "instruction": "register_identity",
+    "script": "scripts/cli/fracks_irs/register_identity.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "wallet",
+        "type": "pubkey"
+      },
+      {
+        "name": "fid",
+        "type": "pubkey"
+      },
+      {
+        "name": "country",
+        "type": "u16"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "authority",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "irs_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                105,
+                114,
+                115,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "irs_state.owner",
+              "account": "IdentityRegistryStorageState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "registry_state"
+      },
+      {
+        "name": "wallet_identity",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                119,
+                97,
+                108,
+                108,
+                101,
+                116,
+                95,
+                105,
+                100,
+                101,
+                110,
+                116,
+                105,
+                116,
+                121
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "irs_state"
+            },
+            {
+              "kind": "arg",
+              "path": "wallet"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "fracks_irs",
+    "address": "CsrdR7QK3ma6hxU46Cp4DZHAdbGPWPiwmGjhKsR9VzdS",
+    "instruction": "remove_identity",
+    "script": "scripts/cli/fracks_irs/remove_identity.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "authority",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "irs_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                105,
+                114,
+                115,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "irs_state.owner",
+              "account": "IdentityRegistryStorageState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "registry_state"
+      },
+      {
+        "name": "wallet_identity",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                119,
+                97,
+                108,
+                108,
+                101,
+                116,
+                95,
+                105,
+                100,
+                101,
+                110,
+                116,
+                105,
+                116,
+                121
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "irs_state"
+            },
+            {
+              "kind": "account",
+              "path": "wallet_identity.wallet",
+              "account": "WalletIdentity"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_irs",
+    "address": "CsrdR7QK3ma6hxU46Cp4DZHAdbGPWPiwmGjhKsR9VzdS",
+    "instruction": "unbind_registry",
+    "script": "scripts/cli/fracks_irs/unbind_registry.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "irp_pubkey",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "irs_state"
+        ]
+      },
+      {
+        "name": "irs_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                105,
+                114,
+                115,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "owner"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_irs",
+    "address": "CsrdR7QK3ma6hxU46Cp4DZHAdbGPWPiwmGjhKsR9VzdS",
+    "instruction": "update_country",
+    "script": "scripts/cli/fracks_irs/update_country.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "new_country",
+        "type": "u16"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "authority",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "irs_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                105,
+                114,
+                115,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "irs_state.owner",
+              "account": "IdentityRegistryStorageState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "registry_state"
+      },
+      {
+        "name": "wallet_identity",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                119,
+                97,
+                108,
+                108,
+                101,
+                116,
+                95,
+                105,
+                100,
+                101,
+                110,
+                116,
+                105,
+                116,
+                121
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "irs_state"
+            },
+            {
+              "kind": "account",
+              "path": "wallet_identity.wallet",
+              "account": "WalletIdentity"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_irs",
+    "address": "CsrdR7QK3ma6hxU46Cp4DZHAdbGPWPiwmGjhKsR9VzdS",
+    "instruction": "update_identity",
+    "script": "scripts/cli/fracks_irs/update_identity.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "new_fid",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "authority",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "irs_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                105,
+                114,
+                115,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "irs_state.owner",
+              "account": "IdentityRegistryStorageState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "registry_state"
+      },
+      {
+        "name": "wallet_identity",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                119,
+                97,
+                108,
+                108,
+                101,
+                116,
+                95,
+                105,
+                100,
+                101,
+                110,
+                116,
+                105,
+                116,
+                121
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "irs_state"
+            },
+            {
+              "kind": "account",
+              "path": "wallet_identity.wallet",
+              "account": "WalletIdentity"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_tir",
+    "address": "Am5W7oEe8NCU4jdLP8qyUT3gjUPCDsvTSxGhdCQp1ETS",
+    "instruction": "add_trusted_issuer",
+    "script": "scripts/cli/fracks_tir/add_trusted_issuer.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "issuer_fid",
+        "type": "pubkey"
+      },
+      {
+        "name": "topics",
+        "type": {
+          "vec": "u64"
+        }
+      },
+      {
+        "name": "label",
+        "type": "string"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "tir_state"
+        ]
+      },
+      {
+        "name": "tir_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                105,
+                114,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "tir_state.token_mint",
+              "account": "TrustedIssuersState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "issuer_entry",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                105,
+                115,
+                115,
+                117,
+                101,
+                114,
+                95,
+                101,
+                110,
+                116,
+                114,
+                121
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "tir_state"
+            },
+            {
+              "kind": "arg",
+              "path": "issuer_fid"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "fracks_tir",
+    "address": "Am5W7oEe8NCU4jdLP8qyUT3gjUPCDsvTSxGhdCQp1ETS",
+    "instruction": "deactivate_issuer",
+    "script": "scripts/cli/fracks_tir/deactivate_issuer.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "tir_state"
+        ]
+      },
+      {
+        "name": "tir_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                105,
+                114,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "tir_state.token_mint",
+              "account": "TrustedIssuersState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "issuer_entry",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                105,
+                115,
+                115,
+                117,
+                101,
+                114,
+                95,
+                101,
+                110,
+                116,
+                114,
+                121
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "tir_state"
+            },
+            {
+              "kind": "account",
+              "path": "issuer_entry.issuer_fid",
+              "account": "IssuerEntry"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_tir",
+    "address": "Am5W7oEe8NCU4jdLP8qyUT3gjUPCDsvTSxGhdCQp1ETS",
+    "instruction": "initialize_tir",
+    "script": "scripts/cli/fracks_tir/initialize_tir.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "token_mint",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "tir_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                105,
+                114,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "arg",
+              "path": "token_mint"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "fracks_tir",
+    "address": "Am5W7oEe8NCU4jdLP8qyUT3gjUPCDsvTSxGhdCQp1ETS",
+    "instruction": "is_trusted_for_topic",
+    "script": "scripts/cli/fracks_tir/is_trusted_for_topic.js",
+    "returns": "bool",
+    "args": [
+      {
+        "name": "issuer_fid",
+        "type": "pubkey"
+      },
+      {
+        "name": "topic",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "tir_state"
+      },
+      {
+        "name": "issuer_entry",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                105,
+                115,
+                115,
+                117,
+                101,
+                114,
+                95,
+                101,
+                110,
+                116,
+                114,
+                121
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "tir_state"
+            },
+            {
+              "kind": "account",
+              "path": "issuer_entry.issuer_fid",
+              "account": "IssuerEntry"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_tir",
+    "address": "Am5W7oEe8NCU4jdLP8qyUT3gjUPCDsvTSxGhdCQp1ETS",
+    "instruction": "reactivate_issuer",
+    "script": "scripts/cli/fracks_tir/reactivate_issuer.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "tir_state"
+        ]
+      },
+      {
+        "name": "tir_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                105,
+                114,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "tir_state.token_mint",
+              "account": "TrustedIssuersState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "issuer_entry",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                105,
+                115,
+                115,
+                117,
+                101,
+                114,
+                95,
+                101,
+                110,
+                116,
+                114,
+                121
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "tir_state"
+            },
+            {
+              "kind": "account",
+              "path": "issuer_entry.issuer_fid",
+              "account": "IssuerEntry"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_tir",
+    "address": "Am5W7oEe8NCU4jdLP8qyUT3gjUPCDsvTSxGhdCQp1ETS",
+    "instruction": "remove_trusted_issuer",
+    "script": "scripts/cli/fracks_tir/remove_trusted_issuer.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "tir_state"
+        ]
+      },
+      {
+        "name": "tir_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                105,
+                114,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "tir_state.token_mint",
+              "account": "TrustedIssuersState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "issuer_entry",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                105,
+                115,
+                115,
+                117,
+                101,
+                114,
+                95,
+                101,
+                110,
+                116,
+                114,
+                121
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "tir_state"
+            },
+            {
+              "kind": "account",
+              "path": "issuer_entry.issuer_fid",
+              "account": "IssuerEntry"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_tir",
+    "address": "Am5W7oEe8NCU4jdLP8qyUT3gjUPCDsvTSxGhdCQp1ETS",
+    "instruction": "update_issuer_topics",
+    "script": "scripts/cli/fracks_tir/update_issuer_topics.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "new_topics",
+        "type": {
+          "vec": "u64"
+        }
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "tir_state"
+        ]
+      },
+      {
+        "name": "tir_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                105,
+                114,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "tir_state.token_mint",
+              "account": "TrustedIssuersState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "issuer_entry",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                105,
+                115,
+                115,
+                117,
+                101,
+                114,
+                95,
+                101,
+                110,
+                116,
+                114,
+                121
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "tir_state"
+            },
+            {
+              "kind": "account",
+              "path": "issuer_entry.issuer_fid",
+              "account": "IssuerEntry"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_token",
+    "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn",
+    "instruction": "accept_ownership",
+    "script": "scripts/cli/fracks_token/accept_ownership.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "pending_owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "owner_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                111,
+                119,
+                110,
+                101,
+                114
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "owner_state.token_mint",
+              "account": "OwnerState"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_token",
+    "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn",
+    "instruction": "add_agent",
+    "script": "scripts/cli/fracks_token/add_agent.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "agent",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "token_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                111,
+                107,
+                101,
+                110,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "owner_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                111,
+                119,
+                110,
+                101,
+                114
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "owner_state.token_mint",
+              "account": "OwnerState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "agent_role",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                97,
+                103,
+                101,
+                110,
+                116
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            },
+            {
+              "kind": "arg",
+              "path": "agent"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "fracks_token",
+    "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn",
+    "instruction": "burn",
+    "script": "scripts/cli/fracks_token/burn.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "from",
+        "type": "pubkey"
+      },
+      {
+        "name": "amount",
+        "type": "u64"
+      },
+      {
+        "name": "from_balance_after",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "agent",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "token_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                111,
+                107,
+                101,
+                110,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "agent_role",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                97,
+                103,
+                101,
+                110,
+                116
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            },
+            {
+              "kind": "account",
+              "path": "agent"
+            }
+          ]
+        }
+      },
+      {
+        "name": "compliance_state"
+      },
+      {
+        "name": "compliance_program"
+      },
+      {
+        "name": "irs_state"
+      },
+      {
+        "name": "from_wallet_identity"
+      },
+      {
+        "name": "token_mint_account",
+        "writable": true
+      },
+      {
+        "name": "source_token_account",
+        "writable": true
+      },
+      {
+        "name": "token_program"
+      }
+    ]
+  },
+  {
+    "program": "fracks_token",
+    "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn",
+    "instruction": "finalize_recovery",
+    "script": "scripts/cli/fracks_token/finalize_recovery.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "lost_wallet",
+        "type": "pubkey"
+      },
+      {
+        "name": "new_wallet",
+        "type": "pubkey"
+      },
+      {
+        "name": "amount",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "agent",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "token_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                111,
+                107,
+                101,
+                110,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "agent_role",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                97,
+                103,
+                101,
+                110,
+                116
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            },
+            {
+              "kind": "account",
+              "path": "agent"
+            }
+          ]
+        }
+      },
+      {
+        "name": "irs_state",
+        "writable": true
+      },
+      {
+        "name": "irp_state"
+      },
+      {
+        "name": "new_wallet_identity",
+        "writable": true
+      },
+      {
+        "name": "lost_wallet_identity",
+        "writable": true
+      },
+      {
+        "name": "transfer_approval",
+        "writable": true
+      },
+      {
+        "name": "irs_program",
+        "address": "CsrdR7QK3ma6hxU46Cp4DZHAdbGPWPiwmGjhKsR9VzdS"
+      }
+    ]
+  },
+  {
+    "program": "fracks_token",
+    "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn",
+    "instruction": "forced_transfer",
+    "script": "scripts/cli/fracks_token/forced_transfer.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "from",
+        "type": "pubkey"
+      },
+      {
+        "name": "to",
+        "type": "pubkey"
+      },
+      {
+        "name": "amount",
+        "type": "u64"
+      },
+      {
+        "name": "from_balance",
+        "type": "u64"
+      },
+      {
+        "name": "to_balance",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "agent",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "token_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                111,
+                107,
+                101,
+                110,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "agent_role",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                97,
+                103,
+                101,
+                110,
+                116
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            },
+            {
+              "kind": "account",
+              "path": "agent"
+            }
+          ]
+        }
+      },
+      {
+        "name": "irp_state"
+      },
+      {
+        "name": "irs_state"
+      },
+      {
+        "name": "tir_state"
+      },
+      {
+        "name": "ctr_state"
+      },
+      {
+        "name": "compliance_state"
+      },
+      {
+        "name": "compliance_program"
+      },
+      {
+        "name": "from_wallet_identity"
+      },
+      {
+        "name": "to_wallet_identity"
+      },
+      {
+        "name": "to_frozen"
+      },
+      {
+        "name": "from_partial_freeze",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                112,
+                97,
+                114,
+                116,
+                105,
+                97,
+                108,
+                95,
+                102,
+                114,
+                101,
+                101,
+                122,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            },
+            {
+              "kind": "account",
+              "path": "from_partial_freeze.wallet",
+              "account": "PartialFreeze"
+            }
+          ]
+        }
+      },
+      {
+        "name": "token_mint_account",
+        "writable": true
+      },
+      {
+        "name": "source_token_account",
+        "writable": true
+      },
+      {
+        "name": "destination_token_account",
+        "writable": true
+      },
+      {
+        "name": "extra_account_metas"
+      },
+      {
+        "name": "controller_program",
+        "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn"
+      },
+      {
+        "name": "hook_program",
+        "address": "CQwdsA97gSiPMUzNXjS22AUu6HmvzMK2XZVqhswYEHLi"
+      },
+      {
+        "name": "transfer_approval",
+        "writable": true
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      },
+      {
+        "name": "token_program"
+      }
+    ]
+  },
+  {
+    "program": "fracks_token",
+    "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn",
+    "instruction": "freeze_partial",
+    "script": "scripts/cli/fracks_token/freeze_partial.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "amount",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "agent",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "token_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                111,
+                107,
+                101,
+                110,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "agent_role",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                97,
+                103,
+                101,
+                110,
+                116
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            },
+            {
+              "kind": "account",
+              "path": "agent"
+            }
+          ]
+        }
+      },
+      {
+        "name": "wallet"
+      },
+      {
+        "name": "partial_freeze",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                112,
+                97,
+                114,
+                116,
+                105,
+                97,
+                108,
+                95,
+                102,
+                114,
+                101,
+                101,
+                122,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            },
+            {
+              "kind": "account",
+              "path": "wallet"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "fracks_token",
+    "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn",
+    "instruction": "freeze_wallet",
+    "script": "scripts/cli/fracks_token/freeze_wallet.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "agent",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "token_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                111,
+                107,
+                101,
+                110,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "agent_role",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                97,
+                103,
+                101,
+                110,
+                116
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            },
+            {
+              "kind": "account",
+              "path": "agent"
+            }
+          ]
+        }
+      },
+      {
+        "name": "wallet"
+      },
+      {
+        "name": "frozen_wallet",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                102,
+                114,
+                111,
+                122,
+                101,
+                110
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            },
+            {
+              "kind": "account",
+              "path": "wallet"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "fracks_token",
+    "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn",
+    "instruction": "initialize_token",
+    "script": "scripts/cli/fracks_token/initialize_token.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "token_mint",
+        "type": "pubkey"
+      },
+      {
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "name": "symbol",
+        "type": "string"
+      },
+      {
+        "name": "decimals",
+        "type": "u8"
+      },
+      {
+        "name": "isin",
+        "type": "string"
+      },
+      {
+        "name": "identity_registry",
+        "type": "pubkey"
+      },
+      {
+        "name": "compliance",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "token_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                111,
+                107,
+                101,
+                110,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "arg",
+              "path": "token_mint"
+            }
+          ]
+        }
+      },
+      {
+        "name": "owner_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                111,
+                119,
+                110,
+                101,
+                114
+              ]
+            },
+            {
+              "kind": "arg",
+              "path": "token_mint"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "fracks_token",
+    "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn",
+    "instruction": "mint",
+    "script": "scripts/cli/fracks_token/mint.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "to",
+        "type": "pubkey"
+      },
+      {
+        "name": "amount",
+        "type": "u64"
+      },
+      {
+        "name": "to_balance_after",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "agent",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "token_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                111,
+                107,
+                101,
+                110,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "agent_role",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                97,
+                103,
+                101,
+                110,
+                116
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            },
+            {
+              "kind": "account",
+              "path": "agent"
+            }
+          ]
+        }
+      },
+      {
+        "name": "irp_state"
+      },
+      {
+        "name": "irs_state"
+      },
+      {
+        "name": "tir_state"
+      },
+      {
+        "name": "ctr_state"
+      },
+      {
+        "name": "compliance_state"
+      },
+      {
+        "name": "compliance_program"
+      },
+      {
+        "name": "wallet_identity"
+      },
+      {
+        "name": "to_frozen"
+      },
+      {
+        "name": "token_mint_account",
+        "writable": true
+      },
+      {
+        "name": "destination_token_account",
+        "writable": true
+      },
+      {
+        "name": "token_program"
+      }
+    ]
+  },
+  {
+    "program": "fracks_token",
+    "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn",
+    "instruction": "pause",
+    "script": "scripts/cli/fracks_token/pause.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "token_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                111,
+                107,
+                101,
+                110,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "owner_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                111,
+                119,
+                110,
+                101,
+                114
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "owner_state.token_mint",
+              "account": "OwnerState"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_token",
+    "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn",
+    "instruction": "recovery",
+    "script": "scripts/cli/fracks_token/recovery.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "lost_wallet",
+        "type": "pubkey"
+      },
+      {
+        "name": "new_wallet",
+        "type": "pubkey"
+      },
+      {
+        "name": "amount",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "agent",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "token_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                111,
+                107,
+                101,
+                110,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "agent_role",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                97,
+                103,
+                101,
+                110,
+                116
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            },
+            {
+              "kind": "account",
+              "path": "agent"
+            }
+          ]
+        }
+      },
+      {
+        "name": "irp_state"
+      },
+      {
+        "name": "irs_state",
+        "writable": true
+      },
+      {
+        "name": "tir_state"
+      },
+      {
+        "name": "ctr_state"
+      },
+      {
+        "name": "new_wallet_identity",
+        "writable": true
+      },
+      {
+        "name": "lost_wallet_identity",
+        "writable": true
+      },
+      {
+        "name": "compliance_state"
+      },
+      {
+        "name": "compliance_program"
+      },
+      {
+        "name": "new_wallet_frozen"
+      },
+      {
+        "name": "irs_program",
+        "address": "CsrdR7QK3ma6hxU46Cp4DZHAdbGPWPiwmGjhKsR9VzdS"
+      },
+      {
+        "name": "token_mint_account",
+        "writable": true
+      },
+      {
+        "name": "lost_token_account",
+        "writable": true
+      },
+      {
+        "name": "new_token_account",
+        "writable": true
+      },
+      {
+        "name": "extra_account_metas"
+      },
+      {
+        "name": "controller_program",
+        "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn"
+      },
+      {
+        "name": "hook_program",
+        "address": "CQwdsA97gSiPMUzNXjS22AUu6HmvzMK2XZVqhswYEHLi"
+      },
+      {
+        "name": "transfer_approval",
+        "writable": true
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      },
+      {
+        "name": "token_program"
+      }
+    ]
+  },
+  {
+    "program": "fracks_token",
+    "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn",
+    "instruction": "remove_agent",
+    "script": "scripts/cli/fracks_token/remove_agent.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "token_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                111,
+                107,
+                101,
+                110,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "owner_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                111,
+                119,
+                110,
+                101,
+                114
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "owner_state.token_mint",
+              "account": "OwnerState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "agent_role",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                97,
+                103,
+                101,
+                110,
+                116
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            },
+            {
+              "kind": "account",
+              "path": "agent_role.agent",
+              "account": "AgentRole"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_token",
+    "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn",
+    "instruction": "set_compliance",
+    "script": "scripts/cli/fracks_token/set_compliance.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "new_compliance",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "token_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                111,
+                107,
+                101,
+                110,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "owner_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                111,
+                119,
+                110,
+                101,
+                114
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "owner_state.token_mint",
+              "account": "OwnerState"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_token",
+    "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn",
+    "instruction": "set_identity_registry",
+    "script": "scripts/cli/fracks_token/set_identity_registry.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "new_identity_registry",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "token_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                111,
+                107,
+                101,
+                110,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "owner_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                111,
+                119,
+                110,
+                101,
+                114
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "owner_state.token_mint",
+              "account": "OwnerState"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_token",
+    "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn",
+    "instruction": "transfer",
+    "script": "scripts/cli/fracks_token/transfer.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "amount",
+        "type": "u64"
+      },
+      {
+        "name": "from_balance",
+        "type": "u64"
+      },
+      {
+        "name": "to_balance",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "token_state"
+      },
+      {
+        "name": "source_token_account",
+        "writable": true
+      },
+      {
+        "name": "token_mint_account",
+        "writable": true
+      },
+      {
+        "name": "destination_token_account",
+        "writable": true
+      },
+      {
+        "name": "from_wallet",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "to_wallet"
+      },
+      {
+        "name": "extra_account_metas"
+      },
+      {
+        "name": "controller_program",
+        "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn"
+      },
+      {
+        "name": "hook_program",
+        "address": "CQwdsA97gSiPMUzNXjS22AUu6HmvzMK2XZVqhswYEHLi"
+      },
+      {
+        "name": "transfer_approval",
+        "writable": true
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      },
+      {
+        "name": "irp_state"
+      },
+      {
+        "name": "irs_state"
+      },
+      {
+        "name": "tir_state"
+      },
+      {
+        "name": "ctr_state"
+      },
+      {
+        "name": "compliance_state"
+      },
+      {
+        "name": "compliance_program"
+      },
+      {
+        "name": "from_wallet_identity"
+      },
+      {
+        "name": "to_wallet_identity"
+      },
+      {
+        "name": "from_frozen"
+      },
+      {
+        "name": "to_frozen"
+      },
+      {
+        "name": "from_partial_freeze"
+      },
+      {
+        "name": "token_program"
+      }
+    ]
+  },
+  {
+    "program": "fracks_token",
+    "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn",
+    "instruction": "transfer_ownership",
+    "script": "scripts/cli/fracks_token/transfer_ownership.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "new_owner",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "token_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                111,
+                107,
+                101,
+                110,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "owner_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                111,
+                119,
+                110,
+                101,
+                114
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "owner_state.token_mint",
+              "account": "OwnerState"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_token",
+    "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn",
+    "instruction": "unfreeze_partial",
+    "script": "scripts/cli/fracks_token/unfreeze_partial.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "amount",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "agent",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "token_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                111,
+                107,
+                101,
+                110,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "agent_role",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                97,
+                103,
+                101,
+                110,
+                116
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            },
+            {
+              "kind": "account",
+              "path": "agent"
+            }
+          ]
+        }
+      },
+      {
+        "name": "wallet"
+      },
+      {
+        "name": "partial_freeze",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                112,
+                97,
+                114,
+                116,
+                105,
+                97,
+                108,
+                95,
+                102,
+                114,
+                101,
+                101,
+                122,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            },
+            {
+              "kind": "account",
+              "path": "wallet"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "fracks_token",
+    "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn",
+    "instruction": "unfreeze_wallet",
+    "script": "scripts/cli/fracks_token/unfreeze_wallet.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "agent",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "token_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                111,
+                107,
+                101,
+                110,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "agent_role",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                97,
+                103,
+                101,
+                110,
+                116
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            },
+            {
+              "kind": "account",
+              "path": "agent"
+            }
+          ]
+        }
+      },
+      {
+        "name": "frozen_wallet",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                102,
+                114,
+                111,
+                122,
+                101,
+                110
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            },
+            {
+              "kind": "account",
+              "path": "frozen_wallet.wallet",
+              "account": "FrozenWallet"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_token",
+    "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn",
+    "instruction": "unpause",
+    "script": "scripts/cli/fracks_token/unpause.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "token_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                111,
+                107,
+                101,
+                110,
+                95,
+                115,
+                116,
+                97,
+                116,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_state.token_mint",
+              "account": "TokenState"
+            }
+          ]
+        }
+      },
+      {
+        "name": "owner_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                111,
+                119,
+                110,
+                101,
+                114
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "owner_state.token_mint",
+              "account": "OwnerState"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "fracks_token_hook",
+    "address": "CQwdsA97gSiPMUzNXjS22AUu6HmvzMK2XZVqhswYEHLi",
+    "instruction": "approve_transfer",
+    "script": "scripts/cli/fracks_token_hook/approve_transfer.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "source_wallet",
+        "type": "pubkey"
+      },
+      {
+        "name": "destination_wallet",
+        "type": "pubkey"
+      },
+      {
+        "name": "authority",
+        "type": "pubkey"
+      },
+      {
+        "name": "amount",
+        "type": "u64"
+      },
+      {
+        "name": "from_balance",
+        "type": "u64"
+      },
+      {
+        "name": "to_balance",
+        "type": "u64"
+      },
+      {
+        "name": "from_country",
+        "type": "u16"
+      },
+      {
+        "name": "to_country",
+        "type": "u16"
+      },
+      {
+        "name": "kind",
+        "type": "u8"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "payer",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "controller_authority",
+        "signer": true
+      },
+      {
+        "name": "token_state"
+      },
+      {
+        "name": "token_mint_account"
+      },
+      {
+        "name": "source_token_account"
+      },
+      {
+        "name": "destination_token_account"
+      },
+      {
+        "name": "transfer_approval",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                114,
+                97,
+                110,
+                115,
+                102,
+                101,
+                114,
+                95,
+                97,
+                112,
+                112,
+                114,
+                111,
+                118,
+                97,
+                108
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "source_token_account"
+            },
+            {
+              "kind": "account",
+              "path": "destination_token_account"
+            },
+            {
+              "kind": "account",
+              "path": "authority_seed"
+            }
+          ]
+        }
+      },
+      {
+        "name": "authority_seed"
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "fracks_token_hook",
+    "address": "CQwdsA97gSiPMUzNXjS22AUu6HmvzMK2XZVqhswYEHLi",
+    "instruction": "execute_transfer_hook",
+    "script": "scripts/cli/fracks_token_hook/execute_transfer_hook.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "amount",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "source_token_account"
+      },
+      {
+        "name": "token_mint_account"
+      },
+      {
+        "name": "destination_token_account"
+      },
+      {
+        "name": "authority"
+      },
+      {
+        "name": "extra_account_metas"
+      },
+      {
+        "name": "controller_program"
+      },
+      {
+        "name": "token_state"
+      },
+      {
+        "name": "transfer_approval",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                116,
+                114,
+                97,
+                110,
+                115,
+                102,
+                101,
+                114,
+                95,
+                97,
+                112,
+                112,
+                114,
+                111,
+                118,
+                97,
+                108
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "source_token_account"
+            },
+            {
+              "kind": "account",
+              "path": "destination_token_account"
+            },
+            {
+              "kind": "account",
+              "path": "authority"
+            }
+          ]
+        }
+      },
+      {
+        "name": "compliance_state"
+      },
+      {
+        "name": "compliance_program"
+      }
+    ]
+  },
+  {
+    "program": "fracks_token_hook",
+    "address": "CQwdsA97gSiPMUzNXjS22AUu6HmvzMK2XZVqhswYEHLi",
+    "instruction": "initialize_extra_account_metas",
+    "script": "scripts/cli/fracks_token_hook/initialize_extra_account_metas.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "payer",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "token_state"
+      },
+      {
+        "name": "owner_state"
+      },
+      {
+        "name": "compliance_state"
+      },
+      {
+        "name": "token_mint_account"
+      },
+      {
+        "name": "extra_account_metas",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                101,
+                120,
+                116,
+                114,
+                97,
+                45,
+                97,
+                99,
+                99,
+                111,
+                117,
+                110,
+                116,
+                45,
+                109,
+                101,
+                116,
+                97,
+                115
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "token_mint_account"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "mod_country_cap",
+    "address": "HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW",
+    "instruction": "can_transfer",
+    "script": "scripts/cli/mod_country_cap/can_transfer.js",
+    "returns": "bool",
+    "args": [
+      {
+        "name": "amount",
+        "type": "u64"
+      },
+      {
+        "name": "to_balance",
+        "type": "u64"
+      },
+      {
+        "name": "to_country",
+        "type": "u16"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                99,
+                111,
+                117,
+                110,
+                116,
+                114,
+                121,
+                95,
+                99,
+                97,
+                112
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "InvestorCountryCapModule"
+            }
+          ]
+        }
+      },
+      {
+        "name": "country_count"
+      }
+    ]
+  },
+  {
+    "program": "mod_country_cap",
+    "address": "HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW",
+    "instruction": "created",
+    "script": "scripts/cli/mod_country_cap/created.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "amount",
+        "type": "u64"
+      },
+      {
+        "name": "to_balance_after",
+        "type": "u64"
+      },
+      {
+        "name": "to_country",
+        "type": "u16"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "authority",
+        "signer": true
+      },
+      {
+        "name": "module_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                99,
+                111,
+                117,
+                110,
+                116,
+                114,
+                121,
+                95,
+                99,
+                97,
+                112
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "InvestorCountryCapModule"
+            }
+          ]
+        }
+      },
+      {
+        "name": "country_count",
+        "writable": true
+      }
+    ]
+  },
+  {
+    "program": "mod_country_cap",
+    "address": "HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW",
+    "instruction": "destroyed",
+    "script": "scripts/cli/mod_country_cap/destroyed.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "amount",
+        "type": "u64"
+      },
+      {
+        "name": "from_balance_after",
+        "type": "u64"
+      },
+      {
+        "name": "from_country",
+        "type": "u16"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "authority",
+        "signer": true
+      },
+      {
+        "name": "module_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                99,
+                111,
+                117,
+                110,
+                116,
+                114,
+                121,
+                95,
+                99,
+                97,
+                112
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "InvestorCountryCapModule"
+            }
+          ]
+        }
+      },
+      {
+        "name": "country_count",
+        "writable": true
+      }
+    ]
+  },
+  {
+    "program": "mod_country_cap",
+    "address": "HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW",
+    "instruction": "initialize_country_count",
+    "script": "scripts/cli/mod_country_cap/initialize_country_count.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "country",
+        "type": "u16"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "module_state"
+        ]
+      },
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                99,
+                111,
+                117,
+                110,
+                116,
+                114,
+                121,
+                95,
+                99,
+                97,
+                112
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "InvestorCountryCapModule"
+            }
+          ]
+        }
+      },
+      {
+        "name": "country_count",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                99,
+                111,
+                117,
+                110,
+                116,
+                114,
+                121,
+                95,
+                99,
+                111,
+                117,
+                110,
+                116
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state"
+            },
+            {
+              "kind": "arg",
+              "path": "country"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "mod_country_cap",
+    "address": "HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW",
+    "instruction": "initialize_module",
+    "script": "scripts/cli/mod_country_cap/initialize_module.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "token_mint",
+        "type": "pubkey"
+      },
+      {
+        "name": "country_caps",
+        "type": {
+          "vec": {
+            "defined": {
+              "name": "CountryCapEntry"
+            }
+          }
+        }
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "module_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                99,
+                111,
+                117,
+                110,
+                116,
+                114,
+                121,
+                95,
+                99,
+                97,
+                112
+              ]
+            },
+            {
+              "kind": "arg",
+              "path": "token_mint"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "mod_country_cap",
+    "address": "HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW",
+    "instruction": "set_hook_authority",
+    "script": "scripts/cli/mod_country_cap/set_hook_authority.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "hook_authority",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "signer": true,
+        "relations": [
+          "module_state"
+        ]
+      },
+      {
+        "name": "module_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                99,
+                111,
+                117,
+                110,
+                116,
+                114,
+                121,
+                95,
+                99,
+                97,
+                112
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "InvestorCountryCapModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_country_cap",
+    "address": "HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW",
+    "instruction": "transferred",
+    "script": "scripts/cli/mod_country_cap/transferred.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "amount",
+        "type": "u64"
+      },
+      {
+        "name": "from_balance_after",
+        "type": "u64"
+      },
+      {
+        "name": "to_balance_after",
+        "type": "u64"
+      },
+      {
+        "name": "from_country",
+        "type": "u16"
+      },
+      {
+        "name": "to_country",
+        "type": "u16"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "authority",
+        "signer": true
+      },
+      {
+        "name": "module_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                99,
+                111,
+                117,
+                110,
+                116,
+                114,
+                121,
+                95,
+                99,
+                97,
+                112
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "InvestorCountryCapModule"
+            }
+          ]
+        }
+      },
+      {
+        "name": "from_country_count",
+        "writable": true
+      },
+      {
+        "name": "to_country_count",
+        "writable": true
+      }
+    ]
+  },
+  {
+    "program": "mod_country_restrict",
+    "address": "6JcKpK45GvhwaPRZoEfLFCNos2eCxCr3N3tGzzaC1ECQ",
+    "instruction": "can_transfer",
+    "script": "scripts/cli/mod_country_restrict/can_transfer.js",
+    "returns": "bool",
+    "args": [
+      {
+        "name": "from_country",
+        "type": "u16"
+      },
+      {
+        "name": "to_country",
+        "type": "u16"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                99,
+                111,
+                117,
+                110,
+                116,
+                114,
+                121
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "CountryRestrictModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_country_restrict",
+    "address": "6JcKpK45GvhwaPRZoEfLFCNos2eCxCr3N3tGzzaC1ECQ",
+    "instruction": "created",
+    "script": "scripts/cli/mod_country_restrict/created.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                99,
+                111,
+                117,
+                110,
+                116,
+                114,
+                121
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "CountryRestrictModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_country_restrict",
+    "address": "6JcKpK45GvhwaPRZoEfLFCNos2eCxCr3N3tGzzaC1ECQ",
+    "instruction": "destroyed",
+    "script": "scripts/cli/mod_country_restrict/destroyed.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                99,
+                111,
+                117,
+                110,
+                116,
+                114,
+                121
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "CountryRestrictModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_country_restrict",
+    "address": "6JcKpK45GvhwaPRZoEfLFCNos2eCxCr3N3tGzzaC1ECQ",
+    "instruction": "initialize_module",
+    "script": "scripts/cli/mod_country_restrict/initialize_module.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "token_mint",
+        "type": "pubkey"
+      },
+      {
+        "name": "blocked_countries",
+        "type": {
+          "vec": "u16"
+        }
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "module_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                99,
+                111,
+                117,
+                110,
+                116,
+                114,
+                121
+              ]
+            },
+            {
+              "kind": "arg",
+              "path": "token_mint"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "mod_country_restrict",
+    "address": "6JcKpK45GvhwaPRZoEfLFCNos2eCxCr3N3tGzzaC1ECQ",
+    "instruction": "transferred",
+    "script": "scripts/cli/mod_country_restrict/transferred.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                99,
+                111,
+                117,
+                110,
+                116,
+                114,
+                121
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "CountryRestrictModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_daily_limit",
+    "address": "EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9",
+    "instruction": "can_transfer",
+    "script": "scripts/cli/mod_daily_limit/can_transfer.js",
+    "returns": "bool",
+    "args": [
+      {
+        "name": "amount",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                100,
+                97,
+                105,
+                108,
+                121,
+                95,
+                108,
+                105,
+                109,
+                105,
+                116
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "DailyTransferLimitModule"
+            }
+          ]
+        }
+      },
+      {
+        "name": "wallet_usage"
+      }
+    ]
+  },
+  {
+    "program": "mod_daily_limit",
+    "address": "EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9",
+    "instruction": "created",
+    "script": "scripts/cli/mod_daily_limit/created.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                100,
+                97,
+                105,
+                108,
+                121,
+                95,
+                108,
+                105,
+                109,
+                105,
+                116
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "DailyTransferLimitModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_daily_limit",
+    "address": "EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9",
+    "instruction": "destroyed",
+    "script": "scripts/cli/mod_daily_limit/destroyed.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                100,
+                97,
+                105,
+                108,
+                121,
+                95,
+                108,
+                105,
+                109,
+                105,
+                116
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "DailyTransferLimitModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_daily_limit",
+    "address": "EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9",
+    "instruction": "initialize_module",
+    "script": "scripts/cli/mod_daily_limit/initialize_module.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "token_mint",
+        "type": "pubkey"
+      },
+      {
+        "name": "daily_limit",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "module_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                100,
+                97,
+                105,
+                108,
+                121,
+                95,
+                108,
+                105,
+                109,
+                105,
+                116
+              ]
+            },
+            {
+              "kind": "arg",
+              "path": "token_mint"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "mod_daily_limit",
+    "address": "EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9",
+    "instruction": "initialize_wallet_usage",
+    "script": "scripts/cli/mod_daily_limit/initialize_wallet_usage.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "wallet",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "module_state"
+        ]
+      },
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                100,
+                97,
+                105,
+                108,
+                121,
+                95,
+                108,
+                105,
+                109,
+                105,
+                116
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "DailyTransferLimitModule"
+            }
+          ]
+        }
+      },
+      {
+        "name": "wallet_usage",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                100,
+                97,
+                105,
+                108,
+                121,
+                95,
+                117,
+                115,
+                97,
+                103,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state"
+            },
+            {
+              "kind": "arg",
+              "path": "wallet"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "mod_daily_limit",
+    "address": "EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9",
+    "instruction": "set_hook_authority",
+    "script": "scripts/cli/mod_daily_limit/set_hook_authority.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "hook_authority",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true,
+        "relations": [
+          "module_state"
+        ]
+      },
+      {
+        "name": "module_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                100,
+                97,
+                105,
+                108,
+                121,
+                95,
+                108,
+                105,
+                109,
+                105,
+                116
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "DailyTransferLimitModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_daily_limit",
+    "address": "EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9",
+    "instruction": "transferred",
+    "script": "scripts/cli/mod_daily_limit/transferred.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "wallet",
+        "type": "pubkey"
+      },
+      {
+        "name": "amount",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "authority",
+        "signer": true
+      },
+      {
+        "name": "module_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                100,
+                97,
+                105,
+                108,
+                121,
+                95,
+                108,
+                105,
+                109,
+                105,
+                116
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "DailyTransferLimitModule"
+            }
+          ]
+        }
+      },
+      {
+        "name": "wallet_usage",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                100,
+                97,
+                105,
+                108,
+                121,
+                95,
+                117,
+                115,
+                97,
+                103,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state"
+            },
+            {
+              "kind": "arg",
+              "path": "wallet"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_lockup",
+    "address": "GqsAXZggWEwVF9EFHHXiAKiKBkcrpzQp3SK7NPZWAfR5",
+    "instruction": "can_transfer",
+    "script": "scripts/cli/mod_lockup/can_transfer.js",
+    "returns": "bool",
+    "args": [],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                108,
+                111,
+                99,
+                107,
+                117,
+                112
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "LockupModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_lockup",
+    "address": "GqsAXZggWEwVF9EFHHXiAKiKBkcrpzQp3SK7NPZWAfR5",
+    "instruction": "created",
+    "script": "scripts/cli/mod_lockup/created.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                108,
+                111,
+                99,
+                107,
+                117,
+                112
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "LockupModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_lockup",
+    "address": "GqsAXZggWEwVF9EFHHXiAKiKBkcrpzQp3SK7NPZWAfR5",
+    "instruction": "destroyed",
+    "script": "scripts/cli/mod_lockup/destroyed.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                108,
+                111,
+                99,
+                107,
+                117,
+                112
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "LockupModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_lockup",
+    "address": "GqsAXZggWEwVF9EFHHXiAKiKBkcrpzQp3SK7NPZWAfR5",
+    "instruction": "initialize_module",
+    "script": "scripts/cli/mod_lockup/initialize_module.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "token_mint",
+        "type": "pubkey"
+      },
+      {
+        "name": "lockup_end",
+        "type": "i64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "module_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                108,
+                111,
+                99,
+                107,
+                117,
+                112
+              ]
+            },
+            {
+              "kind": "arg",
+              "path": "token_mint"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "mod_lockup",
+    "address": "GqsAXZggWEwVF9EFHHXiAKiKBkcrpzQp3SK7NPZWAfR5",
+    "instruction": "transferred",
+    "script": "scripts/cli/mod_lockup/transferred.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                108,
+                111,
+                99,
+                107,
+                117,
+                112
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "LockupModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_max_balance",
+    "address": "8r9euzP3dFg8d3sA6fh3Ur73cMbvEAbj5UbigHVEXimZ",
+    "instruction": "can_transfer",
+    "script": "scripts/cli/mod_max_balance/can_transfer.js",
+    "returns": "bool",
+    "args": [
+      {
+        "name": "amount",
+        "type": "u64"
+      },
+      {
+        "name": "to_balance",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                109,
+                97,
+                120,
+                95,
+                98,
+                97,
+                108,
+                97,
+                110,
+                99,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "MaxBalanceModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_max_balance",
+    "address": "8r9euzP3dFg8d3sA6fh3Ur73cMbvEAbj5UbigHVEXimZ",
+    "instruction": "created",
+    "script": "scripts/cli/mod_max_balance/created.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                109,
+                97,
+                120,
+                95,
+                98,
+                97,
+                108,
+                97,
+                110,
+                99,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "MaxBalanceModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_max_balance",
+    "address": "8r9euzP3dFg8d3sA6fh3Ur73cMbvEAbj5UbigHVEXimZ",
+    "instruction": "destroyed",
+    "script": "scripts/cli/mod_max_balance/destroyed.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                109,
+                97,
+                120,
+                95,
+                98,
+                97,
+                108,
+                97,
+                110,
+                99,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "MaxBalanceModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_max_balance",
+    "address": "8r9euzP3dFg8d3sA6fh3Ur73cMbvEAbj5UbigHVEXimZ",
+    "instruction": "initialize_module",
+    "script": "scripts/cli/mod_max_balance/initialize_module.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "token_mint",
+        "type": "pubkey"
+      },
+      {
+        "name": "max_balance",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "module_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                109,
+                97,
+                120,
+                95,
+                98,
+                97,
+                108,
+                97,
+                110,
+                99,
+                101
+              ]
+            },
+            {
+              "kind": "arg",
+              "path": "token_mint"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "mod_max_balance",
+    "address": "8r9euzP3dFg8d3sA6fh3Ur73cMbvEAbj5UbigHVEXimZ",
+    "instruction": "transferred",
+    "script": "scripts/cli/mod_max_balance/transferred.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                109,
+                97,
+                120,
+                95,
+                98,
+                97,
+                108,
+                97,
+                110,
+                99,
+                101
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "MaxBalanceModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_max_investors",
+    "address": "FMSVzD74EbSiTj2XHi8xsqcp6pigdxHL7MGHxtRLYte7",
+    "instruction": "can_transfer",
+    "script": "scripts/cli/mod_max_investors/can_transfer.js",
+    "returns": "bool",
+    "args": [
+      {
+        "name": "amount",
+        "type": "u64"
+      },
+      {
+        "name": "to_balance",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                109,
+                97,
+                120,
+                95,
+                105,
+                110,
+                118,
+                101,
+                115,
+                116,
+                111,
+                114,
+                115
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "MaxInvestorsModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_max_investors",
+    "address": "FMSVzD74EbSiTj2XHi8xsqcp6pigdxHL7MGHxtRLYte7",
+    "instruction": "created",
+    "script": "scripts/cli/mod_max_investors/created.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "amount",
+        "type": "u64"
+      },
+      {
+        "name": "to_balance_after",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "authority",
+        "signer": true
+      },
+      {
+        "name": "module_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                109,
+                97,
+                120,
+                95,
+                105,
+                110,
+                118,
+                101,
+                115,
+                116,
+                111,
+                114,
+                115
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "MaxInvestorsModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_max_investors",
+    "address": "FMSVzD74EbSiTj2XHi8xsqcp6pigdxHL7MGHxtRLYte7",
+    "instruction": "destroyed",
+    "script": "scripts/cli/mod_max_investors/destroyed.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "amount",
+        "type": "u64"
+      },
+      {
+        "name": "from_balance_after",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "authority",
+        "signer": true
+      },
+      {
+        "name": "module_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                109,
+                97,
+                120,
+                95,
+                105,
+                110,
+                118,
+                101,
+                115,
+                116,
+                111,
+                114,
+                115
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "MaxInvestorsModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_max_investors",
+    "address": "FMSVzD74EbSiTj2XHi8xsqcp6pigdxHL7MGHxtRLYte7",
+    "instruction": "initialize_module",
+    "script": "scripts/cli/mod_max_investors/initialize_module.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "token_mint",
+        "type": "pubkey"
+      },
+      {
+        "name": "max_investors",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "module_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                109,
+                97,
+                120,
+                95,
+                105,
+                110,
+                118,
+                101,
+                115,
+                116,
+                111,
+                114,
+                115
+              ]
+            },
+            {
+              "kind": "arg",
+              "path": "token_mint"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "mod_max_investors",
+    "address": "FMSVzD74EbSiTj2XHi8xsqcp6pigdxHL7MGHxtRLYte7",
+    "instruction": "set_hook_authority",
+    "script": "scripts/cli/mod_max_investors/set_hook_authority.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "hook_authority",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "signer": true,
+        "relations": [
+          "module_state"
+        ]
+      },
+      {
+        "name": "module_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                109,
+                97,
+                120,
+                95,
+                105,
+                110,
+                118,
+                101,
+                115,
+                116,
+                111,
+                114,
+                115
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "MaxInvestorsModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_max_investors",
+    "address": "FMSVzD74EbSiTj2XHi8xsqcp6pigdxHL7MGHxtRLYte7",
+    "instruction": "transferred",
+    "script": "scripts/cli/mod_max_investors/transferred.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "amount",
+        "type": "u64"
+      },
+      {
+        "name": "from_balance_after",
+        "type": "u64"
+      },
+      {
+        "name": "to_balance_after",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "authority",
+        "signer": true
+      },
+      {
+        "name": "module_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                109,
+                97,
+                120,
+                95,
+                105,
+                110,
+                118,
+                101,
+                115,
+                116,
+                111,
+                114,
+                115
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "MaxInvestorsModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_max_transfer",
+    "address": "8EiBd6256x7CfFE1vqGLGBqviiCs64ubZzTVmDwjnQAw",
+    "instruction": "can_transfer",
+    "script": "scripts/cli/mod_max_transfer/can_transfer.js",
+    "returns": "bool",
+    "args": [
+      {
+        "name": "amount",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                109,
+                97,
+                120,
+                95,
+                116,
+                114,
+                97,
+                110,
+                115,
+                102,
+                101,
+                114
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "MaxTransferModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_max_transfer",
+    "address": "8EiBd6256x7CfFE1vqGLGBqviiCs64ubZzTVmDwjnQAw",
+    "instruction": "created",
+    "script": "scripts/cli/mod_max_transfer/created.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                109,
+                97,
+                120,
+                95,
+                116,
+                114,
+                97,
+                110,
+                115,
+                102,
+                101,
+                114
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "MaxTransferModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_max_transfer",
+    "address": "8EiBd6256x7CfFE1vqGLGBqviiCs64ubZzTVmDwjnQAw",
+    "instruction": "destroyed",
+    "script": "scripts/cli/mod_max_transfer/destroyed.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                109,
+                97,
+                120,
+                95,
+                116,
+                114,
+                97,
+                110,
+                115,
+                102,
+                101,
+                114
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "MaxTransferModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_max_transfer",
+    "address": "8EiBd6256x7CfFE1vqGLGBqviiCs64ubZzTVmDwjnQAw",
+    "instruction": "initialize_module",
+    "script": "scripts/cli/mod_max_transfer/initialize_module.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "token_mint",
+        "type": "pubkey"
+      },
+      {
+        "name": "max_amount",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "module_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                109,
+                97,
+                120,
+                95,
+                116,
+                114,
+                97,
+                110,
+                115,
+                102,
+                101,
+                114
+              ]
+            },
+            {
+              "kind": "arg",
+              "path": "token_mint"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "mod_max_transfer",
+    "address": "8EiBd6256x7CfFE1vqGLGBqviiCs64ubZzTVmDwjnQAw",
+    "instruction": "transferred",
+    "script": "scripts/cli/mod_max_transfer/transferred.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                109,
+                97,
+                120,
+                95,
+                116,
+                114,
+                97,
+                110,
+                115,
+                102,
+                101,
+                114
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "MaxTransferModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_supply_cap",
+    "address": "EGJvV5cBN7et6Pdthyj6z7xuN8FN2u1wtGQsUjR69Rxb",
+    "instruction": "can_transfer",
+    "script": "scripts/cli/mod_supply_cap/can_transfer.js",
+    "returns": "bool",
+    "args": [],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                115,
+                117,
+                112,
+                112,
+                108,
+                121,
+                95,
+                99,
+                97,
+                112
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "SupplyCapModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_supply_cap",
+    "address": "EGJvV5cBN7et6Pdthyj6z7xuN8FN2u1wtGQsUjR69Rxb",
+    "instruction": "created",
+    "script": "scripts/cli/mod_supply_cap/created.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "amount",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "authority",
+        "signer": true
+      },
+      {
+        "name": "module_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                115,
+                117,
+                112,
+                112,
+                108,
+                121,
+                95,
+                99,
+                97,
+                112
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "SupplyCapModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_supply_cap",
+    "address": "EGJvV5cBN7et6Pdthyj6z7xuN8FN2u1wtGQsUjR69Rxb",
+    "instruction": "destroyed",
+    "script": "scripts/cli/mod_supply_cap/destroyed.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "amount",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "authority",
+        "signer": true
+      },
+      {
+        "name": "module_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                115,
+                117,
+                112,
+                112,
+                108,
+                121,
+                95,
+                99,
+                97,
+                112
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "SupplyCapModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_supply_cap",
+    "address": "EGJvV5cBN7et6Pdthyj6z7xuN8FN2u1wtGQsUjR69Rxb",
+    "instruction": "initialize_module",
+    "script": "scripts/cli/mod_supply_cap/initialize_module.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "token_mint",
+        "type": "pubkey"
+      },
+      {
+        "name": "max_supply",
+        "type": "u64"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "writable": true,
+        "signer": true
+      },
+      {
+        "name": "module_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                115,
+                117,
+                112,
+                112,
+                108,
+                121,
+                95,
+                99,
+                97,
+                112
+              ]
+            },
+            {
+              "kind": "arg",
+              "path": "token_mint"
+            }
+          ]
+        }
+      },
+      {
+        "name": "system_program",
+        "address": "11111111111111111111111111111111"
+      }
+    ]
+  },
+  {
+    "program": "mod_supply_cap",
+    "address": "EGJvV5cBN7et6Pdthyj6z7xuN8FN2u1wtGQsUjR69Rxb",
+    "instruction": "set_hook_authority",
+    "script": "scripts/cli/mod_supply_cap/set_hook_authority.js",
+    "returns": null,
+    "args": [
+      {
+        "name": "hook_authority",
+        "type": "pubkey"
+      }
+    ],
+    "accounts": [
+      {
+        "name": "owner",
+        "signer": true,
+        "relations": [
+          "module_state"
+        ]
+      },
+      {
+        "name": "module_state",
+        "writable": true,
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                115,
+                117,
+                112,
+                112,
+                108,
+                121,
+                95,
+                99,
+                97,
+                112
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "SupplyCapModule"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "program": "mod_supply_cap",
+    "address": "EGJvV5cBN7et6Pdthyj6z7xuN8FN2u1wtGQsUjR69Rxb",
+    "instruction": "transferred",
+    "script": "scripts/cli/mod_supply_cap/transferred.js",
+    "returns": null,
+    "args": [],
+    "accounts": [
+      {
+        "name": "module_state",
+        "pda": {
+          "seeds": [
+            {
+              "kind": "const",
+              "value": [
+                109,
+                111,
+                100,
+                95,
+                115,
+                117,
+                112,
+                112,
+                108,
+                121,
+                95,
+                99,
+                97,
+                112
+              ]
+            },
+            {
+              "kind": "account",
+              "path": "module_state.token_mint",
+              "account": "SupplyCapModule"
+            }
+          ]
+        }
+      }
+    ]
+  }
+]

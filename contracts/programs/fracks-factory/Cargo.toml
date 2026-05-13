@@ -1,0 +1,26 @@
+[package]
+name = "fracks-factory"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "fracks_factory"
+
+[features]
+no-entrypoint = []
+no-idl = []
+cpi = ["no-entrypoint"]
+idl-build = ["anchor-lang/idl-build"]
+
+[dependencies]
+anchor-lang = { workspace = true }
+anchor-spl = { workspace = true }
+fracks-compliance = { path = "../fracks-compliance", features = ["cpi"] }
+fracks-ctr = { path = "../fracks-ctr", features = ["cpi"] }
+fracks-fid = { path = "../fracks-fid", features = ["cpi"] }
+fracks-irp = { path = "../fracks-irp", features = ["cpi"] }
+fracks-irs = { path = "../fracks-irs", features = ["cpi"] }
+fracks-tir = { path = "../fracks-tir", features = ["cpi"] }
+fracks-token = { path = "../fracks-token", features = ["cpi"] }
+fracks-token-hook = { path = "../fracks-token-hook", features = ["cpi"] }

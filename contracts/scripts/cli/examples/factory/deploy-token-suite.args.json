@@ -1,0 +1,18 @@
+{
+  "token_mint": "11111111111111111111111111111111",
+  "token_name": "FRACKS Example",
+  "token_symbol": "FRX",
+  "decimals": 6,
+  "isin": "US0000000000",
+  "claim_topics": [1, 2],
+  "trusted_issuers": [
+    {
+      "issuer_fid": "11111111111111111111111111111111",
+      "topics": [1, 2],
+      "label": "Primary issuer"
+    }
+  ],
+  "compliance_modules": [],
+  "shared_irs": null,
+  "salt": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+}

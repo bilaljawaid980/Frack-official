@@ -1,0 +1,22 @@
+[package]
+name = "fracks-compliance"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "fracks_compliance"
+
+[features]
+no-entrypoint = []
+no-idl = []
+cpi = ["no-entrypoint"]
+idl-build = ["anchor-lang/idl-build"]
+
+[dependencies]
+anchor-lang = { workspace = true }
+solana-program = { workspace = true }
+mod-daily-limit = { path = "../modules/mod-daily-limit", features = ["cpi"] }
+mod-country-cap = { path = "../modules/mod-country-cap", features = ["cpi"] }
+mod-max-investors = { path = "../modules/mod-max-investors", features = ["cpi"] }
+mod-supply-cap = { path = "../modules/mod-supply-cap", features = ["cpi"] }

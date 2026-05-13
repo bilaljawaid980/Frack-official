@@ -1,0 +1,9 @@
+target/
+.anchor/
+node_modules/
+.DS_Store
+dist/
+coverage/
+*.log
+test-ledger/
+.local-validator-ledger/

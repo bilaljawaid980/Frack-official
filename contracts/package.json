@@ -1,0 +1,22 @@
+{
+  "name": "fracks-protocol",
+  "private": true,
+  "scripts": {
+    "test": "anchor test",
+    "build": "anchor build",
+    "cli:generate": "node scripts/cli/generate.js",
+    "cli:list": "node scripts/cli/list.js",
+    "cli:reference": "node scripts/cli/build-reference.js",
+    "cli:testcases": "node scripts/cli/build-test-cases.js"
+  },
+  "devDependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
+    "@solana/spl-token": "^0.4.14",
+    "@solana/web3.js": "^1.98.0",
+    "chai": "^4.5.0",
+    "mocha": "^10.7.3",
+    "ts-mocha": "^10.0.0",
+    "tweetnacl": "^1.0.3",
+    "typescript": "^5.8.3"
+  }
+}

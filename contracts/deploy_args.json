@@ -1,0 +1,30 @@
+{
+  "token_mint": "EobyvU2aXiiD9T5rfjch9XZrsbkXdMY6HLGmd3i14xHf",
+  "token_name": "Factory Security Token",
+  "token_symbol": "FST",
+  "decimals": 6,
+  "isin": "PK000FACTORY1",
+
+  "claim_topics": [1],
+
+  "trusted_issuers": [
+    {
+      "issuer_fid": "CJXoqTC9RLHGninoxXaa8SpRAyn1qpm12GBVErLUv5uj",
+      "topics": [1],
+      "label": "Primary KYC Issuer"
+    }
+  ],
+
+  "compliance_modules": [],
+
+"shared_irs": {
+  "some": "CkdkbcCaG4dqoY8CeMM6kWrygpfALDNggzSuZpSLoy5g"
+},
+
+  "salt": [
+    1,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0
+  ]
+}
