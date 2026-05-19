@@ -12,7 +12,15 @@ export class IndexedService {
   }
 
   listAssets() {
-    return this.prisma.asset.findMany({ orderBy: { updatedAt: "desc" } });
+    return this.prisma.asset.findMany({
+      where: {
+        OR: [
+          { lifecycleState: "PENDING_APPROVAL" },
+          { tokenContract: { not: { startsWith: "zig1" } } },
+        ],
+      },
+      orderBy: { updatedAt: "desc" },
+    });
   }
 
   listTokens() {

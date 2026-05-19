@@ -1,4 +1,5 @@
 import { Type } from "class-transformer";
+import type { Prisma } from "@prisma/client";
 import { IsOptional, IsString, IsInt, IsDateString } from "class-validator";
 
 export class CreateAssetDto {
@@ -35,4 +36,11 @@ export class CreateAssetDto {
   @IsOptional()
   @IsDateString()
   deployedAt?: string;
+
+  @IsOptional()
+  @IsString()
+  lifecycleState?: string;
+
+  @IsOptional()
+  metadata?: Prisma.InputJsonValue;
 }

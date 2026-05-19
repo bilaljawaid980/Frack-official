@@ -1,0 +1,977 @@
+{
+  "address": "EoENMXgL9GZBEVfjhn5KU4SkfjZeyoTEdd8NHAcMQsEB",
+  "metadata": {
+    "name": "fracks_fid",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "add_claim",
+      "discriminator": [
+        70,
+        114,
+        85,
+        106,
+        66,
+        244,
+        46,
+        99
+      ],
+      "accounts": [
+        {
+          "name": "issuer_owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "issuer_fid",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "issuer_fid.owner",
+                "account": "FidAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "target_fid",
+          "writable": true
+        },
+        {
+          "name": "claim",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  97,
+                  105,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "target_fid"
+              },
+              {
+                "kind": "account",
+                "path": "target_fid.claim_count",
+                "account": "FidAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "claim_topic_index",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  97,
+                  105,
+                  109,
+                  95,
+                  116,
+                  111,
+                  112,
+                  105,
+                  99,
+                  95,
+                  105,
+                  110,
+                  100,
+                  101,
+                  120
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "target_fid"
+              },
+              {
+                "kind": "account",
+                "path": "issuer_fid"
+              },
+              {
+                "kind": "arg",
+                "path": "topic"
+              }
+            ]
+          }
+        },
+        {
+          "name": "instructions_sysvar"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "topic",
+          "type": "u64"
+        },
+        {
+          "name": "data_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "signature",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "expires_at",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "create_fid",
+      "discriminator": [
+        170,
+        229,
+        98,
+        240,
+        20,
+        109,
+        122,
+        238
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "fid",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "is_issuer",
+          "type": "bool"
+        },
+        {
+          "name": "country",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "remove_claim",
+      "discriminator": [
+        4,
+        246,
+        59,
+        78,
+        67,
+        11,
+        210,
+        12
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "fid"
+        },
+        {
+          "name": "claim",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  97,
+                  105,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "claim.fid",
+                "account": "ClaimAccount"
+              },
+              {
+                "kind": "account",
+                "path": "claim.claim_id",
+                "account": "ClaimAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "claim_topic_index",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  97,
+                  105,
+                  109,
+                  95,
+                  116,
+                  111,
+                  112,
+                  105,
+                  99,
+                  95,
+                  105,
+                  110,
+                  100,
+                  101,
+                  120
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "claim.fid",
+                "account": "ClaimAccount"
+              },
+              {
+                "kind": "account",
+                "path": "claim.issuer_fid",
+                "account": "ClaimAccount"
+              },
+              {
+                "kind": "account",
+                "path": "claim.topic",
+                "account": "ClaimAccount"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "revoke_claim",
+      "discriminator": [
+        182,
+        1,
+        142,
+        33,
+        207,
+        153,
+        37,
+        132
+      ],
+      "accounts": [
+        {
+          "name": "issuer_owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "issuer_fid",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "issuer_fid.owner",
+                "account": "FidAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "claim",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  97,
+                  105,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "claim.fid",
+                "account": "ClaimAccount"
+              },
+              {
+                "kind": "account",
+                "path": "claim.claim_id",
+                "account": "ClaimAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "claim_topic_index",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  97,
+                  105,
+                  109,
+                  95,
+                  116,
+                  111,
+                  112,
+                  105,
+                  99,
+                  95,
+                  105,
+                  110,
+                  100,
+                  101,
+                  120
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "claim.fid",
+                "account": "ClaimAccount"
+              },
+              {
+                "kind": "account",
+                "path": "issuer_fid"
+              },
+              {
+                "kind": "account",
+                "path": "claim.topic",
+                "account": "ClaimAccount"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "set_management_key",
+      "discriminator": [
+        218,
+        115,
+        203,
+        190,
+        29,
+        167,
+        60,
+        248
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "fid"
+          ]
+        },
+        {
+          "name": "fid",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_key",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_signer_key",
+      "discriminator": [
+        3,
+        33,
+        201,
+        254,
+        15,
+        8,
+        55,
+        21
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "fid",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "fid.owner",
+                "account": "FidAccount"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_key",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "update_fid_profile",
+      "discriminator": [
+        159,
+        190,
+        109,
+        197,
+        159,
+        196,
+        229,
+        194
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "fid",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "fid.owner",
+                "account": "FidAccount"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "is_issuer",
+          "type": "bool"
+        },
+        {
+          "name": "country",
+          "type": "u16"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "ClaimAccount",
+      "discriminator": [
+        113,
+        109,
+        47,
+        96,
+        242,
+        219,
+        61,
+        165
+      ]
+    },
+    {
+      "name": "ClaimTopicIndex",
+      "discriminator": [
+        188,
+        122,
+        139,
+        30,
+        73,
+        58,
+        165,
+        201
+      ]
+    },
+    {
+      "name": "FidAccount",
+      "discriminator": [
+        25,
+        188,
+        177,
+        154,
+        173,
+        195,
+        222,
+        72
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "ClaimAdded",
+      "discriminator": [
+        147,
+        187,
+        131,
+        7,
+        56,
+        200,
+        233,
+        46
+      ]
+    },
+    {
+      "name": "ClaimRevoked",
+      "discriminator": [
+        167,
+        87,
+        234,
+        156,
+        201,
+        249,
+        211,
+        85
+      ]
+    },
+    {
+      "name": "FidCreated",
+      "discriminator": [
+        86,
+        230,
+        128,
+        180,
+        179,
+        110,
+        110,
+        112
+      ]
+    },
+    {
+      "name": "FidProfileUpdated",
+      "discriminator": [
+        98,
+        38,
+        40,
+        118,
+        26,
+        96,
+        247,
+        130
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 12025,
+      "name": "Unauthorized",
+      "msg": "Signer is not authorized for this action."
+    },
+    {
+      "code": 12026,
+      "name": "InvalidIssuerFid",
+      "msg": "Claim issuer FID is invalid for this operation."
+    },
+    {
+      "code": 12027,
+      "name": "MissingEd25519Instruction",
+      "msg": "An ed25519 verification instruction is required before add_claim."
+    },
+    {
+      "code": 12028,
+      "name": "InvalidInstructionsSysvar",
+      "msg": "The provided instructions sysvar account is invalid."
+    },
+    {
+      "code": 12029,
+      "name": "ArithmeticOverflow",
+      "msg": "Arithmetic overflow."
+    },
+    {
+      "code": 12030,
+      "name": "ClaimFidMismatch",
+      "msg": "Claim account does not belong to the provided FID."
+    },
+    {
+      "code": 12008,
+      "name": "InvalidClaimSignature",
+      "msg": "Claim signature is invalid."
+    },
+    {
+      "code": 12009,
+      "name": "DuplicateClaimTopicIssuer",
+      "msg": "An active claim already exists for this issuer/topic/investor tuple."
+    },
+    {
+      "code": 12012,
+      "name": "FidAlreadyExists",
+      "msg": "FID already exists for this wallet."
+    },
+    {
+      "code": 12017,
+      "name": "InvalidCountryCode",
+      "msg": "Country code is invalid."
+    },
+    {
+      "code": 12018,
+      "name": "InvalidClaimTopicIndex",
+      "msg": "Claim topic index account is invalid."
+    }
+  ],
+  "types": [
+    {
+      "name": "ClaimAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "claim_id",
+            "type": "u32"
+          },
+          {
+            "name": "topic",
+            "type": "u64"
+          },
+          {
+            "name": "issuer_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "data_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "signer_key",
+            "type": "pubkey"
+          },
+          {
+            "name": "signature",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          },
+          {
+            "name": "issued_at",
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "revoked",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ClaimAdded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "claim_id",
+            "type": "u32"
+          },
+          {
+            "name": "topic",
+            "type": "u64"
+          },
+          {
+            "name": "issuer_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ClaimRevoked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "claim_id",
+            "type": "u32"
+          },
+          {
+            "name": "topic",
+            "type": "u64"
+          },
+          {
+            "name": "by_issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ClaimTopicIndex",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "target_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "issuer_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "topic",
+            "type": "u64"
+          },
+          {
+            "name": "active_claim",
+            "type": "pubkey"
+          },
+          {
+            "name": "active_claim_id",
+            "type": "u32"
+          },
+          {
+            "name": "is_active",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FidAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "management_key",
+            "type": "pubkey"
+          },
+          {
+            "name": "signer_key",
+            "type": "pubkey"
+          },
+          {
+            "name": "claim_count",
+            "type": "u32"
+          },
+          {
+            "name": "is_issuer",
+            "type": "bool"
+          },
+          {
+            "name": "country",
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FidCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "fid_pubkey",
+            "type": "pubkey"
+          },
+          {
+            "name": "is_issuer",
+            "type": "bool"
+          },
+          {
+            "name": "country",
+            "type": "u16"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FidProfileUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "fid_pubkey",
+            "type": "pubkey"
+          },
+          {
+            "name": "is_issuer",
+            "type": "bool"
+          },
+          {
+            "name": "country",
+            "type": "u16"
+          },
+          {
+            "name": "by_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -22,10 +22,10 @@ use spl_tlv_account_resolution::{
 };
 use spl_transfer_hook_interface::instruction::ExecuteInstruction;
 
-declare_id!("CQwdsA97gSiPMUzNXjS22AUu6HmvzMK2XZVqhswYEHLi");
+declare_id!("4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m");
 
-const FRACKS_TOKEN_PROGRAM_ID: Pubkey = pubkey!("Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn");
-const FRACKS_COMPLIANCE_PROGRAM_ID: Pubkey = pubkey!("9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d");
+const FRACKS_TOKEN_PROGRAM_ID: Pubkey = pubkey!("92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s");
+const FRACKS_COMPLIANCE_PROGRAM_ID: Pubkey = pubkey!("FhMXw2VmYYksR4VcjQCUNWYrhzba1rmfiU1EDvaTsxHj");
 const MOD_MAX_INVESTORS_PROGRAM_ID: Pubkey = pubkey!("FMSVzD74EbSiTj2XHi8xsqcp6pigdxHL7MGHxtRLYte7");
 const MOD_DAILY_LIMIT_PROGRAM_ID: Pubkey = pubkey!("EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9");
 const MOD_COUNTRY_CAP_PROGRAM_ID: Pubkey = pubkey!("HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW");
@@ -37,7 +37,7 @@ const EXTRA_ACCOUNT_METAS_SPACE: usize =
     12 + 4 + (EXTRA_ACCOUNT_META_SIZE * (BASE_EXTRA_METAS + (15 * MAX_MODULE_EXTRA_METAS)));
 const TOKEN_STATE_COMPLIANCE_OFFSET: u8 = 72;
 const OWNER_STATE_OWNER_OFFSET: usize = 8;
-const OWNER_STATE_TOKEN_MINT_OFFSET: usize = 72;
+const OWNER_STATE_TOKEN_MINT_OFFSET: usize = 40;
 const COMPLIANCE_MODULES_OFFSET: u8 = 76;
 const TRANSFER_APPROVAL_KIND_FORCED: u8 = 1;
 const TRANSFER_APPROVAL_KIND_RECOVERY: u8 = 2;
@@ -132,6 +132,91 @@ pub mod fracks_token_hook {
 
         let mut data = ctx.accounts.extra_account_metas.try_borrow_mut_data()?;
         ExtraAccountMetaList::init::<ExecuteInstruction>(&mut data, &metas)
+            .map_err(|_| error!(FracksTokenHookError::InvalidExtraAccountMetas))?;
+        Ok(())
+    }
+
+    pub fn refresh_extra_account_metas<'info>(
+        ctx: Context<'_, '_, '_, 'info, RefreshExtraAccountMetas<'info>>,
+    ) -> Result<()> {
+        let token_state = read_token_state(&ctx.accounts.token_state)?;
+        validate_compliance_state(
+            &ctx.accounts.compliance_state,
+            token_state.compliance,
+            token_state.token_mint,
+        )?;
+        require_keys_eq!(
+            token_state.token_mint,
+            ctx.accounts.token_mint_account.key(),
+            FracksTokenHookError::InvalidTokenState
+        );
+        validate_token_mint_account(
+            &ctx.accounts.token_mint_account,
+            &ctx.accounts.token_state,
+            &token_state,
+        )?;
+        validate_extra_account_metas_account(
+            &ctx.accounts.extra_account_metas,
+            &ctx.accounts.token_mint_account,
+        )?;
+
+        let mut metas = vec![
+            ExtraAccountMeta::new_with_pubkey(&FRACKS_TOKEN_PROGRAM_ID, false, false)
+                .map_err(|_| error!(FracksTokenHookError::InvalidExtraAccountMetas))?,
+            ExtraAccountMeta::new_external_pda_with_seeds(
+                5,
+                &[
+                    Seed::Literal {
+                        bytes: b"token_state".to_vec(),
+                    },
+                    Seed::AccountKey { index: 1 },
+                ],
+                false,
+                false,
+            )
+            .map_err(|_| error!(FracksTokenHookError::InvalidExtraAccountMetas))?,
+            ExtraAccountMeta::new_with_seeds(
+                &[
+                    Seed::Literal {
+                        bytes: b"transfer_approval".to_vec(),
+                    },
+                    Seed::AccountKey { index: 0 },
+                    Seed::AccountKey { index: 2 },
+                    Seed::AccountKey { index: 3 },
+                ],
+                false,
+                true,
+            )
+            .map_err(|_| error!(FracksTokenHookError::InvalidExtraAccountMetas))?,
+            ExtraAccountMeta::new_with_pubkey_data(
+                &PubkeyData::AccountData {
+                    account_index: 6,
+                    data_index: TOKEN_STATE_COMPLIANCE_OFFSET,
+                },
+                false,
+                false,
+            )
+            .map_err(|_| error!(FracksTokenHookError::InvalidExtraAccountMetas))?,
+            ExtraAccountMeta::new_with_pubkey(&FRACKS_COMPLIANCE_PROGRAM_ID, false, false)
+                .map_err(|_| error!(FracksTokenHookError::InvalidExtraAccountMetas))?,
+        ];
+
+        require!(
+            ctx.remaining_accounts.len() <= 15,
+            FracksTokenHookError::TooManyModules
+        );
+        for index in 0..ctx.remaining_accounts.len() {
+            let module_account = &ctx.remaining_accounts[index];
+            require_keys_eq!(
+                module_account.key(),
+                read_compliance_module_key(&ctx.accounts.compliance_state, index)?,
+                FracksTokenHookError::InvalidComplianceModule
+            );
+            push_module_metas(&mut metas, module_account, index)?;
+        }
+
+        let mut data = ctx.accounts.extra_account_metas.try_borrow_mut_data()?;
+        ExtraAccountMetaList::update::<ExecuteInstruction>(&mut data, &metas)
             .map_err(|_| error!(FracksTokenHookError::InvalidExtraAccountMetas))?;
         Ok(())
     }
@@ -282,6 +367,25 @@ pub struct InitializeExtraAccountMetas<'info> {
 }
 
 #[derive(Accounts)]
+pub struct RefreshExtraAccountMetas<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    /// CHECK: Validated against the FRACKS token controller account layout.
+    pub token_state: UncheckedAccount<'info>,
+    /// CHECK: Validated against token_state.compliance.
+    pub compliance_state: UncheckedAccount<'info>,
+    /// CHECK: Token-2022 mint validated in instruction.
+    pub token_mint_account: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        seeds = [b"extra-account-metas", token_mint_account.key().as_ref()],
+        bump
+    )]
+    /// CHECK: Canonical transfer-hook validation PDA refreshed from compliance state.
+    pub extra_account_metas: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
 pub struct ApproveTransfer<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -407,7 +511,7 @@ fn validate_owner_state(
         FracksTokenHookError::InvalidOwnerState
     );
     let data = account.try_borrow_data()?;
-    require!(data.len() >= 105, FracksTokenHookError::InvalidOwnerState);
+    require!(data.len() >= 73, FracksTokenHookError::InvalidOwnerState);
     require!(
         data[..8] == account_discriminator("OwnerState"),
         FracksTokenHookError::InvalidOwnerState
@@ -726,6 +830,25 @@ fn validate_transfer_hook_invocation<'info>(
     require!(
         is_transferring_token_account(destination_token_account)?,
         FracksTokenHookError::ProgramCalledOutsideTransfer
+    );
+    Ok(())
+}
+
+fn validate_extra_account_metas_account<'info>(
+    extra_account_metas: &AccountInfo<'info>,
+    mint_info: &AccountInfo<'info>,
+) -> Result<()> {
+    let expected_extra_metas =
+        spl_transfer_hook_interface::get_extra_account_metas_address(mint_info.key, &id());
+    require_keys_eq!(
+        extra_account_metas.key(),
+        expected_extra_metas,
+        FracksTokenHookError::InvalidExtraAccountMetas
+    );
+    require_keys_eq!(
+        *extra_account_metas.owner,
+        id(),
+        FracksTokenHookError::InvalidExtraAccountMetas
     );
     Ok(())
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useMemo } from 'react';
 import { useWallet as useSolanaWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { TrexClient } from '@/lib/trex-client';
@@ -39,6 +39,21 @@ export function useWallet() {
     signMessage,
   } = solanaWallet;
   const { setVisible } = useWalletModal();
+  
+  // Use a ref for signers to avoid re-triggering hydration when wallet methods change identity
+  const walletMethodsRef = useRef({
+    signTransaction,
+    signAllTransactions,
+    signMessage,
+  });
+
+  useEffect(() => {
+    walletMethodsRef.current = {
+      signTransaction,
+      signAllTransactions,
+      signMessage,
+    };
+  }, [signTransaction, signAllTransactions, signMessage]);
 
   const connectWallet = useCallback(async () => {
     try {
@@ -100,9 +115,9 @@ export function useWallet() {
           sharedHydrationPromise = (async () => {
             const anchorWallet = {
               publicKey,
-              signTransaction: signTransaction!,
-              signAllTransactions: signAllTransactions!,
-              signMessage,
+              signTransaction: walletMethodsRef.current.signTransaction!,
+              signAllTransactions: walletMethodsRef.current.signAllTransactions!,
+              signMessage: walletMethodsRef.current.signMessage,
             };
             const client = await TrexClient.connectWithWallet(
               anchorWallet,
@@ -210,7 +225,7 @@ export function useWallet() {
     };
 
     hydrateWallet();
-  }, [publicKey, connected, wallet, address, trexClient, setWalletState, clearWalletState, setIsConnecting, signTransaction, signAllTransactions, signMessage]);
+  }, [publicKey, connected, wallet, setVisible]);
 
   return {
     address,

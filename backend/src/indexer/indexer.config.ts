@@ -8,7 +8,16 @@ export const INDEXER_DEFAULTS = {
 };
 
 export function getIndexerConfig() {
-  const rpcEndpoint = process.env.SOLANA_RPC_URL || INDEXER_DEFAULTS.rpcEndpoint;
+  const rpcEndpoints = [
+    process.env.SOLANA_RPC_URL1,
+    process.env.SOLANA_RPC_URL2,
+    process.env.SOLANA_RPC_URL,
+    INDEXER_DEFAULTS.rpcEndpoint,
+  ]
+    .map((endpoint) => endpoint?.trim())
+    .filter((endpoint): endpoint is string => Boolean(endpoint))
+    .filter((endpoint, index, list) => list.indexOf(endpoint) === index);
+  const rpcEndpoint = rpcEndpoints[0];
   const factoryProgram = process.env.FRACKS_FACTORY || INDEXER_DEFAULTS.factoryProgram;
   const tokenListRaw = process.env.INDEXER_TOKENS || INDEXER_DEFAULTS.tokenList.join(",");
 
@@ -34,6 +43,7 @@ export function getIndexerConfig() {
 
   return {
     rpcEndpoint,
+    rpcEndpoints,
     factoryProgram,
     tokenContracts,
     maxAssetScan,

@@ -48,6 +48,41 @@ model Asset {
   updatedAt      DateTime @updatedAt
 }
 
+model AssetRequest {
+  id              String   @id @default(uuid())
+  status          String   @default("PENDING_REVIEW")
+  issuerWallet    String   @map("issuer_wallet")
+  legalOwner      String?  @map("legal_owner")
+  referenceId     String?  @map("reference_id")
+  name            String
+  symbol          String
+  description     String?
+  assetType       String   @map("asset_type")
+  currency        String   @default("USD")
+  location        String?
+  underlyingValue Float    @map("underlying_value")
+  totalSupply     Int      @map("total_supply")
+  decimals        Int      @default(6)
+  initialPrice    Float    @map("initial_price")
+  claimTopics     String[] @map("claim_topics")
+  trustedIssuers  Json?    @map("trusted_issuers")
+  complianceModules String[] @map("compliance_modules")
+  documents       Json?
+  metadata        Json?
+  reviewedAt      DateTime? @map("reviewed_at")
+  reviewedBy      String?   @map("reviewed_by")
+  rejectionReason String?   @map("rejection_reason")
+  deployedAssetId String?   @map("deployed_asset_id")
+  txHash          String?   @map("tx_hash")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([issuerWallet])
+  @@index([createdAt])
+  @@map("asset_requests")
+}
+
 model TokenState {
   id           String   @id @default(uuid())
   tokenContract String @unique
@@ -255,5 +290,53 @@ model KycDocument {
   verifiedAt      DateTime?
   
   @@index([applicationId])
+}
+
+
+model TokenPurchaseRequest {
+  id                String   @id @default(uuid())
+  assetId           String?  @map("asset_id")
+  tokenContract     String
+  investorWallet    String
+  amount            Float?
+  
+  fullName          String?
+  email             String?
+  nationality       String?
+  country           String?
+  idDocumentUrl     String?
+  proofOfAddressUrl String?
+  
+  kycProvider       String?
+  amlProvider       String?
+  issuerWallet      String?
+  requiredClaimTopics String[] @default([]) @map("required_claim_topics")
+  documents         Json?
+  
+  status            String   @default("SUBMITTED")
+  
+  kycApprovedAt     DateTime?
+  kycApprovedBy     String?
+  kycClaimTxHash    String?
+  amlApprovedAt     DateTime?
+  amlApprovedBy     String?
+  amlClaimTxHash    String?
+  issuerApprovedAt  DateTime?
+  issuerApprovedBy  String?
+  mintTxHash        String?
+  mintedAt          DateTime?
+  rejectionReason   String?
+  rejectedAt        DateTime?
+  rejectedBy        String?
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([assetId])
+  @@index([tokenContract])
+  @@index([investorWallet])
+  @@index([kycProvider])
+  @@index([amlProvider])
+  @@index([issuerWallet])
 }
 

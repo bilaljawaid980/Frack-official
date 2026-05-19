@@ -49,28 +49,28 @@ export const TREX_CONTRACTS = {
 
   identityRegistry:
     process.env.NEXT_PUBLIC_FRACKS_IRP ||
-    '6dDKwtRbGkHJhU9LztpDkBC3fUdM46WeKJdrASFikce6',
+    'C8jtErJYtuu7pSZczfSm1JvDmv254Nmmw1KLX6rBdY8o',
   trustedIssuers:
     process.env.NEXT_PUBLIC_FRACKS_TIR ||
-    'Am5W7oEe8NCU4jdLP8qyUT3gjUPCDsvTSxGhdCQp1ETS',
+    '8KDYYPx74w6ZLKZgcvVWrj1mCv1gcULdTh2jbxcJwGMJ',
   claimTopics:
     process.env.NEXT_PUBLIC_FRACKS_CTR ||
-    'B15EFQKwnfbNHXHhPVvVcw18PaBeTDsRLNRno3QS8Yna',
+    '12rCF9fuSth8T3o6sfpfWdGyaDEQ1jNsxe1ZvKH7q2tS',
   compliance:
     process.env.NEXT_PUBLIC_FRACKS_COMPLIANCE ||
-    '9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d',
+    'FhMXw2VmYYksR4VcjQCUNWYrhzba1rmfiU1EDvaTsxHj',
 
   onchainIdCodeId: 0,
 
   factory:
     process.env.NEXT_PUBLIC_FRACKS_FACTORY ||
-    '3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M',
+    '6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe',
 };
 
 export const EXAMPLE_IDENTITIES = {
   issuer:
     process.env.NEXT_PUBLIC_ISSUER_IDENTITY ||
-    '7Y6WJtDmRMcRYgENfKATsGnQTQJ2wAQfF3LhoBt3KbBH',
+    'EoENMXgL9GZBEVfjhn5KU4SkfjZeyoTEdd8NHAcMQsEB',
   investor:
     process.env.NEXT_PUBLIC_INVESTOR_IDENTITY ||
     '11111111111111111111111111111111',

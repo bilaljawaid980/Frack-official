@@ -829,6 +829,7 @@ name = "fracks-irs"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
+ "fracks-fid",
 ]
 
 [[package]]

@@ -1,16 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import {
-  Building2,
-  FileText,
-  Shield,
-  TrendingUp,
-  CheckCircle,
-  Clock,
-  AlertCircle
-} from "lucide-react";
+import { Building2, CheckCircle, Clock, TrendingUp } from "lucide-react";
+import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,116 +14,293 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { IssuanceForm } from "@/components/rwa/issuance-form";
+import {
+  IssuanceForm,
+  type IssuanceFormValues,
+} from "@/components/rwa/issuance-form";
 import { ConnectWalletCard } from "@/components/wallet/connect-wallet-card";
-import { useAssetsContext } from "@/contexts/assets-context";
 import { useWallet } from "@/hooks/use-wallet";
 import { formatCurrency } from "@/lib/utils";
-import { toast } from "sonner";
-import { usePermissionsContext } from "@/contexts/permissions-context";
+import { apiFetch } from "@/lib/backend";
+
+type IndexedAsset = {
+  id: string;
+  factoryAssetId?: number | null;
+  tokenContract: string;
+  referenceId?: string | null;
+  name: string;
+  symbol: string;
+  description?: string | null;
+  issuerWallet?: string | null;
+  legalOwner?: string | null;
+  metadata?: Record<string, unknown> | string | null;
+  deployedAt?: string | null;
+  lifecycleState?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+type IssuanceAsset = {
+  id: string;
+  dbId: string;
+  name: string;
+  symbol: string;
+  description: string;
+  issuer: string;
+  referenceId: string;
+  assetType: string;
+  currency: string;
+  location: string;
+  underlyingValue: number;
+  totalSupply: number;
+  tokenContract: string;
+  lifecycleState: string;
+};
+
+type AssetRequest = {
+  id: string;
+  status: "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "DEPLOYED";
+  issuerWallet: string;
+  legalOwner?: string | null;
+  referenceId?: string | null;
+  name: string;
+  symbol: string;
+  description?: string | null;
+  assetType: string;
+  currency: string;
+  location?: string | null;
+  underlyingValue: number;
+  totalSupply: number;
+  decimals: number;
+  initialPrice: number;
+  claimTopics: string[];
+  trustedIssuers?: unknown;
+  complianceModules: string[];
+  documents?: unknown;
+  createdAt: string;
+};
+
+function parseMetadata(metadata: IndexedAsset["metadata"]) {
+  if (!metadata) return {};
+  if (typeof metadata !== "string") return metadata;
+  try {
+    return JSON.parse(metadata) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+function stringValue(value: unknown, fallback = "") {
+  return typeof value === "string" ? value : fallback;
+}
+
+function numberValue(value: unknown, fallback = 0) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function mapAsset(asset: IndexedAsset): IssuanceAsset {
+  const metadata = parseMetadata(asset.metadata);
+  return {
+    id: asset.factoryAssetId != null ? String(asset.factoryAssetId) : asset.id,
+    dbId: asset.id,
+    name: stringValue(metadata.name, asset.name),
+    symbol: asset.symbol,
+    description: asset.description || stringValue(metadata.description),
+    issuer: asset.issuerWallet || asset.legalOwner || "",
+    referenceId: asset.referenceId || stringValue(metadata.isin, asset.symbol),
+    assetType: stringValue(metadata.assetType, stringValue(metadata.type, "real-estate")),
+    currency: stringValue(metadata.currency, "USD"),
+    location: stringValue(metadata.location),
+    underlyingValue: numberValue(metadata.underlyingValue),
+    totalSupply: numberValue(metadata.totalSupply),
+    tokenContract: asset.tokenContract,
+    lifecycleState: asset.lifecycleState || "ISSUED",
+  };
+}
+
+async function parseApiResponse<T>(response: Response, fallback: string): Promise<T> {
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.success === false) {
+    throw new Error(payload?.error || fallback);
+  }
+  return payload?.data as T;
+}
 
 export default function IssuancePage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { address, connectWallet, isConnecting } = useWallet();
-  const { canSeeIssuance, loading: permissionsLoading } =
-    usePermissionsContext();
-  const { assets, loading, issueAsset, deleteAsset } = useAssetsContext();
+  const [assets, setAssets] = useState<IssuanceAsset[]>([]);
+  const [assetRequests, setAssetRequests] = useState<AssetRequest[]>([]);
+  const [selectedRequest, setSelectedRequest] = useState<AssetRequest | null>(null);
+  const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("new");
 
-  const recentIssuances = assets.filter(a => a.lifecycleState !== "PENDING_APPROVAL").slice(0, 5);
-  const pendingIssuances = assets.filter(
-    (asset) => asset.lifecycleState === "PENDING_APPROVAL",
+  const loadAssets = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/rwa", { cache: "no-store" });
+      const records = await parseApiResponse<IndexedAsset[]>(
+        response,
+        "Failed to load issued assets.",
+      );
+      setAssets(records.map(mapAsset));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load assets";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const loadAssetRequests = useCallback(async () => {
+    try {
+      const requests = await apiFetch<AssetRequest[]>("/asset-requests");
+      setAssetRequests(requests);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to load asset requests";
+      toast.error(message);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void loadAssets();
+      void loadAssetRequests();
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [loadAssetRequests, loadAssets]);
+
+  useEffect(() => {
+    const requestId = searchParams.get("requestId");
+    if (!requestId) {
+      const timeout = window.setTimeout(() => setSelectedRequest(null), 0);
+      return () => window.clearTimeout(timeout);
+    }
+
+    const timeout = window.setTimeout(async () => {
+      try {
+        const request = await apiFetch<AssetRequest>(`/asset-requests/${requestId}`);
+        setSelectedRequest(request);
+        setActiveTab("new");
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to load asset request";
+        toast.error(message);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [searchParams]);
+
+  const pendingRequests = useMemo(
+    () => assetRequests.filter((request) => request.status === "PENDING_REVIEW"),
+    [assetRequests],
   );
 
-  const stats = {
-    totalIssued: assets.filter(a => a.lifecycleState !== "PENDING_APPROVAL").length,
-    totalValue: assets.reduce((sum, asset) => sum + (asset.underlyingValue || 0), 0),
-    pendingReview: pendingIssuances.length,
-  };
+  const recentIssuances = useMemo(
+    () =>
+      assets
+        .filter((asset) => asset.lifecycleState !== "PENDING_APPROVAL")
+        .slice(0, 5),
+    [assets],
+  );
 
-  const handleApprove = async (asset: any) => {
+  const stats = useMemo(
+    () => ({
+      totalIssued: assets.filter((asset) => asset.lifecycleState !== "PENDING_APPROVAL").length,
+      totalValue: assets.reduce((sum, asset) => sum + asset.underlyingValue, 0),
+      pendingReview: pendingRequests.length,
+    }),
+    [assets, pendingRequests.length],
+  );
+
+  const handleApprove = async (request: AssetRequest) => {
     try {
-      const issuanceRequest = {
-        assetDetails: {
-          name: asset.name,
-          symbol: asset.symbol,
-          description: asset.description,
-          assetType: asset.assetType,
-          location: asset.location || "",
-          currency: asset.currency || "USD",
-          underlyingValue: asset.underlyingValue || 0,
-          totalSupply: asset.totalSupply || 0,
-          legalOwner: asset.issuerWallet || asset.issuer || ""
-        },
-        complianceRequirements: {
-          kycRequired: true,
-          amlRequired: true,
-          accreditedInvestorsOnly: false,
-          jurisdiction: ["us"]
-        },
-        tokenDetails: {
-          tokenName: asset.name,
-          tokenSymbol: asset.symbol,
-          decimals: 6,
-          initialPrice: 1,
-          owner: asset.issuerWallet || asset.issuer || "",
-          issuer: asset.issuerWallet || asset.issuer || "",
-          controller: asset.issuerWallet || asset.issuer || "",
-        },
-        documents: []
-      };
-      
-      toast.loading("Approving and deploying token suite...", { id: "approve-deploy" });
-      
-      // 1. Issue on-chain
-      await issueAsset(issuanceRequest);
-      
-      // 2. Remove the pending application from DB since it is now live
-      await deleteAsset(asset.id);
-      
-      toast.success("Application approved and deployed on-chain!", { id: "approve-deploy" });
-      
-    } catch (err: any) {
-      console.error(err);
-      toast.error("Deployment failed: " + err.message, { id: "approve-deploy" });
+      await apiFetch(`/asset-requests/${request.id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: "APPROVED",
+          reviewedBy: address,
+        }),
+      });
+      toast.success("Request approved. Deployment form is ready.");
+      router.push(`/issuance?requestId=${request.id}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      toast.error(`Approval failed: ${message}`);
     }
   };
 
-  const handleReject = async (asset: any) => {
-    if (!window.confirm("Are you sure you want to reject this application?")) return;
-    
+  const handleReject = async (request: AssetRequest) => {
+    if (!window.confirm("Are you sure you want to reject this request?")) return;
+
     try {
-      toast.loading("Rejecting application...", { id: "reject-app" });
-      await deleteAsset(asset.id);
-      toast.success("Application rejected and removed.", { id: "reject-app" });
-    } catch (err: any) {
-      toast.error("Failed to reject: " + err.message, { id: "reject-app" });
+      await apiFetch(`/asset-requests/${request.id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: "REJECTED",
+          reviewedBy: address,
+        }),
+      });
+      await loadAssetRequests();
+      toast.success("Request rejected.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      toast.error(`Failed to reject: ${message}`);
     }
   };
 
-  // Show connect wallet prompt if not connected
+  const selectedRequestValues = useMemo<Partial<IssuanceFormValues> | undefined>(() => {
+    if (!selectedRequest) return undefined;
+    const trustedIssuers = Array.isArray(selectedRequest.trustedIssuers)
+      ? selectedRequest.trustedIssuers.map((issuer: unknown) => {
+          const record =
+            issuer && typeof issuer === "object"
+              ? (issuer as Record<string, unknown>)
+              : {};
+          return {
+            walletAddress: String(record.walletAddress || ""),
+            issuerFid: String(record.issuerFid || ""),
+            label: String(record.label || ""),
+            topics: Array.isArray(record.topics)
+              ? record.topics.map((topic: unknown) => BigInt(String(topic)))
+            : [1n],
+          };
+        })
+      : [];
+
+    return {
+      assetDetails: {
+        name: selectedRequest.name,
+        symbol: selectedRequest.symbol,
+        description: selectedRequest.description || "",
+        assetType: selectedRequest.assetType as IssuanceFormValues["assetDetails"]["assetType"],
+        underlyingValue: selectedRequest.underlyingValue,
+        totalSupply: selectedRequest.totalSupply,
+        location: selectedRequest.location || "",
+        currency: selectedRequest.currency,
+        issuerWallet: selectedRequest.issuerWallet,
+        isin: selectedRequest.referenceId || selectedRequest.symbol,
+      },
+      complianceRequirements: {
+        claimTopics: selectedRequest.claimTopics,
+        trustedIssuers,
+        selectedModules: selectedRequest.complianceModules || [],
+      },
+      tokenDetails: {
+        decimals: selectedRequest.decimals,
+        initialPrice: selectedRequest.initialPrice,
+      },
+      documents: [],
+    };
+  }, [selectedRequest]);
+
   if (!address) {
     return (
       <ConnectWalletCard onConnect={connectWallet} isConnecting={isConnecting} />
-    );
-  }
-
-  if (!permissionsLoading && !canSeeIssuance) {
-    return (
-      <div className="space-y-6 p-8 glass-panel rounded-[22px]">
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="pt-6">
-            <h2 className="text-lg font-semibold text-red-800">
-              Access Restricted
-            </h2>
-            <p className="text-sm text-red-700 mt-1">
-              Only the platform owner wallet can manage asset issuances.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
     );
   }
 
@@ -143,11 +315,15 @@ export default function IssuancePage() {
         </div>
         <div className="flex gap-4">
           <Card className="px-6 py-3 bg-primary/5 border-primary/10">
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Total Assets</p>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+              Total Assets
+            </p>
             <p className="text-2xl font-bold">{stats.totalIssued}</p>
           </Card>
           <Card className="px-6 py-3 bg-yellow-500/5 border-yellow-500/10">
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Pending Review</p>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+              Pending Review
+            </p>
             <p className="text-2xl font-bold text-yellow-600">{stats.pendingReview}</p>
           </Card>
         </div>
@@ -168,7 +344,26 @@ export default function IssuancePage() {
         </TabsList>
 
         <TabsContent value="new" className="space-y-6">
-          <IssuanceForm />
+          {selectedRequest && (
+            <Card className="border-amber-200 bg-amber-50/70">
+              <CardHeader>
+                <CardTitle className="text-base">Approved Request Loaded</CardTitle>
+                <CardDescription>
+                  Deploying {selectedRequest.name} for issuer{" "}
+                  {selectedRequest.issuerWallet.slice(0, 6)}...
+                  {selectedRequest.issuerWallet.slice(-4)}.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          )}
+          <IssuanceForm
+            onDeployed={async () => {
+              await loadAssets();
+              await loadAssetRequests();
+            }}
+            initialValues={selectedRequestValues}
+            deploymentRequestId={selectedRequest?.id}
+          />
         </TabsContent>
 
         <TabsContent value="pending" className="space-y-6">
@@ -184,22 +379,24 @@ export default function IssuancePage() {
             </CardHeader>
             <CardContent className="pt-6">
               {loading ? (
-                <div className="text-center py-12 text-muted-foreground">Loading applications...</div>
-              ) : pendingIssuances.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  Loading applications...
+                </div>
+              ) : pendingRequests.length === 0 ? (
                 <div className="text-center py-16">
                   <div className="h-16 w-16 mx-auto rounded-full bg-emerald-50 flex items-center justify-center mb-4">
                     <CheckCircle className="h-8 w-8 text-emerald-500" />
                   </div>
                   <h3 className="text-lg font-semibold">Queue Empty</h3>
                   <p className="text-muted-foreground max-w-xs mx-auto">
-                    All submitted asset applications have been reviewed and processed.
+                    All submitted asset tokenization requests have been reviewed.
                   </p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {pendingIssuances.map((asset) => (
+                  {pendingRequests.map((request) => (
                     <motion.div
-                      key={asset.id}
+                      key={request.id}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       className="p-6 rounded-xl border border-slate-200 hover:border-primary/20 transition-all bg-white shadow-sm"
@@ -211,40 +408,43 @@ export default function IssuancePage() {
                           </div>
                           <div>
                             <div className="flex items-center gap-2 mb-1">
-                              <h4 className="font-bold text-lg">{asset.name}</h4>
-                              <Badge variant="secondary">{asset.symbol}</Badge>
+                              <h4 className="font-bold text-lg">{request.name}</h4>
+                              <Badge variant="secondary">{request.symbol}</Badge>
                             </div>
                             <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                               <span className="flex items-center gap-1">
                                 <TrendingUp className="h-3.5 w-3.5" />
-                                {formatCurrency(asset.underlyingValue)}
+                                {formatCurrency(request.underlyingValue)}
                               </span>
-                              <span>•</span>
-                              <span>Issuer: {asset.issuer.slice(0, 6)}...{asset.issuer.slice(-4)}</span>
-                              <span>•</span>
-                              <span className="capitalize">{asset.assetType.replace('-', ' ')}</span>
+                              <span>
+                                Issuer: {request.issuerWallet.slice(0, 6)}...
+                                {request.issuerWallet.slice(-4)}
+                              </span>
+                              <span className="capitalize">
+                                {request.assetType.replace("-", " ")}
+                              </span>
                             </div>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
-                          <Button 
+                          <Button
                             className="bg-primary hover:bg-primary/90 text-white font-semibold px-6"
-                            onClick={() => handleApprove(asset)}
+                            onClick={() => handleApprove(request)}
                           >
-                            Approve & Deploy
+                            Approve & Prepare Deploy
                           </Button>
-                          <Button 
-                            variant="outline" 
+                          <Button
+                            variant="outline"
                             className="text-slate-600"
-                            onClick={() => handleReject(asset)}
+                            onClick={() => handleReject(request)}
                           >
                             Reject
                           </Button>
                         </div>
                       </div>
-                      {asset.description && (
+                      {request.description && (
                         <div className="mt-4 pt-4 border-t text-sm text-muted-foreground italic">
-                          "{asset.description}"
+                          &quot;{request.description}&quot;
                         </div>
                       )}
                     </motion.div>
@@ -264,24 +464,38 @@ export default function IssuancePage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {recentIssuances.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">No active tokens found.</div>
+              {loading ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  Loading tokens...
+                </div>
+              ) : recentIssuances.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  No active tokens found.
+                </div>
               ) : (
                 <div className="grid grid-cols-1 gap-4">
                   {recentIssuances.map((asset) => (
-                    <div key={asset.id} className="flex items-center justify-between p-4 rounded-lg border bg-slate-50/30">
+                    <div
+                      key={asset.dbId}
+                      className="flex items-center justify-between p-4 rounded-lg border bg-slate-50/30"
+                    >
                       <div className="flex items-center gap-4">
                         <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600">
                           <CheckCircle className="h-5 w-5" />
                         </div>
                         <div>
                           <p className="font-bold">{asset.name}</p>
-                          <p className="text-xs text-muted-foreground mono">{asset.contractAddress.slice(0, 8)}...{asset.contractAddress.slice(-8)}</p>
+                          <p className="text-xs text-muted-foreground mono">
+                            {asset.tokenContract.slice(0, 8)}...
+                            {asset.tokenContract.slice(-8)}
+                          </p>
                         </div>
                       </div>
                       <div className="text-right">
                         <p className="font-bold">{formatCurrency(asset.underlyingValue)}</p>
-                        <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Active</Badge>
+                        <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
+                          Active
+                        </Badge>
                       </div>
                     </div>
                   ))}

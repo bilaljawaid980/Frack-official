@@ -10,28 +10,28 @@ use anchor_spl::token_2022_extensions::transfer_hook::{
 };
 
 use fracks_compliance::cpi::accounts::{
-    InitializeCompliance, UpdateComplianceOwner as BindComplianceModule,
+    InitializeCompliance, UpdateComplianceOwner as ComplianceOwnerAccounts,
 };
 use fracks_compliance::program::FracksCompliance;
-use fracks_ctr::cpi::accounts::{InitializeCtr, MutateCtr as AddClaimTopic};
+use fracks_ctr::cpi::accounts::{InitializeCtr, MutateCtr as CtrOwnerAccounts};
 use fracks_ctr::program::FracksCtr;
-use fracks_irp::cpi::accounts::InitializeRegistry;
+use fracks_irp::cpi::accounts::{InitializeRegistry, UpdateRegistryOwner};
 use fracks_irp::program::FracksIrp;
-use fracks_irs::cpi::accounts::{InitializeIrs, UpdateIrsOwnerState as BindRegistry};
+use fracks_irs::cpi::accounts::{InitializeIrs, UpdateIrsOwnerState as IrsOwnerAccounts};
 use fracks_irs::program::FracksIrs;
-use fracks_tir::cpi::accounts::{AddTrustedIssuer, InitializeTir};
+use fracks_tir::cpi::accounts::{AddTrustedIssuer, InitializeTir, TransferTirOwnership};
 use fracks_tir::program::FracksTir;
 use fracks_token_hook::cpi::accounts::InitializeExtraAccountMetas;
 use fracks_token_hook::program::FracksTokenHook;
-use fracks_token::cpi::accounts::InitializeToken;
+use fracks_token::cpi::accounts::{InitializeToken, UpdateOwnerState};
 use fracks_token::program::FracksToken;
 
-declare_id!("3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M");
+declare_id!("6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe");
 
 const MAX_CLAIM_TOPICS: usize = 20;
 const MAX_TRUSTED_ISSUERS: usize = 16;
 const MAX_COMPLIANCE_MODULES: usize = 15;
-const FACTORY_STATE_SPACE: usize = 8 + (32 * 9) + 8 + 1;
+const FACTORY_STATE_SPACE: usize = 8 + (32 * 8) + 8 + 1;
 const TOKEN_DEPLOYMENT_SPACE: usize = 8 + 8 + 32 + 32 + (32 * 8) + 8 + 1;
 const TOKEN_2022_MINT_EXTENSIONS: [spl_token_2022::extension::ExtensionType; 2] = [
     spl_token_2022::extension::ExtensionType::TransferHook,
@@ -45,7 +45,6 @@ pub mod fracks_factory {
     pub fn initialize_factory(ctx: Context<InitializeFactory>) -> Result<()> {
         let state = &mut ctx.accounts.factory_state;
         state.owner = ctx.accounts.owner.key();
-        state.pending_owner = Pubkey::default();
         state.token_program_id = ctx.accounts.token_program.key();
         state.fid_program_id = fracks_fid::id();
         state.irp_program_id = ctx.accounts.irp_program.key();
@@ -77,23 +76,8 @@ pub mod fracks_factory {
         ctx: Context<UpdateFactoryState>,
         new_owner: Pubkey,
     ) -> Result<()> {
-        require_keys_neq!(
-            new_owner,
-            Pubkey::default(),
-            FracksFactoryError::InvalidPendingOwner
-        );
-        ctx.accounts.factory_state.pending_owner = new_owner;
-        Ok(())
-    }
-
-    pub fn accept_factory_ownership(ctx: Context<AcceptFactoryOwnership>) -> Result<()> {
-        require_keys_eq!(
-            ctx.accounts.factory_state.pending_owner,
-            ctx.accounts.pending_owner.key(),
-            FracksFactoryError::NotPendingOwner
-        );
-        ctx.accounts.factory_state.owner = ctx.accounts.pending_owner.key();
-        ctx.accounts.factory_state.pending_owner = Pubkey::default();
+        require_keys_neq!(new_owner, Pubkey::default(), FracksFactoryError::InvalidOwner);
+        ctx.accounts.factory_state.owner = new_owner;
         Ok(())
     }
 
@@ -148,7 +132,7 @@ pub mod fracks_factory {
         .0;
         let expected_irs_state = args.shared_irs.unwrap_or_else(|| {
             Pubkey::find_program_address(
-                &[b"irs_state", ctx.accounts.issuer.key().as_ref()],
+                &[b"irs_state", args.token_mint.as_ref()],
                 &ctx.accounts.irs_program.key(),
             )
             .0
@@ -195,6 +179,10 @@ pub mod fracks_factory {
             FracksFactoryError::InvalidDerivedAccount
         );
 
+        let irs_info = ctx.accounts.irs_state.to_account_info();
+        let irs_already_initialized =
+            irs_info.owner == &ctx.accounts.irs_program.key() && !irs_info.data_is_empty();
+
         let trusted_issuer_account_count = args.trusted_issuers.len();
         require!(
             ctx.remaining_accounts.len() >= trusted_issuer_account_count,
@@ -212,12 +200,20 @@ pub mod fracks_factory {
             ctx.accounts.deployment.deployed_at == 0,
             FracksFactoryError::DeploymentAlreadyExists
         );
+        require!(
+            args.shared_irs.is_none(),
+            FracksFactoryError::SharedIrsUnsupported
+        );
+        require!(
+            !irs_already_initialized,
+            FracksFactoryError::IrsAlreadyInitialized
+        );
 
         fracks_token::cpi::initialize_token(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
                 InitializeToken {
-                    owner: ctx.accounts.issuer.to_account_info(),
+                    owner: ctx.accounts.admin.to_account_info(),
                     token_state: ctx.accounts.token_state.to_account_info(),
                     owner_state: ctx.accounts.owner_state.to_account_info(),
                     system_program: ctx.accounts.system_program.to_account_info(),
@@ -236,7 +232,7 @@ pub mod fracks_factory {
             CpiContext::new(
                 ctx.accounts.ctr_program.to_account_info(),
                 InitializeCtr {
-                    owner: ctx.accounts.issuer.to_account_info(),
+                    owner: ctx.accounts.admin.to_account_info(),
                     ctr_state: ctx.accounts.ctr_state.to_account_info(),
                     system_program: ctx.accounts.system_program.to_account_info(),
                 },
@@ -248,8 +244,8 @@ pub mod fracks_factory {
             fracks_ctr::cpi::add_claim_topic(
                 CpiContext::new(
                     ctx.accounts.ctr_program.to_account_info(),
-                    AddClaimTopic {
-                        owner: ctx.accounts.issuer.to_account_info(),
+                    CtrOwnerAccounts {
+                        owner: ctx.accounts.admin.to_account_info(),
                         ctr_state: ctx.accounts.ctr_state.to_account_info(),
                     },
                 ),
@@ -261,7 +257,7 @@ pub mod fracks_factory {
             CpiContext::new(
                 ctx.accounts.tir_program.to_account_info(),
                 InitializeTir {
-                    owner: ctx.accounts.issuer.to_account_info(),
+                    owner: ctx.accounts.admin.to_account_info(),
                     tir_state: ctx.accounts.tir_state.to_account_info(),
                     system_program: ctx.accounts.system_program.to_account_info(),
                 },
@@ -290,7 +286,7 @@ pub mod fracks_factory {
                 CpiContext::new(
                     ctx.accounts.tir_program.to_account_info(),
                     AddTrustedIssuer {
-                        owner: ctx.accounts.issuer.to_account_info(),
+                        owner: ctx.accounts.admin.to_account_info(),
                         tir_state: ctx.accounts.tir_state.to_account_info(),
                         issuer_entry,
                         system_program: ctx.accounts.system_program.to_account_info(),
@@ -302,22 +298,23 @@ pub mod fracks_factory {
             )?;
         }
 
-        if args.shared_irs.is_none() {
-            fracks_irs::cpi::initialize_irs(CpiContext::new(
+        fracks_irs::cpi::initialize_irs(
+            CpiContext::new(
                 ctx.accounts.irs_program.to_account_info(),
                 InitializeIrs {
-                    owner: ctx.accounts.issuer.to_account_info(),
+                    owner: ctx.accounts.admin.to_account_info(),
                     irs_state: ctx.accounts.irs_state.to_account_info(),
                     system_program: ctx.accounts.system_program.to_account_info(),
                 },
-            ))?;
-        }
+            ),
+            args.token_mint,
+        )?;
 
         fracks_irp::cpi::initialize_registry(
             CpiContext::new(
                 ctx.accounts.irp_program.to_account_info(),
                 InitializeRegistry {
-                    owner: ctx.accounts.issuer.to_account_info(),
+                    owner: ctx.accounts.admin.to_account_info(),
                     registry_state: ctx.accounts.irp_state.to_account_info(),
                     system_program: ctx.accounts.system_program.to_account_info(),
                 },
@@ -331,8 +328,8 @@ pub mod fracks_factory {
         fracks_irs::cpi::bind_registry(
             CpiContext::new(
                 ctx.accounts.irs_program.to_account_info(),
-                BindRegistry {
-                    owner: ctx.accounts.issuer.to_account_info(),
+                IrsOwnerAccounts {
+                    owner: ctx.accounts.admin.to_account_info(),
                     irs_state: ctx.accounts.irs_state.to_account_info(),
                 },
             ),
@@ -343,7 +340,7 @@ pub mod fracks_factory {
             CpiContext::new(
                 ctx.accounts.compliance_program.to_account_info(),
                 InitializeCompliance {
-                    owner: ctx.accounts.issuer.to_account_info(),
+                    owner: ctx.accounts.admin.to_account_info(),
                     compliance_state: ctx.accounts.compliance_state.to_account_info(),
                     system_program: ctx.accounts.system_program.to_account_info(),
                 },
@@ -355,8 +352,8 @@ pub mod fracks_factory {
             fracks_compliance::cpi::bind_module(
                 CpiContext::new(
                     ctx.accounts.compliance_program.to_account_info(),
-                    BindComplianceModule {
-                        owner: ctx.accounts.issuer.to_account_info(),
+                    ComplianceOwnerAccounts {
+                        owner: ctx.accounts.admin.to_account_info(),
                         compliance_state: ctx.accounts.compliance_state.to_account_info(),
                     },
                 ),
@@ -380,7 +377,7 @@ pub mod fracks_factory {
             CpiContext::new(
                 ctx.accounts.hook_program.to_account_info(),
                 InitializeExtraAccountMetas {
-                    payer: ctx.accounts.issuer.to_account_info(),
+                    payer: ctx.accounts.admin.to_account_info(),
                     token_state: ctx.accounts.token_state.to_account_info(),
                     owner_state: ctx.accounts.owner_state.to_account_info(),
                     compliance_state: ctx.accounts.compliance_state.to_account_info(),
@@ -394,9 +391,71 @@ pub mod fracks_factory {
             ),
         )?;
 
+        fracks_token::cpi::transfer_ownership(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                UpdateOwnerState {
+                    owner: ctx.accounts.admin.to_account_info(),
+                    token_state: ctx.accounts.token_state.to_account_info(),
+                    owner_state: ctx.accounts.owner_state.to_account_info(),
+                },
+            ),
+            args.issuer,
+        )?;
+        fracks_ctr::cpi::transfer_ownership(
+            CpiContext::new(
+                ctx.accounts.ctr_program.to_account_info(),
+                CtrOwnerAccounts {
+                    owner: ctx.accounts.admin.to_account_info(),
+                    ctr_state: ctx.accounts.ctr_state.to_account_info(),
+                },
+            ),
+            args.issuer,
+        )?;
+        fracks_tir::cpi::transfer_ownership(
+            CpiContext::new(
+                ctx.accounts.tir_program.to_account_info(),
+                TransferTirOwnership {
+                    owner: ctx.accounts.admin.to_account_info(),
+                    tir_state: ctx.accounts.tir_state.to_account_info(),
+                },
+            ),
+            args.issuer,
+        )?;
+        fracks_irp::cpi::transfer_registry_ownership(
+            CpiContext::new(
+                ctx.accounts.irp_program.to_account_info(),
+                UpdateRegistryOwner {
+                    owner: ctx.accounts.admin.to_account_info(),
+                    registry_state: ctx.accounts.irp_state.to_account_info(),
+                },
+            ),
+            args.issuer,
+        )?;
+        fracks_irs::cpi::transfer_ownership(
+            CpiContext::new(
+                ctx.accounts.irs_program.to_account_info(),
+                IrsOwnerAccounts {
+                    owner: ctx.accounts.admin.to_account_info(),
+                    irs_state: ctx.accounts.irs_state.to_account_info(),
+                },
+            ),
+            args.issuer,
+        )?;
+        fracks_compliance::cpi::transfer_ownership(
+            CpiContext::new(
+                ctx.accounts.compliance_program.to_account_info(),
+                ComplianceOwnerAccounts {
+                    owner: ctx.accounts.admin.to_account_info(),
+                    compliance_state: ctx.accounts.compliance_state.to_account_info(),
+                },
+            ),
+            args.issuer,
+        )?;
+
         let deployment = &mut ctx.accounts.deployment;
         deployment.deployment_id = ctx.accounts.factory_state.deployment_count;
-        deployment.issuer = ctx.accounts.issuer.key();
+        deployment.issuer = args.issuer;
         deployment.salt = args.salt;
         deployment.token_mint = args.token_mint;
         deployment.token_state = ctx.accounts.token_state.key();
@@ -417,7 +476,7 @@ pub mod fracks_factory {
             .ok_or_else(|| error!(FracksFactoryError::ArithmeticOverflow))?;
 
         emit!(TokenSuiteDeployed {
-            issuer: ctx.accounts.issuer.key(),
+            issuer: args.issuer,
             deployment_id: deployment.deployment_id,
             token_mint: deployment.token_mint,
             token_state: deployment.token_state,
@@ -481,33 +540,25 @@ pub struct CreateTokenMint<'info> {
 }
 
 #[derive(Accounts)]
-pub struct AcceptFactoryOwnership<'info> {
-    #[account(mut)]
-    pub pending_owner: Signer<'info>,
-    #[account(
-        mut,
-        seeds = [b"factory_state"],
-        bump = factory_state.bump
-    )]
-    pub factory_state: Account<'info, FactoryState>,
-}
-
-#[derive(Accounts)]
 #[instruction(args: DeployTokenSuiteArgs)]
 pub struct DeployTokenSuite<'info> {
     #[account(mut)]
-    pub issuer: Signer<'info>,
+    pub admin: Signer<'info>,
     #[account(
         mut,
         seeds = [b"factory_state"],
-        bump = factory_state.bump
+        bump = factory_state.bump,
+        constraint = factory_state.owner == admin.key() @ FracksFactoryError::NotOwner
     )]
     pub factory_state: Account<'info, FactoryState>,
+    /// CHECK: Issuer wallet is passed explicitly and becomes the final owner of the deployed suite.
+    #[account(constraint = issuer.key() == args.issuer @ FracksFactoryError::InvalidIssuer)]
+    pub issuer: UncheckedAccount<'info>,
     #[account(
         init_if_needed,
-        payer = issuer,
+        payer = admin,
         space = TOKEN_DEPLOYMENT_SPACE,
-        seeds = [b"deployment", issuer.key().as_ref(), args.salt.as_ref()],
+        seeds = [b"deployment", args.issuer.as_ref(), args.salt.as_ref()],
         bump
     )]
     pub deployment: Account<'info, TokenDeployment>,
@@ -550,7 +601,6 @@ pub struct DeployTokenSuite<'info> {
 #[account]
 pub struct FactoryState {
     pub owner: Pubkey,
-    pub pending_owner: Pubkey,
     pub token_program_id: Pubkey,
     pub fid_program_id: Pubkey,
     pub irp_program_id: Pubkey,
@@ -599,6 +649,7 @@ pub struct TrustedIssuerInput {
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct DeployTokenSuiteArgs {
+    pub issuer: Pubkey,
     pub token_mint: Pubkey,
     pub token_name: String,
     pub token_symbol: String,
@@ -626,6 +677,7 @@ pub struct TokenSuiteDeployed {
 }
 
 fn validate_args(args: &DeployTokenSuiteArgs) -> Result<()> {
+    require_keys_neq!(args.issuer, Pubkey::default(), FracksFactoryError::InvalidIssuer);
     require!(
         !args.token_name.is_empty() && args.token_name.len() <= 64,
         FracksFactoryError::InvalidTokenMetadata
@@ -771,6 +823,8 @@ fn verify_program_ids(
 pub enum FracksFactoryError {
     #[msg("Signer is not the owner.")]
     NotOwner = 6000,
+    #[msg("Issuer address is invalid.")]
+    InvalidIssuer = 6001,
     #[msg("Deployment already exists for this issuer and salt.")]
     DeploymentAlreadyExists = 6060,
     #[msg("One or more derived accounts do not match the expected PDA.")]
@@ -799,8 +853,10 @@ pub enum FracksFactoryError {
     TokenMintAlreadyInitialized = 6072,
     #[msg("Token-2022 mint account is invalid.")]
     InvalidTokenMint = 6073,
-    #[msg("Pending owner mismatch.")]
-    NotPendingOwner = 6074,
-    #[msg("Pending owner cannot be the default pubkey.")]
-    InvalidPendingOwner = 6075,
+    #[msg("Owner address is invalid.")]
+    InvalidOwner = 6074,
+    #[msg("Shared IRS deployment is disabled for the direct admin-to-issuer authority model.")]
+    SharedIrsUnsupported = 6075,
+    #[msg("IRS state is already initialized for this token suite.")]
+    IrsAlreadyInitialized = 6076,
 }

@@ -1,0 +1,832 @@
+{
+  "address": "6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe",
+  "metadata": {
+    "name": "fracks_factory",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "create_token_mint",
+      "discriminator": [
+        35,
+        109,
+        237,
+        196,
+        54,
+        218,
+        33,
+        119
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_state"
+        },
+        {
+          "name": "token_mint_account",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "hook_program",
+          "address": "4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m"
+        },
+        {
+          "name": "token_2022_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "decimals",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "deploy_token_suite",
+      "discriminator": [
+        133,
+        32,
+        158,
+        211,
+        16,
+        63,
+        187,
+        87
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "factory_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "issuer"
+        },
+        {
+          "name": "deployment",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  112,
+                  108,
+                  111,
+                  121,
+                  109,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "args.issuer"
+              },
+              {
+                "kind": "arg",
+                "path": "args.salt"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_state",
+          "writable": true
+        },
+        {
+          "name": "owner_state",
+          "writable": true
+        },
+        {
+          "name": "irs_state",
+          "writable": true
+        },
+        {
+          "name": "tir_state",
+          "writable": true
+        },
+        {
+          "name": "ctr_state",
+          "writable": true
+        },
+        {
+          "name": "irp_state",
+          "writable": true
+        },
+        {
+          "name": "compliance_state",
+          "writable": true
+        },
+        {
+          "name": "token_mint_account"
+        },
+        {
+          "name": "extra_account_metas",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s"
+        },
+        {
+          "name": "hook_program",
+          "address": "4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m"
+        },
+        {
+          "name": "irp_program",
+          "address": "C8jtErJYtuu7pSZczfSm1JvDmv254Nmmw1KLX6rBdY8o"
+        },
+        {
+          "name": "irs_program",
+          "address": "GSLErK4bEfF6ZozTWfjYikWfnBitMYrdbbgfXubJBgVJ"
+        },
+        {
+          "name": "tir_program",
+          "address": "8KDYYPx74w6ZLKZgcvVWrj1mCv1gcULdTh2jbxcJwGMJ"
+        },
+        {
+          "name": "ctr_program",
+          "address": "12rCF9fuSth8T3o6sfpfWdGyaDEQ1jNsxe1ZvKH7q2tS"
+        },
+        {
+          "name": "compliance_program",
+          "address": "FhMXw2VmYYksR4VcjQCUNWYrhzba1rmfiU1EDvaTsxHj"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "DeployTokenSuiteArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "initialize_factory",
+      "discriminator": [
+        179,
+        64,
+        75,
+        250,
+        39,
+        254,
+        240,
+        178
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "factory_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s"
+        },
+        {
+          "name": "irp_program",
+          "address": "C8jtErJYtuu7pSZczfSm1JvDmv254Nmmw1KLX6rBdY8o"
+        },
+        {
+          "name": "irs_program",
+          "address": "GSLErK4bEfF6ZozTWfjYikWfnBitMYrdbbgfXubJBgVJ"
+        },
+        {
+          "name": "tir_program",
+          "address": "8KDYYPx74w6ZLKZgcvVWrj1mCv1gcULdTh2jbxcJwGMJ"
+        },
+        {
+          "name": "ctr_program",
+          "address": "12rCF9fuSth8T3o6sfpfWdGyaDEQ1jNsxe1ZvKH7q2tS"
+        },
+        {
+          "name": "compliance_program",
+          "address": "FhMXw2VmYYksR4VcjQCUNWYrhzba1rmfiU1EDvaTsxHj"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "transfer_factory_ownership",
+      "discriminator": [
+        134,
+        88,
+        151,
+        250,
+        30,
+        237,
+        59,
+        180
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "factory_state"
+          ]
+        },
+        {
+          "name": "factory_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_owner",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "update_program_ids",
+      "discriminator": [
+        64,
+        125,
+        148,
+        202,
+        2,
+        202,
+        189,
+        189
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "factory_state"
+          ]
+        },
+        {
+          "name": "factory_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "program_ids",
+          "type": {
+            "defined": {
+              "name": "ProgramIds"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "FactoryState",
+      "discriminator": [
+        91,
+        157,
+        184,
+        99,
+        123,
+        112,
+        102,
+        7
+      ]
+    },
+    {
+      "name": "TokenDeployment",
+      "discriminator": [
+        253,
+        218,
+        24,
+        4,
+        169,
+        51,
+        36,
+        214
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "TokenSuiteDeployed",
+      "discriminator": [
+        24,
+        55,
+        190,
+        253,
+        81,
+        71,
+        32,
+        120
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 12000,
+      "name": "NotOwner",
+      "msg": "Signer is not the owner."
+    },
+    {
+      "code": 12001,
+      "name": "InvalidIssuer",
+      "msg": "Issuer address is invalid."
+    },
+    {
+      "code": 12060,
+      "name": "DeploymentAlreadyExists",
+      "msg": "Deployment already exists for this issuer and salt."
+    },
+    {
+      "code": 12061,
+      "name": "InvalidDerivedAccount",
+      "msg": "One or more derived accounts do not match the expected PDA."
+    },
+    {
+      "code": 12062,
+      "name": "ProgramIdMismatch",
+      "msg": "The provided program IDs do not match the factory configuration."
+    },
+    {
+      "code": 12063,
+      "name": "MissingTrustedIssuerAccounts",
+      "msg": "Missing issuer entry accounts for trusted issuer initialization."
+    },
+    {
+      "code": 12064,
+      "name": "InvalidTokenMetadata",
+      "msg": "Token metadata is invalid."
+    },
+    {
+      "code": 12065,
+      "name": "TooManyClaimTopics",
+      "msg": "Too many claim topics were provided."
+    },
+    {
+      "code": 12066,
+      "name": "TooManyTrustedIssuers",
+      "msg": "Too many trusted issuers were provided."
+    },
+    {
+      "code": 12067,
+      "name": "TooManyComplianceModules",
+      "msg": "Too many compliance modules were provided."
+    },
+    {
+      "code": 12068,
+      "name": "TrustedIssuerTopicsEmpty",
+      "msg": "Trusted issuers must declare at least one topic."
+    },
+    {
+      "code": 12069,
+      "name": "InvalidTrustedIssuerLabel",
+      "msg": "Trusted issuer labels must be between 1 and 64 characters."
+    },
+    {
+      "code": 12070,
+      "name": "ArithmeticOverflow",
+      "msg": "Arithmetic overflow."
+    },
+    {
+      "code": 12071,
+      "name": "MissingComplianceModuleAccounts",
+      "msg": "Missing compliance module accounts for hook extra-account-metas initialization."
+    },
+    {
+      "code": 12072,
+      "name": "TokenMintAlreadyInitialized",
+      "msg": "Token-2022 mint account is already initialized."
+    },
+    {
+      "code": 12073,
+      "name": "InvalidTokenMint",
+      "msg": "Token-2022 mint account is invalid."
+    },
+    {
+      "code": 12074,
+      "name": "InvalidOwner",
+      "msg": "Owner address is invalid."
+    },
+    {
+      "code": 12075,
+      "name": "SharedIrsUnsupported",
+      "msg": "Shared IRS deployment is disabled for the direct admin-to-issuer authority model."
+    },
+    {
+      "code": 12076,
+      "name": "IrsAlreadyInitialized",
+      "msg": "IRS state is already initialized for this token suite."
+    }
+  ],
+  "types": [
+    {
+      "name": "DeployTokenSuiteArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_name",
+            "type": "string"
+          },
+          {
+            "name": "token_symbol",
+            "type": "string"
+          },
+          {
+            "name": "decimals",
+            "type": "u8"
+          },
+          {
+            "name": "isin",
+            "type": "string"
+          },
+          {
+            "name": "claim_topics",
+            "type": {
+              "vec": "u64"
+            }
+          },
+          {
+            "name": "trusted_issuers",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "TrustedIssuerInput"
+                }
+              }
+            }
+          },
+          {
+            "name": "compliance_modules",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "shared_irs",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "salt",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "FactoryState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_program_id",
+            "type": "pubkey"
+          },
+          {
+            "name": "fid_program_id",
+            "type": "pubkey"
+          },
+          {
+            "name": "irp_program_id",
+            "type": "pubkey"
+          },
+          {
+            "name": "irs_program_id",
+            "type": "pubkey"
+          },
+          {
+            "name": "tir_program_id",
+            "type": "pubkey"
+          },
+          {
+            "name": "ctr_program_id",
+            "type": "pubkey"
+          },
+          {
+            "name": "compliance_program_id",
+            "type": "pubkey"
+          },
+          {
+            "name": "deployment_count",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProgramIds",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "token_program_id",
+            "type": "pubkey"
+          },
+          {
+            "name": "fid_program_id",
+            "type": "pubkey"
+          },
+          {
+            "name": "irp_program_id",
+            "type": "pubkey"
+          },
+          {
+            "name": "irs_program_id",
+            "type": "pubkey"
+          },
+          {
+            "name": "tir_program_id",
+            "type": "pubkey"
+          },
+          {
+            "name": "ctr_program_id",
+            "type": "pubkey"
+          },
+          {
+            "name": "compliance_program_id",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokenDeployment",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "deployment_id",
+            "type": "u64"
+          },
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "salt",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_state",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner_state",
+            "type": "pubkey"
+          },
+          {
+            "name": "irp_state",
+            "type": "pubkey"
+          },
+          {
+            "name": "irs_state",
+            "type": "pubkey"
+          },
+          {
+            "name": "tir_state",
+            "type": "pubkey"
+          },
+          {
+            "name": "ctr_state",
+            "type": "pubkey"
+          },
+          {
+            "name": "compliance_state",
+            "type": "pubkey"
+          },
+          {
+            "name": "deployed_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokenSuiteDeployed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "deployment_id",
+            "type": "u64"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_state",
+            "type": "pubkey"
+          },
+          {
+            "name": "irp_state",
+            "type": "pubkey"
+          },
+          {
+            "name": "irs_state",
+            "type": "pubkey"
+          },
+          {
+            "name": "tir_state",
+            "type": "pubkey"
+          },
+          {
+            "name": "ctr_state",
+            "type": "pubkey"
+          },
+          {
+            "name": "compliance_state",
+            "type": "pubkey"
+          },
+          {
+            "name": "deployed_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TrustedIssuerInput",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "issuer_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "topics",
+            "type": {
+              "vec": "u64"
+            }
+          },
+          {
+            "name": "label",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -5,7 +5,6 @@ import { AssetAnalyticsChart } from "@/components/ui/asset-analytics-chart";
 import { AssetAnalyticsPieChart } from "@/components/rwa/asset-analytics-piechart";
 import { AssetsList } from "@/components/rwa/assets-list";
 import { TopTransactions } from "@/components/rwa/top-transactions";
-import { useWallet } from "@/hooks/use-wallet";
 import { useAssetsContext } from "@/contexts/assets-context";
 import { formatCurrency } from "@/lib/utils";
 import { apiFetch } from "@/lib/backend";
@@ -13,7 +12,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 export default function Page() {
-  const { address } = useWallet();
   const { assets, loading } = useAssetsContext();
   const [issuanceSeries, setIssuanceSeries] = useState<
     { month: string; issued: number; redeemed: number; net: number }[]
@@ -245,7 +243,7 @@ export default function Page() {
           <div className="mt-6 flex flex-wrap gap-3">
             <Button
               className="bg-gradient-to-tr from-[#B08933] to-[#E2B65B] text-slate-900"
-              onClick={() => (window.location.href = "/issuers")}
+              onClick={() => (window.location.href = "/issuer")}
             >
               Issuer Workspace
             </Button>

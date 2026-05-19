@@ -1,5 +1,4 @@
 import {
-  clusterApiUrl,
   Connection,
   PublicKey,
   SYSVAR_INSTRUCTIONS_PUBKEY,
@@ -11,33 +10,34 @@ import {
 } from '@solana/web3.js';
 import { AnchorProvider, Program, setProvider, type Idl } from '@coral-xyz/anchor';
 import type { AnchorWallet } from '@solana/wallet-adapter-react';
-import factoryIdl from './idl/fracks_factory.json';
-import tokenIdl from './idl/fracks_token.json';
-import irpIdl from './idl/fracks_irp.json';
-import irsIdl from './idl/fracks_irs.json';
-import tirIdl from './idl/fracks_tir.json';
-import ctrIdl from './idl/fracks_ctr.json';
-import complianceIdl from './idl/fracks_compliance.json';
-import fidIdl from './idl/fracks_fid.json';
+import factoryIdl from '@/lib/solana/idl/fracks_factory.json';
+import tokenIdl from '@/lib/solana/idl/fracks_token.json';
+import irpIdl from '@/lib/solana/idl/fracks_irp.json';
+import irsIdl from '@/lib/solana/idl/fracks_irs.json';
+import tirIdl from '@/lib/solana/idl/fracks_tir.json';
+import ctrIdl from '@/lib/solana/idl/fracks_ctr.json';
+import complianceIdl from '@/lib/solana/idl/fracks_compliance.json';
+import fidIdl from '@/lib/solana/idl/fracks_fid.json';
+import { RPC_URL } from '@/lib/constants';
 
 // 1) Program constants (verified from ERC-3436/programs/*/src/lib.rs declare_id! macros)
 export const PROGRAM_IDS = {
-  factory: new PublicKey('3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M'),
-  token: new PublicKey('Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn'),
-  tokenHook: new PublicKey('CQwdsA97gSiPMUzNXjS22AUu6HmvzMK2XZVqhswYEHLi'),
-  irp: new PublicKey('6dDKwtRbGkHJhU9LztpDkBC3fUdM46WeKJdrASFikce6'),
-  irs: new PublicKey('CsrdR7QK3ma6hxU46Cp4DZHAdbGPWPiwmGjhKsR9VzdS'),
-  tir: new PublicKey('Am5W7oEe8NCU4jdLP8qyUT3gjUPCDsvTSxGhdCQp1ETS'),
-  ctr: new PublicKey('B15EFQKwnfbNHXHhPVvVcw18PaBeTDsRLNRno3QS8Yna'),
-  compliance: new PublicKey('9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d'),
-  fid: new PublicKey('7Y6WJtDmRMcRYgENfKATsGnQTQJ2wAQfF3LhoBt3KbBH'),
+  factory: new PublicKey(process.env.NEXT_PUBLIC_FACTORY_PROGRAM_ID || '3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M'),
+  token: new PublicKey(process.env.NEXT_PUBLIC_TOKEN_PROGRAM_ID || 'Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn'),
+  tokenHook: new PublicKey(process.env.NEXT_PUBLIC_TOKEN_HOOK_PROGRAM_ID || 'CQwdsA97gSiPMUzNXjS22AUu6HmvzMK2XZVqhswYEHLi'),
+  irp: new PublicKey(process.env.NEXT_PUBLIC_IRP_PROGRAM_ID || '6dDKwtRbGkHJhU9LztpDkBC3fUdM46WeKJdrASFikce6'),
+  irs: new PublicKey(process.env.NEXT_PUBLIC_IRS_PROGRAM_ID || 'CsrdR7QK3ma6hxU46Cp4DZHAdbGPWPiwmGjhKsR9VzdS'),
+  tir: new PublicKey(process.env.NEXT_PUBLIC_TIR_PROGRAM_ID || 'Am5W7oEe8NCU4jdLP8qyUT3gjUPCDsvTSxGhdCQp1ETS'),
+  ctr: new PublicKey(process.env.NEXT_PUBLIC_CTR_PROGRAM_ID || 'B15EFQKwnfbNHXHhPVvVcw18PaBeTDsRLNRno3QS8Yna'),
+  compliance: new PublicKey(process.env.NEXT_PUBLIC_COMPLIANCE_PROGRAM_ID || '9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d'),
+  fid: new PublicKey(process.env.NEXT_PUBLIC_FID_PROGRAM_ID || '7Y6WJtDmRMcRYgENfKATsGnQTQJ2wAQfF3LhoBt3KbBH'),
 } as const;
 
 export const PROGRAM_ID = PROGRAM_IDS.token;
 export const TOKEN_2022_PROGRAM_ID = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
 
 export const connection = new Connection(
-  process.env.NEXT_PUBLIC_RPC_URL || clusterApiUrl('mainnet-beta'),
+  RPC_URL,
   'confirmed',
 );
 
@@ -63,21 +63,21 @@ export function getProgramById<T extends Idl>(wallet: AnchorWallet, programId: P
 
 // Named program getters (use these in hooks/components instead of raw getProgram)
 export const getFactoryProgram = (wallet: AnchorWallet) =>
-  getProgram(wallet, factoryIdl as any, PROGRAM_IDS.factory);
+  getProgram(wallet, factoryIdl as Idl, PROGRAM_IDS.factory);
 export const getTokenProgram = (wallet: AnchorWallet) =>
-  getProgram(wallet, tokenIdl as any, PROGRAM_IDS.token);
+  getProgram(wallet, tokenIdl as Idl, PROGRAM_IDS.token);
 export const getIrpProgram = (wallet: AnchorWallet) =>
-  getProgram(wallet, irpIdl as any, PROGRAM_IDS.irp);
+  getProgram(wallet, irpIdl as Idl, PROGRAM_IDS.irp);
 export const getIrsProgram = (wallet: AnchorWallet) =>
-  getProgram(wallet, irsIdl as any, PROGRAM_IDS.irs);
+  getProgram(wallet, irsIdl as Idl, PROGRAM_IDS.irs);
 export const getTirProgram = (wallet: AnchorWallet) =>
-  getProgram(wallet, tirIdl as any, PROGRAM_IDS.tir);
+  getProgram(wallet, tirIdl as Idl, PROGRAM_IDS.tir);
 export const getCtrProgram = (wallet: AnchorWallet) =>
-  getProgram(wallet, ctrIdl as any, PROGRAM_IDS.ctr);
+  getProgram(wallet, ctrIdl as Idl, PROGRAM_IDS.ctr);
 export const getComplianceProgram = (wallet: AnchorWallet) =>
-  getProgram(wallet, complianceIdl as any, PROGRAM_IDS.compliance);
+  getProgram(wallet, complianceIdl as Idl, PROGRAM_IDS.compliance);
 export const getFidProgram = (wallet: AnchorWallet) =>
-  getProgram(wallet, fidIdl as any, PROGRAM_IDS.fid);
+  getProgram(wallet, fidIdl as Idl, PROGRAM_IDS.fid);
 
 // 4) PDA derivations (verified from seeds = [...] in Rust account constraints)
 export function deriveTokenStatePDA(tokenMint: PublicKey): [PublicKey, number] {
@@ -136,8 +136,8 @@ export function deriveIrpStatePDA(tokenMint: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync([Buffer.from('irp_state'), tokenMint.toBuffer()], PROGRAM_IDS.irp);
 }
 
-export function deriveIrsStatePDA(owner: PublicKey): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync([Buffer.from('irs_state'), owner.toBuffer()], PROGRAM_IDS.irs);
+export function deriveIrsStatePDA(authoritySeed: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync([Buffer.from('irs_state'), authoritySeed.toBuffer()], PROGRAM_IDS.irs);
 }
 
 export function deriveWalletIdentityPDA(irsState: PublicKey, wallet: PublicKey): [PublicKey, number] {
@@ -1651,8 +1651,8 @@ export async function fetchIrpStateAccount(tokenMint: PublicKey): Promise<Identi
   return fetchDecodedAccount(pda, decodeIdentityRegistryState);
 }
 
-export async function fetchIrsStateAccount(owner: PublicKey): Promise<IdentityRegistryStorageStateAccount | null> {
-  const [pda] = deriveIrsStatePDA(owner);
+export async function fetchIrsStateAccount(authoritySeed: PublicKey): Promise<IdentityRegistryStorageStateAccount | null> {
+  const [pda] = deriveIrsStatePDA(authoritySeed);
   return fetchDecodedAccount(pda, decodeIdentityRegistryStorageState);
 }
 

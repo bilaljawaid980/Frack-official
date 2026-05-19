@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import { PublicKey } from "@solana/web3.js";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -11,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -22,13 +25,21 @@ import {
 import { useWallet } from "@/hooks/use-wallet";
 import { useAssetsContext } from "@/contexts/assets-context";
 import { formatCurrency } from "@/lib/utils";
+import { apiFetch } from "@/lib/backend";
 import {
   RefreshCw,
   Wallet,
   TrendingUp,
   Layers,
   ExternalLink,
+  TriangleAlert,
+  Loader2,
+  CheckCircle2,
 } from "lucide-react";
+import { useAnchorProvider } from "@/hooks/useAnchorProvider";
+import { FID_PROGRAM_ID } from "@/lib/constants";
+import { IdentityService } from "@/services/identity";
+import type { TokenPurchaseRequest } from "@/types/token-purchase-request";
 
 interface HoldingRow {
   assetId: string;
@@ -41,15 +52,113 @@ interface HoldingRow {
   value: number;
 }
 
+function shortAddress(address: string) {
+  return `${address.slice(0, 8)}...${address.slice(-6)}`;
+}
+
+function solscanTokenUrl(tokenContract: string) {
+  return `https://solscan.io/token/${tokenContract}?cluster=testnet`;
+}
+
+function solscanAccountUrl(address: string) {
+  return `https://solscan.io/account/${address}?cluster=testnet`;
+}
+
+function deriveFidAddress(walletAddress: string) {
+  const wallet = new PublicKey(walletAddress);
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("fid"), wallet.toBuffer()],
+    FID_PROGRAM_ID,
+  )[0];
+}
+
 export default function InvestorDashboardPage() {
   const params = useParams();
   const { address, trexClient, connectWallet, isConnected } = useWallet();
+  const anchorProvider = useAnchorProvider();
   const routeWallet = typeof params?.id === "string" ? params.id : undefined;
   const investorWallet = routeWallet || address || "";
 
   const { assets, loading: assetsLoading, loadAssets } = useAssetsContext();
   const [holdings, setHoldings] = useState<HoldingRow[]>([]);
   const [loadingHoldings, setLoadingHoldings] = useState(false);
+  const [purchaseRequests, setPurchaseRequests] = useState<TokenPurchaseRequest[]>([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
+  const [fidAddress, setFidAddress] = useState("");
+  const [fidCountry, setFidCountry] = useState<number | null>(null);
+  const [fidLoading, setFidLoading] = useState(false);
+  const [fidRegistered, setFidRegistered] = useState<boolean | null>(null);
+  const [registeringFid, setRegisteringFid] = useState(false);
+  const [fidCountryCode, setFidCountryCode] = useState("840");
+  const [resumingIdentityRequests, setResumingIdentityRequests] =
+    useState(false);
+
+  const isOwnInvestorPage = Boolean(
+    address && investorWallet && address === investorWallet,
+  );
+
+  const loadFidStatus = useMemo(
+    () => async () => {
+      if (!investorWallet || !anchorProvider) {
+        setFidAddress("");
+        setFidCountry(null);
+        setFidRegistered(null);
+        return;
+      }
+
+      setFidLoading(true);
+      try {
+        const wallet = new PublicKey(investorWallet);
+        const fid = deriveFidAddress(investorWallet);
+        const service = new IdentityService(anchorProvider);
+        const fidAccount = await service.fetchFid(wallet);
+
+        setFidAddress(fid.toBase58());
+        setFidRegistered(Boolean(fidAccount));
+        setFidCountry(fidAccount?.country ?? null);
+      } catch (error) {
+        console.error("Failed to load FID status", error);
+        setFidAddress("");
+        setFidCountry(null);
+        setFidRegistered(null);
+      } finally {
+        setFidLoading(false);
+      }
+    },
+    [anchorProvider, investorWallet],
+  );
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void loadFidStatus();
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [loadFidStatus]);
+
+  useEffect(() => {
+    let isActive = true;
+    
+    const loadRequests = async () => {
+      if (!investorWallet) {
+        setPurchaseRequests([]);
+        return;
+      }
+      setLoadingRequests(true);
+      try {
+        const reqs = await apiFetch<TokenPurchaseRequest[]>(`/token-purchase-requests?investorWallet=${investorWallet}`);
+        if (isActive) {
+          setPurchaseRequests(reqs);
+        }
+      } catch (err) {
+        console.error("Failed to load purchase requests", err);
+      } finally {
+        if (isActive) setLoadingRequests(false);
+      }
+    };
+    
+    loadRequests();
+    return () => { isActive = false; };
+  }, [investorWallet]);
 
   useEffect(() => {
     let isActive = true;
@@ -114,6 +223,93 @@ export default function InvestorDashboardPage() {
     () => holdings.reduce((sum, row) => sum + row.balance, 0),
     [holdings],
   );
+  const assetsByRequestKey = useMemo(() => {
+    const map = new Map<string, (typeof assets)[number]>();
+    assets.forEach((asset) => {
+      map.set(asset.id, asset);
+      map.set(asset.tokenContractAddress, asset);
+      map.set(asset.contractAddress, asset);
+    });
+    return map;
+  }, [assets]);
+
+  const resumeBlockedIdentityRequests = useCallback(async () => {
+    const blockedRequests = purchaseRequests.filter(
+      (request) => request.status === "ACTION_REQUIRED_INVESTOR_IDENTITY",
+    );
+    if (blockedRequests.length === 0 || resumingIdentityRequests) return;
+
+    setResumingIdentityRequests(true);
+    try {
+      const resumed = await Promise.all(
+        blockedRequests.map((request) =>
+          apiFetch<TokenPurchaseRequest>(
+            `/token-purchase-requests/${request.id}/resume-after-identity`,
+            { method: "PATCH" },
+          ),
+        ),
+      );
+      const resumedById = new Map(resumed.map((request) => [request.id, request]));
+      setPurchaseRequests((current) =>
+        current.map((request) => resumedById.get(request.id) || request),
+      );
+      toast.success("Identity verified. Purchase request sent for review.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to resume identity-blocked requests",
+      );
+    } finally {
+      setResumingIdentityRequests(false);
+    }
+  }, [purchaseRequests, resumingIdentityRequests]);
+
+  useEffect(() => {
+    if (!fidRegistered) return;
+
+    const timeout = window.setTimeout(() => {
+      void resumeBlockedIdentityRequests();
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [fidRegistered, resumeBlockedIdentityRequests]);
+
+  const handleRegisterFid = async () => {
+    if (!anchorProvider || !address || !isOwnInvestorPage) {
+      toast.error("Connect the investor wallet to register its FID.");
+      return;
+    }
+
+    const countryCode = Number(fidCountryCode);
+    if (
+      !Number.isInteger(countryCode) ||
+      countryCode < 1 ||
+      countryCode > 999
+    ) {
+      toast.error("Enter a valid numeric country code between 1 and 999.");
+      return;
+    }
+
+    setRegisteringFid(true);
+    const loadingToast = toast.loading("Registering investor FID...");
+    try {
+      const service = new IdentityService(anchorProvider);
+      await service.ensureOwnFid(countryCode, false);
+      await loadFidStatus();
+      await resumeBlockedIdentityRequests();
+      toast.success("Investor FID registered successfully.", {
+        id: loadingToast,
+      });
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to register FID",
+        { id: loadingToast },
+      );
+    } finally {
+      setRegisteringFid(false);
+    }
+  };
 
   if (!isConnected) {
     return (
@@ -157,17 +353,136 @@ export default function InvestorDashboardPage() {
           variant="outline"
           onClick={() => {
             loadAssets();
+            void loadFidStatus();
           }}
-          disabled={assetsLoading || loadingHoldings}
+          disabled={assetsLoading || loadingHoldings || fidLoading}
         >
           <RefreshCw
             className={`h-4 w-4 mr-2 ${
-              assetsLoading || loadingHoldings ? "animate-spin" : ""
+              assetsLoading || loadingHoldings || fidLoading
+                ? "animate-spin"
+                : ""
             }`}
           />
           Refresh
         </Button>
       </div>
+
+      <Card
+        className={`mb-6 rounded-2xl border bg-white shadow-sm ${
+          fidRegistered
+            ? "border-[#172E7F]/15"
+            : "border-[#D7A928]/25"
+        }`}
+      >
+        <CardContent className="flex flex-col gap-5 p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
+            <div
+              className={`rounded-xl p-3 ${
+                fidRegistered
+                  ? "bg-linear-to-tr from-[#172E7F] to-[#2A5FA6] text-white shadow-lg shadow-[#172E7F]/15"
+                  : "bg-white text-[#D7A928] ring-1 ring-[#D7A928]/25"
+              }`}
+            >
+              {fidLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : fidRegistered ? (
+                <CheckCircle2 className="h-5 w-5" />
+              ) : (
+                <TriangleAlert className="h-5 w-5" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <div
+                className={`text-sm font-semibold ${
+                  fidRegistered ? "text-[#172E7F]" : "text-slate-950"
+                }`}
+              >
+                {fidLoading
+                  ? "Checking investor FID"
+                  : fidRegistered
+                    ? "Investor FID registered"
+                    : "Investor FID required"}
+              </div>
+              <p className="mt-1 max-w-xl text-sm leading-6 text-slate-600">
+                {fidRegistered
+                  ? "Your identity account is active. Trusted KYC and AML providers can now issue claims for token purchases."
+                  : "Register your FID once before a provider can issue KYC or AML claims for your token purchase requests."}
+              </p>
+              {fidRegistered && (
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+                  <span className="font-mono text-slate-700">
+                    {fidAddress ? shortAddress(fidAddress) : "Unavailable"}
+                  </span>
+                  <span className="text-slate-500">
+                    Country code {fidCountry ?? "N/A"}
+                  </span>
+                  {fidAddress && (
+                    <button
+                      className="inline-flex items-center gap-1 font-medium text-[#172E7F] underline-offset-4 hover:underline"
+                      type="button"
+                      onClick={() =>
+                        window.open(solscanAccountUrl(fidAddress), "_blank")
+                      }
+                    >
+                      View on Solscan
+                      <ExternalLink className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {fidRegistered ? (
+            <Badge className="w-fit shrink-0 bg-[#172E7F] px-4 py-2 text-white shadow-lg shadow-[#172E7F]/20 hover:bg-[#172E7F]">
+              Verified on-chain
+            </Badge>
+          ) : (
+            <div className="flex w-full flex-col gap-2 lg:w-auto lg:items-end">
+              <label
+                className="text-left text-xs font-medium text-slate-600"
+                htmlFor="fid-country-code"
+              >
+                Country code
+              </label>
+              <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto">
+                <Input
+                  className="h-10 w-full bg-white sm:w-28"
+                  id="fid-country-code"
+                  inputMode="numeric"
+                  min={1}
+                  max={999}
+                  onChange={(event) => {
+                    const value = event.target.value.replace(/\D/g, "");
+                    setFidCountryCode(value.slice(0, 3));
+                  }}
+                  placeholder="840"
+                  type="text"
+                  value={fidCountryCode}
+                />
+                <Button
+                  className="w-full bg-linear-to-tr from-[#172E7F] to-[#2A5FA6] px-6 text-white shadow-lg shadow-[#172E7F]/20 hover:from-[#1F3E95] hover:to-[#326CB8] sm:w-fit"
+                  disabled={registeringFid || fidLoading || !isOwnInvestorPage}
+                  onClick={handleRegisterFid}
+                >
+                  {registeringFid ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Registering...
+                    </>
+                  ) : (
+                    "Register FID"
+                  )}
+                </Button>
+              </div>
+              <p className="max-w-sm text-left text-xs leading-5 text-slate-500 lg:text-right">
+                Use numeric ISO country code, for example 840 for United States.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-3 mb-6">
         <Card className="bg-white rounded-2xl">
@@ -301,6 +616,87 @@ export default function InvestorDashboardPage() {
                       </TableCell>
                     </TableRow>
                   ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="bg-white rounded-2xl mt-6">
+        <CardHeader>
+          <CardTitle>Token Purchase Requests</CardTitle>
+          <CardDescription>
+            Your ongoing and historical requests to buy tokens.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingRequests ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">
+              Loading requests...
+            </div>
+          ) : purchaseRequests.length === 0 ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">
+              No purchase requests found.
+            </div>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Token Name</TableHead>
+                    <TableHead>Token Contract</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {purchaseRequests.map((req) => {
+                    const asset =
+                      (req.assetId && assetsByRequestKey.get(req.assetId)) ||
+                      assetsByRequestKey.get(req.tokenContract);
+                    const tokenName = asset
+                      ? `${asset.name} (${asset.symbol})`
+                      : "Unknown Token";
+
+                    return (
+                      <TableRow key={req.id}>
+                        <TableCell className="font-medium">
+                          {tokenName}
+                        </TableCell>
+                        <TableCell>
+                          <a
+                            className="inline-flex items-center gap-1 font-mono text-xs text-[#172E7F] underline-offset-4 hover:underline"
+                            href={solscanTokenUrl(req.tokenContract)}
+                            rel="noreferrer"
+                            target="_blank"
+                          >
+                            {shortAddress(req.tokenContract)}
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </TableCell>
+                        <TableCell>{req.amount}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              req.status === "MINTED" ||
+                              req.status === "APPROVED_FOR_MINT"
+                                ? "default"
+                                : req.status === "REJECTED"
+                                  ? "destructive"
+                                  : "secondary"
+                            }
+                          >
+                            {req.status.replaceAll("_", " ")}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {new Date(req.createdAt).toLocaleDateString()}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

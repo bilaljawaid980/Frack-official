@@ -1,0 +1,688 @@
+{
+  "address": "C8jtErJYtuu7pSZczfSm1JvDmv254Nmmw1KLX6rBdY8o",
+  "metadata": {
+    "name": "fracks_irp",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "add_identity_agent",
+      "discriminator": [
+        244,
+        250,
+        152,
+        218,
+        162,
+        27,
+        164,
+        214
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "registry_state"
+          ]
+        },
+        {
+          "name": "registry_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  114,
+                  112,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "registry_state.token_mint",
+                "account": "IdentityRegistryState"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "agent",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "initialize_registry",
+      "discriminator": [
+        189,
+        181,
+        20,
+        17,
+        174,
+        57,
+        249,
+        59
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "registry_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  114,
+                  112,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "token_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "token_mint",
+          "type": "pubkey"
+        },
+        {
+          "name": "irs",
+          "type": "pubkey"
+        },
+        {
+          "name": "tir",
+          "type": "pubkey"
+        },
+        {
+          "name": "ctr",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "is_verified",
+      "discriminator": [
+        142,
+        197,
+        107,
+        116,
+        247,
+        60,
+        229,
+        238
+      ],
+      "accounts": [
+        {
+          "name": "registry_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  114,
+                  112,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "registry_state.token_mint",
+                "account": "IdentityRegistryState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "irs_state"
+        },
+        {
+          "name": "tir_state"
+        },
+        {
+          "name": "ctr_state"
+        },
+        {
+          "name": "wallet_identity"
+        }
+      ],
+      "args": [
+        {
+          "name": "wallet",
+          "type": "pubkey"
+        }
+      ],
+      "returns": "bool"
+    },
+    {
+      "name": "remove_identity_agent",
+      "discriminator": [
+        212,
+        220,
+        16,
+        202,
+        67,
+        181,
+        224,
+        234
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "registry_state"
+          ]
+        },
+        {
+          "name": "registry_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  114,
+                  112,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "registry_state.token_mint",
+                "account": "IdentityRegistryState"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "agent",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "transfer_registry_ownership",
+      "discriminator": [
+        15,
+        209,
+        120,
+        148,
+        23,
+        37,
+        97,
+        28
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "registry_state"
+          ]
+        },
+        {
+          "name": "registry_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  114,
+                  112,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "registry_state.token_mint",
+                "account": "IdentityRegistryState"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_owner",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "update_ctr_reference",
+      "discriminator": [
+        94,
+        88,
+        135,
+        53,
+        9,
+        209,
+        48,
+        89
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "registry_state"
+          ]
+        },
+        {
+          "name": "registry_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  114,
+                  112,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "registry_state.token_mint",
+                "account": "IdentityRegistryState"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_ctr",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "update_irs_reference",
+      "discriminator": [
+        20,
+        149,
+        161,
+        98,
+        151,
+        20,
+        113,
+        239
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "registry_state"
+          ]
+        },
+        {
+          "name": "registry_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  114,
+                  112,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "registry_state.token_mint",
+                "account": "IdentityRegistryState"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_irs",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "update_tir_reference",
+      "discriminator": [
+        145,
+        204,
+        216,
+        68,
+        163,
+        1,
+        119,
+        61
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "registry_state"
+          ]
+        },
+        {
+          "name": "registry_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  114,
+                  112,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "registry_state.token_mint",
+                "account": "IdentityRegistryState"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_tir",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "verification_status",
+      "discriminator": [
+        194,
+        179,
+        17,
+        87,
+        111,
+        24,
+        134,
+        116
+      ],
+      "accounts": [
+        {
+          "name": "registry_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  114,
+                  112,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "registry_state.token_mint",
+                "account": "IdentityRegistryState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "irs_state"
+        },
+        {
+          "name": "tir_state"
+        },
+        {
+          "name": "ctr_state"
+        },
+        {
+          "name": "wallet_identity"
+        }
+      ],
+      "args": [
+        {
+          "name": "wallet",
+          "type": "pubkey"
+        }
+      ],
+      "returns": {
+        "defined": {
+          "name": "VerificationStatus"
+        }
+      }
+    }
+  ],
+  "accounts": [
+    {
+      "name": "IdentityRegistryState",
+      "discriminator": [
+        50,
+        240,
+        176,
+        174,
+        121,
+        45,
+        186,
+        90
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 12000,
+      "name": "NotOwner",
+      "msg": "Signer is not the owner."
+    },
+    {
+      "code": 12001,
+      "name": "InvalidOwner",
+      "msg": "Owner address is invalid."
+    },
+    {
+      "code": 12008,
+      "name": "NotIdentityAgent",
+      "msg": "Caller does not have Identity Agent permission."
+    },
+    {
+      "code": 12013,
+      "name": "InvalidRegistryReference",
+      "msg": "Registry reference is invalid."
+    },
+    {
+      "code": 12042,
+      "name": "IdentityAgentAlreadyExists",
+      "msg": "Identity agent already exists."
+    },
+    {
+      "code": 12043,
+      "name": "MaxIdentityAgentsReached",
+      "msg": "Maximum identity agents reached."
+    },
+    {
+      "code": 12044,
+      "name": "TrustedIssuerNotFound",
+      "msg": "Trusted issuer entry not found."
+    },
+    {
+      "code": 12045,
+      "name": "IssuerFidNotFound",
+      "msg": "Issuer FID account not found."
+    },
+    {
+      "code": 12046,
+      "name": "InvalidClaimSignature",
+      "msg": "Claim signature is invalid."
+    }
+  ],
+  "types": [
+    {
+      "name": "IdentityRegistryState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "irs_account",
+            "type": "pubkey"
+          },
+          {
+            "name": "tir_account",
+            "type": "pubkey"
+          },
+          {
+            "name": "ctr_account",
+            "type": "pubkey"
+          },
+          {
+            "name": "identity_agents",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "registered_count",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VerificationReason",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Verified"
+          },
+          {
+            "name": "MissingIdentity"
+          },
+          {
+            "name": "IdentityInactive"
+          },
+          {
+            "name": "MissingRequiredClaim"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VerificationStatus",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "verified",
+            "type": "bool"
+          },
+          {
+            "name": "reason",
+            "type": {
+              "defined": {
+                "name": "VerificationReason"
+              }
+            }
+          },
+          {
+            "name": "missing_topic",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}

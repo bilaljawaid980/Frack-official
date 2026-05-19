@@ -1,0 +1,590 @@
+{
+  "address": "EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9",
+  "metadata": {
+    "name": "mod_daily_limit",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "can_transfer",
+      "discriminator": [
+        233,
+        153,
+        157,
+        96,
+        140,
+        58,
+        200,
+        137
+      ],
+      "accounts": [
+        {
+          "name": "module_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  95,
+                  100,
+                  97,
+                  105,
+                  108,
+                  121,
+                  95,
+                  108,
+                  105,
+                  109,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "module_state.token_mint",
+                "account": "DailyTransferLimitModule"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wallet_usage"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ],
+      "returns": "bool"
+    },
+    {
+      "name": "created",
+      "discriminator": [
+        181,
+        154,
+        183,
+        237,
+        76,
+        88,
+        131,
+        92
+      ],
+      "accounts": [
+        {
+          "name": "module_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  95,
+                  100,
+                  97,
+                  105,
+                  108,
+                  121,
+                  95,
+                  108,
+                  105,
+                  109,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "module_state.token_mint",
+                "account": "DailyTransferLimitModule"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "destroyed",
+      "discriminator": [
+        212,
+        251,
+        145,
+        156,
+        56,
+        131,
+        108,
+        36
+      ],
+      "accounts": [
+        {
+          "name": "module_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  95,
+                  100,
+                  97,
+                  105,
+                  108,
+                  121,
+                  95,
+                  108,
+                  105,
+                  109,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "module_state.token_mint",
+                "account": "DailyTransferLimitModule"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_module",
+      "discriminator": [
+        237,
+        8,
+        2,
+        139,
+        239,
+        178,
+        75,
+        161
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "module_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  95,
+                  100,
+                  97,
+                  105,
+                  108,
+                  121,
+                  95,
+                  108,
+                  105,
+                  109,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "token_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "token_mint",
+          "type": "pubkey"
+        },
+        {
+          "name": "daily_limit",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initialize_wallet_usage",
+      "discriminator": [
+        12,
+        107,
+        11,
+        224,
+        249,
+        33,
+        169,
+        250
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "module_state"
+          ]
+        },
+        {
+          "name": "module_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  95,
+                  100,
+                  97,
+                  105,
+                  108,
+                  121,
+                  95,
+                  108,
+                  105,
+                  109,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "module_state.token_mint",
+                "account": "DailyTransferLimitModule"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wallet_usage",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  97,
+                  105,
+                  108,
+                  121,
+                  95,
+                  117,
+                  115,
+                  97,
+                  103,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "module_state"
+              },
+              {
+                "kind": "arg",
+                "path": "wallet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "wallet",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_hook_authority",
+      "discriminator": [
+        155,
+        21,
+        37,
+        140,
+        172,
+        113,
+        25,
+        235
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "module_state"
+          ]
+        },
+        {
+          "name": "module_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  95,
+                  100,
+                  97,
+                  105,
+                  108,
+                  121,
+                  95,
+                  108,
+                  105,
+                  109,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "module_state.token_mint",
+                "account": "DailyTransferLimitModule"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "hook_authority",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "transferred",
+      "discriminator": [
+        234,
+        216,
+        64,
+        126,
+        163,
+        136,
+        73,
+        206
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "module_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  95,
+                  100,
+                  97,
+                  105,
+                  108,
+                  121,
+                  95,
+                  108,
+                  105,
+                  109,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "module_state.token_mint",
+                "account": "DailyTransferLimitModule"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wallet_usage",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  97,
+                  105,
+                  108,
+                  121,
+                  95,
+                  117,
+                  115,
+                  97,
+                  103,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "module_state"
+              },
+              {
+                "kind": "arg",
+                "path": "wallet"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "wallet",
+          "type": "pubkey"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "DailyTransferLimitModule",
+      "discriminator": [
+        229,
+        185,
+        57,
+        70,
+        51,
+        143,
+        213,
+        82
+      ]
+    },
+    {
+      "name": "DailyWalletUsage",
+      "discriminator": [
+        89,
+        44,
+        49,
+        169,
+        56,
+        16,
+        97,
+        62
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 12000,
+      "name": "NotOwner",
+      "msg": "Signer is not the owner."
+    },
+    {
+      "code": 12001,
+      "name": "NotAuthorized",
+      "msg": "Signer is not authorized to update module hook state."
+    },
+    {
+      "code": 12002,
+      "name": "InvalidUsageAccount",
+      "msg": "Invalid wallet usage account."
+    },
+    {
+      "code": 12003,
+      "name": "ArithmeticOverflow",
+      "msg": "Arithmetic overflow."
+    }
+  ],
+  "types": [
+    {
+      "name": "DailyTransferLimitModule",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "hook_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "daily_limit",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DailyWalletUsage",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "module",
+            "type": "pubkey"
+          },
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "window_started_at",
+            "type": "i64"
+          },
+          {
+            "name": "volume",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -9,7 +9,7 @@ use mod_max_investors::cpi::accounts::MutateModule as MutateMaxInvestorsModule;
 use mod_supply_cap::cpi::accounts::MutateModule as MutateSupplyCapModule;
 use solana_program::hash::hash;
 
-declare_id!("9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d");
+declare_id!("FhMXw2VmYYksR4VcjQCUNWYrhzba1rmfiU1EDvaTsxHj");
 
 const MAX_MODULES: usize = 15;
 const COMPLIANCE_SPACE: usize = 8 + 32 + 32 + 4 + (32 * MAX_MODULES) + 1 + 1;
@@ -58,6 +58,19 @@ pub mod fracks_compliance {
         paused: bool,
     ) -> Result<()> {
         ctx.accounts.compliance_state.modules_paused = paused;
+        Ok(())
+    }
+
+    pub fn transfer_ownership(
+        ctx: Context<UpdateComplianceOwner>,
+        new_owner: Pubkey,
+    ) -> Result<()> {
+        require_keys_neq!(
+            new_owner,
+            Pubkey::default(),
+            FracksComplianceError::InvalidOwner
+        );
+        ctx.accounts.compliance_state.owner = new_owner;
         Ok(())
     }
 
@@ -254,31 +267,32 @@ pub mod fracks_compliance {
                     .find(|account| account.key() == *module_info.owner)
                     .cloned()
                     .ok_or_else(|| error!(FracksComplianceError::MissingModuleProgramAccount))?;
-                let usage_account = find_daily_usage_account(
+                if let Ok(usage_account) = find_daily_usage_account(
                     ctx.remaining_accounts,
                     &module_info.key(),
                     module_info.owner,
                     &_from,
-                )?;
-                let bump_seed = [ctx.accounts.compliance_state.bump];
-                let signer_seeds: [&[u8]; 3] = [
-                    b"compliance_state",
-                    ctx.accounts.compliance_state.token_mint.as_ref(),
-                    &bump_seed,
-                ];
-                mod_daily_limit::cpi::transferred(
-                    CpiContext::new_with_signer(
-                        program,
-                        MutateDailyLimitModule {
-                            authority: ctx.accounts.compliance_state.to_account_info(),
-                            module_state: module_info.clone(),
-                            wallet_usage: usage_account,
-                        },
-                        &[&signer_seeds],
-                    ),
-                    _from,
-                    amount,
-                )?;
+                ) {
+                    let bump_seed = [ctx.accounts.compliance_state.bump];
+                    let signer_seeds: [&[u8]; 3] = [
+                        b"compliance_state",
+                        ctx.accounts.compliance_state.token_mint.as_ref(),
+                        &bump_seed,
+                    ];
+                    mod_daily_limit::cpi::transferred(
+                        CpiContext::new_with_signer(
+                            program,
+                            MutateDailyLimitModule {
+                                authority: ctx.accounts.compliance_state.to_account_info(),
+                                module_state: module_info.clone(),
+                                wallet_usage: usage_account,
+                            },
+                            &[&signer_seeds],
+                        ),
+                        _from,
+                        amount,
+                    )?;
+                }
                 continue;
             }
 
@@ -718,6 +732,8 @@ pub struct CountryInvestorCountView {
 pub enum FracksComplianceError {
     #[msg("Signer is not the owner.")]
     NotOwner = 6000,
+    #[msg("Owner address is invalid.")]
+    InvalidOwner = 6001,
     #[msg("Max modules reached.")]
     MaxModulesReached = 6014,
     #[msg("Module is already bound.")]

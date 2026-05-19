@@ -18,9 +18,30 @@ import type { FactoryTokenInfo } from "./types";
 @Injectable()
 export class IndexerService {
   private config = getIndexerConfig();
-  private connection = new Connection(this.config.rpcEndpoint, "confirmed");
+  private activeRpcIndex = 0;
+  private connection = this.createConnection(this.config.rpcEndpoints[0]);
+  private rpcDelayMs = Number(process.env.INDEXER_RPC_DELAY_MS || 250);
+  private rpcMaxRetries = Number(process.env.INDEXER_RPC_MAX_RETRIES || 5);
 
   constructor(private prisma: PrismaService) {}
+
+  private createConnection(rpcEndpoint: string) {
+    return new Connection(rpcEndpoint, "confirmed");
+  }
+
+  private switchToNextRpcEndpoint() {
+    if (this.activeRpcIndex >= this.config.rpcEndpoints.length - 1) {
+      return false;
+    }
+
+    this.activeRpcIndex += 1;
+    const nextEndpoint = this.config.rpcEndpoints[this.activeRpcIndex];
+    this.connection = this.createConnection(nextEndpoint);
+    console.warn(
+      `[Indexer] Switched Solana RPC endpoint to fallback #${this.activeRpcIndex + 1}`,
+    );
+    return true;
+  }
 
   async syncOnce() {
     console.log(`[Indexer] Sync start ${new Date().toISOString()}`);
@@ -37,7 +58,13 @@ export class IndexerService {
       ];
 
       for (const contract of tokenContracts) {
-        await this.syncToken(contract);
+        try {
+          await this.syncToken(contract);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.warn(`[Indexer] Skipping token ${contract}: ${message}`);
+        }
+        await this.sleep(this.rpcDelayMs);
       }
 
       await this.updateState("IDLE", null);
@@ -60,19 +87,23 @@ export class IndexerService {
       { dataSize: TOKEN_DEPLOYMENT_SIZE },
     ];
 
-    const accounts = await this.connection.getProgramAccounts(programId, {
-      filters,
-      commitment: "confirmed",
-    });
+    const accounts = await this.withRpcRetries("getProgramAccounts(factory)", () =>
+      this.connection.getProgramAccounts(programId, {
+        filters,
+        commitment: "confirmed",
+      }),
+    );
+
+    if (!accounts) return [];
 
     const tokens: FactoryTokenInfo[] = [];
     for (const account of accounts) {
       const deployment = parseTokenDeployment(account.account);
       if (!deployment) continue;
 
-      const tokenStateInfo = await this.connection.getAccountInfo(
-        deployment.tokenState,
-        "confirmed",
+      const tokenStateInfo = await this.withRpcRetries(
+        `getAccountInfo(tokenState:${deployment.tokenState.toBase58()})`,
+        () => this.connection.getAccountInfo(deployment.tokenState, "confirmed"),
       );
       const tokenState = tokenStateInfo
         ? parseTokenState(tokenStateInfo)
@@ -89,6 +120,7 @@ export class IndexerService {
         metadata: undefined,
         deployed_at: Number(deployment.deployedAt),
       });
+      await this.sleep(this.rpcDelayMs);
     }
 
     return tokens.sort((a, b) => a.asset_id - b.asset_id);
@@ -131,7 +163,10 @@ export class IndexerService {
   private async syncToken(tokenContract: string) {
     const tokenMint = new PublicKey(tokenContract);
     const [ownerState] = deriveOwnerStatePDA(tokenMint);
-    const ownerInfo = await this.connection.getAccountInfo(ownerState, "confirmed");
+    const ownerInfo = await this.withRpcRetries(
+      `getAccountInfo(ownerState:${ownerState.toBase58()})`,
+      () => this.connection.getAccountInfo(ownerState, "confirmed"),
+    );
     const ownerWallet = ownerInfo ? parseOwnerState(ownerInfo) : null;
 
     const mintInfo = await getMint(
@@ -240,6 +275,47 @@ export class IndexerService {
   private async scanTokenAssets(tokenContract: string) {
     void tokenContract;
     return [];
+  }
+
+  private async withRpcRetries<T>(
+    label: string,
+    operation: () => Promise<T>,
+  ): Promise<T | null> {
+    for (let attempt = 0; attempt <= this.rpcMaxRetries; attempt += 1) {
+      try {
+        return await operation();
+      } catch (error) {
+        if (!this.isRecoverableRpcError(error) || attempt === this.rpcMaxRetries) {
+          throw error;
+        }
+
+        this.switchToNextRpcEndpoint();
+        const delayMs = this.rpcDelayMs * 2 ** attempt;
+        console.warn(
+          `[Indexer] RPC failed during ${label}; retrying in ${delayMs}ms`,
+        );
+        await this.sleep(delayMs);
+      }
+    }
+
+    return null;
+  }
+
+  private isRecoverableRpcError(error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return (
+      message.includes("429") ||
+      message.includes("Too Many Requests") ||
+      message.includes("fetch failed") ||
+      message.includes("Failed to fetch") ||
+      message.includes("ECONNRESET") ||
+      message.includes("ETIMEDOUT") ||
+      message.includes("ENOTFOUND")
+    );
+  }
+
+  private sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private async updateState(status: string, error?: string | null) {

@@ -10,19 +10,34 @@ import { usePermissionsContext } from "@/contexts/permissions-context";
 
 const menuItems = [
   {
-    category: "",
+    category: "Market",
     items: [
-      { name: "Market Overview", href: "/" },
-      { name: "Explore Assets", href: "/assets" },
-      { name: "KYC Status", href: "/identity" },
-      { name: "Investor Dashboard", href: "/investor" },
-      { name: "Issuer Onboarding Dashboard", href: "/admin/identities" },
-      { name: "KYC Provider", href: "/kyc-provider" },
+      { name: "Overview", href: "/" },
+      { name: "Assets", href: "/assets" },
+    ],
+  },
+  {
+    category: "Investor",
+    items: [
+      { name: "My Portfolio", href: "/investor" },
+      { name: "Identity / KYC", href: "/identity" },
+    ],
+  },
+  {
+    category: "Issuer",
+    items: [
+      { name: "Issuer Portal", href: "/issuer" },
+      { name: "Issuer FID", href: "/issuer/identity" },
+      { name: "Tokenize Asset", href: "/issuer/submit-request" },
+    ],
+  },
+  {
+    category: "Admin",
+    items: [
+      { name: "Asset Issuance", href: "/issuance" },
       { name: "Token Admin", href: "/token-admin" },
-      { name: "Personnel", href: "/personnel" },
       { name: "Compliance", href: "/compliance" },
-      { name: "Issuance", href: "/issuance" },
-      { name: "Activity Logs", href: "/activity-logs" },
+      { name: "Personnel", href: "/personnel" },
     ],
   },
 ];
@@ -31,10 +46,8 @@ export function Sidebar() {
   const pathname = usePathname();
   const { address } = useAppContext();
   const {
-    canSeeAdminIdentities,
     canSeeCompliance,
     canSeeIssuance,
-    canSeeKycProvider,
     canSeeAdminTab,
     canSeeActivityLogs,
   } = usePermissionsContext();
@@ -42,13 +55,10 @@ export function Sidebar() {
   const visibleItems = menuItems.map((section) => ({
     ...section,
     items: section.items.filter((item) => {
-      if (item.href === "/admin/identities") return canSeeAdminIdentities;
-      if (item.href === "/kyc-provider") return canSeeKycProvider;
       if (item.href === "/token-admin") return canSeeAdminTab;
       if (item.href === "/personnel") return canSeeActivityLogs;
       if (item.href === "/compliance") return canSeeCompliance;
       if (item.href === "/issuance") return canSeeIssuance;
-      if (item.href === "/activity-logs") return canSeeActivityLogs;
       if (item.href === "/investor") return !!address;
       return true;
     }),
@@ -71,16 +81,13 @@ export function Sidebar() {
         </Link>
       </div>
 
-      {/* Navigation */}
-      <div className="flex-1 px-4 py-3 space-y-5">
+      <div className="flex-1 px-6 py-2 space-y-5 overflow-y-auto">
         {visibleItems.map((section) => (
-          <div key={section.category}>
-            {section.category && (
-              <h3 className="px-4 mb-2 text-sm font-medium text-muted-foreground/70">
-                {section.category}
-              </h3>
-            )}
-            <div className="space-y-1">
+          <div key={section.category} className="space-y-1">
+            <h3 className="px-3 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+              {section.category}
+            </h3>
+            <div className="space-y-0.5">
               {section.items.map((item) => {
                 const href =
                   item.href === "/investor" && address
@@ -95,10 +102,10 @@ export function Sidebar() {
                     key={item.name}
                     href={href}
                     className={cn(
-                      "flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-colors relative group",
+                      "relative flex items-center px-3 py-2.5 text-sm font-medium transition-colors",
                       isActive
-                        ? "text-slate-900 font-semibold"
-                        : "text-muted-foreground hover:text-slate-900 hover:bg-white/50",
+                        ? "text-slate-950 font-semibold"
+                        : "text-slate-500 hover:text-slate-900",
                     )}
                   >
                     {isActive && (
@@ -106,7 +113,7 @@ export function Sidebar() {
                     )}
                     <span
                       className={cn(
-                        isActive ? "translate-x-2" : "",
+                        isActive ? "translate-x-1.5" : "",
                         "transition-transform",
                       )}
                     >

@@ -1,0 +1,2610 @@
+{
+  "address": "92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s",
+  "metadata": {
+    "name": "fracks_token",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "add_agent",
+      "discriminator": [
+        214,
+        206,
+        14,
+        110,
+        178,
+        131,
+        218,
+        45
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  119,
+                  110,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner_state.token_mint",
+                "account": "OwnerState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "agent_role",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  103,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              },
+              {
+                "kind": "arg",
+                "path": "agent"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "agent",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "burn",
+      "discriminator": [
+        116,
+        110,
+        29,
+        56,
+        107,
+        219,
+        42,
+        93
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_state"
+        },
+        {
+          "name": "agent_role"
+        },
+        {
+          "name": "compliance_state"
+        },
+        {
+          "name": "compliance_program"
+        },
+        {
+          "name": "irs_state"
+        },
+        {
+          "name": "from_wallet_identity"
+        },
+        {
+          "name": "token_mint_account",
+          "writable": true
+        },
+        {
+          "name": "source_token_account",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "from",
+          "type": "pubkey"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "from_balance_after",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "finalize_recovery",
+      "discriminator": [
+        180,
+        175,
+        56,
+        254,
+        138,
+        101,
+        151,
+        219
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_state"
+        },
+        {
+          "name": "agent_role"
+        },
+        {
+          "name": "irs_state",
+          "writable": true
+        },
+        {
+          "name": "irp_state"
+        },
+        {
+          "name": "new_wallet_identity",
+          "writable": true
+        },
+        {
+          "name": "lost_wallet_identity",
+          "writable": true
+        },
+        {
+          "name": "transfer_approval",
+          "writable": true
+        },
+        {
+          "name": "irs_program",
+          "address": "GSLErK4bEfF6ZozTWfjYikWfnBitMYrdbbgfXubJBgVJ"
+        }
+      ],
+      "args": [
+        {
+          "name": "lost_wallet",
+          "type": "pubkey"
+        },
+        {
+          "name": "new_wallet",
+          "type": "pubkey"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "forced_transfer",
+      "discriminator": [
+        60,
+        52,
+        242,
+        236,
+        23,
+        136,
+        230,
+        190
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_state"
+        },
+        {
+          "name": "agent_role"
+        },
+        {
+          "name": "irp_state"
+        },
+        {
+          "name": "irs_state"
+        },
+        {
+          "name": "tir_state"
+        },
+        {
+          "name": "ctr_state"
+        },
+        {
+          "name": "compliance_state"
+        },
+        {
+          "name": "compliance_program"
+        },
+        {
+          "name": "from_wallet_identity"
+        },
+        {
+          "name": "to_wallet_identity"
+        },
+        {
+          "name": "to_frozen"
+        },
+        {
+          "name": "from_partial_freeze",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  116,
+                  105,
+                  97,
+                  108,
+                  95,
+                  102,
+                  114,
+                  101,
+                  101,
+                  122,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              },
+              {
+                "kind": "account",
+                "path": "from_partial_freeze.wallet",
+                "account": "PartialFreeze"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_mint_account",
+          "writable": true
+        },
+        {
+          "name": "source_token_account",
+          "writable": true
+        },
+        {
+          "name": "destination_token_account",
+          "writable": true
+        },
+        {
+          "name": "extra_account_metas"
+        },
+        {
+          "name": "controller_program",
+          "address": "92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s"
+        },
+        {
+          "name": "hook_program",
+          "address": "4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m"
+        },
+        {
+          "name": "transfer_approval",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "from",
+          "type": "pubkey"
+        },
+        {
+          "name": "to",
+          "type": "pubkey"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "from_balance",
+          "type": "u64"
+        },
+        {
+          "name": "to_balance",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "freeze_partial",
+      "discriminator": [
+        19,
+        13,
+        72,
+        194,
+        88,
+        59,
+        68,
+        51
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_state"
+        },
+        {
+          "name": "agent_role"
+        },
+        {
+          "name": "wallet"
+        },
+        {
+          "name": "partial_freeze",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  116,
+                  105,
+                  97,
+                  108,
+                  95,
+                  102,
+                  114,
+                  101,
+                  101,
+                  122,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              },
+              {
+                "kind": "account",
+                "path": "wallet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "freeze_wallet",
+      "discriminator": [
+        93,
+        202,
+        159,
+        167,
+        22,
+        246,
+        255,
+        211
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_state"
+        },
+        {
+          "name": "agent_role"
+        },
+        {
+          "name": "wallet"
+        },
+        {
+          "name": "frozen_wallet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  114,
+                  111,
+                  122,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              },
+              {
+                "kind": "account",
+                "path": "wallet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_token",
+      "discriminator": [
+        38,
+        209,
+        150,
+        50,
+        190,
+        117,
+        16,
+        54
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "token_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  119,
+                  110,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "token_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "token_mint",
+          "type": "pubkey"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "symbol",
+          "type": "string"
+        },
+        {
+          "name": "decimals",
+          "type": "u8"
+        },
+        {
+          "name": "isin",
+          "type": "string"
+        },
+        {
+          "name": "identity_registry",
+          "type": "pubkey"
+        },
+        {
+          "name": "compliance",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "mint",
+      "discriminator": [
+        51,
+        57,
+        225,
+        47,
+        182,
+        146,
+        137,
+        166
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_state"
+        },
+        {
+          "name": "agent_role"
+        },
+        {
+          "name": "irp_state"
+        },
+        {
+          "name": "irs_state"
+        },
+        {
+          "name": "tir_state"
+        },
+        {
+          "name": "ctr_state"
+        },
+        {
+          "name": "compliance_state"
+        },
+        {
+          "name": "compliance_program"
+        },
+        {
+          "name": "wallet_identity"
+        },
+        {
+          "name": "to_frozen"
+        },
+        {
+          "name": "token_mint_account",
+          "writable": true
+        },
+        {
+          "name": "destination_token_account",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "to",
+          "type": "pubkey"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "to_balance_after",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "pause",
+      "discriminator": [
+        211,
+        22,
+        221,
+        251,
+        74,
+        121,
+        193,
+        47
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  119,
+                  110,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner_state.token_mint",
+                "account": "OwnerState"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "recovery",
+      "discriminator": [
+        248,
+        90,
+        255,
+        146,
+        157,
+        182,
+        171,
+        170
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_state"
+        },
+        {
+          "name": "agent_role"
+        },
+        {
+          "name": "irp_state"
+        },
+        {
+          "name": "irs_state",
+          "writable": true
+        },
+        {
+          "name": "tir_state"
+        },
+        {
+          "name": "ctr_state"
+        },
+        {
+          "name": "new_wallet_identity",
+          "writable": true
+        },
+        {
+          "name": "lost_wallet_identity",
+          "writable": true
+        },
+        {
+          "name": "compliance_state"
+        },
+        {
+          "name": "compliance_program"
+        },
+        {
+          "name": "new_wallet_frozen"
+        },
+        {
+          "name": "irs_program",
+          "address": "GSLErK4bEfF6ZozTWfjYikWfnBitMYrdbbgfXubJBgVJ"
+        },
+        {
+          "name": "token_mint_account",
+          "writable": true
+        },
+        {
+          "name": "lost_token_account",
+          "writable": true
+        },
+        {
+          "name": "new_token_account",
+          "writable": true
+        },
+        {
+          "name": "extra_account_metas"
+        },
+        {
+          "name": "controller_program",
+          "address": "92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s"
+        },
+        {
+          "name": "hook_program",
+          "address": "4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m"
+        },
+        {
+          "name": "transfer_approval",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "lost_wallet",
+          "type": "pubkey"
+        },
+        {
+          "name": "new_wallet",
+          "type": "pubkey"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "remove_agent",
+      "discriminator": [
+        126,
+        25,
+        90,
+        199,
+        104,
+        237,
+        225,
+        130
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  119,
+                  110,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner_state.token_mint",
+                "account": "OwnerState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "agent_role",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  103,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              },
+              {
+                "kind": "account",
+                "path": "agent_role.agent",
+                "account": "AgentRole"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "set_compliance",
+      "discriminator": [
+        46,
+        128,
+        120,
+        26,
+        105,
+        175,
+        165,
+        6
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  119,
+                  110,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner_state.token_mint",
+                "account": "OwnerState"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_compliance",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_identity_registry",
+      "discriminator": [
+        166,
+        159,
+        194,
+        134,
+        36,
+        79,
+        162,
+        255
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  119,
+                  110,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner_state.token_mint",
+                "account": "OwnerState"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_identity_registry",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "transfer",
+      "discriminator": [
+        163,
+        52,
+        200,
+        231,
+        140,
+        3,
+        69,
+        186
+      ],
+      "accounts": [
+        {
+          "name": "token_state"
+        },
+        {
+          "name": "source_token_account",
+          "writable": true
+        },
+        {
+          "name": "token_mint_account",
+          "writable": true
+        },
+        {
+          "name": "destination_token_account",
+          "writable": true
+        },
+        {
+          "name": "from_wallet",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "to_wallet"
+        },
+        {
+          "name": "extra_account_metas"
+        },
+        {
+          "name": "controller_program",
+          "address": "92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s"
+        },
+        {
+          "name": "hook_program",
+          "address": "4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m"
+        },
+        {
+          "name": "transfer_approval",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "irp_state"
+        },
+        {
+          "name": "irs_state"
+        },
+        {
+          "name": "tir_state"
+        },
+        {
+          "name": "ctr_state"
+        },
+        {
+          "name": "compliance_state"
+        },
+        {
+          "name": "compliance_program"
+        },
+        {
+          "name": "from_wallet_identity"
+        },
+        {
+          "name": "to_wallet_identity"
+        },
+        {
+          "name": "from_frozen"
+        },
+        {
+          "name": "to_frozen"
+        },
+        {
+          "name": "from_partial_freeze"
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "from_balance",
+          "type": "u64"
+        },
+        {
+          "name": "to_balance",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "transfer_ownership",
+      "discriminator": [
+        65,
+        177,
+        215,
+        73,
+        53,
+        45,
+        99,
+        47
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  119,
+                  110,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner_state.token_mint",
+                "account": "OwnerState"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_owner",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "unfreeze_partial",
+      "discriminator": [
+        90,
+        232,
+        228,
+        78,
+        237,
+        178,
+        102,
+        144
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_state"
+        },
+        {
+          "name": "agent_role"
+        },
+        {
+          "name": "wallet"
+        },
+        {
+          "name": "partial_freeze",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  114,
+                  116,
+                  105,
+                  97,
+                  108,
+                  95,
+                  102,
+                  114,
+                  101,
+                  101,
+                  122,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              },
+              {
+                "kind": "account",
+                "path": "wallet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "unfreeze_wallet",
+      "discriminator": [
+        246,
+        148,
+        196,
+        60,
+        209,
+        142,
+        99,
+        68
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_state"
+        },
+        {
+          "name": "agent_role"
+        },
+        {
+          "name": "frozen_wallet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  114,
+                  111,
+                  122,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              },
+              {
+                "kind": "account",
+                "path": "frozen_wallet.wallet",
+                "account": "FrozenWallet"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "unpause",
+      "discriminator": [
+        169,
+        144,
+        4,
+        38,
+        10,
+        141,
+        188,
+        255
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  119,
+                  110,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner_state.token_mint",
+                "account": "OwnerState"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "AgentRole",
+      "discriminator": [
+        183,
+        131,
+        38,
+        95,
+        37,
+        18,
+        122,
+        136
+      ]
+    },
+    {
+      "name": "FrozenWallet",
+      "discriminator": [
+        165,
+        203,
+        218,
+        18,
+        62,
+        58,
+        187,
+        59
+      ]
+    },
+    {
+      "name": "OwnerState",
+      "discriminator": [
+        234,
+        56,
+        107,
+        216,
+        144,
+        52,
+        54,
+        244
+      ]
+    },
+    {
+      "name": "PartialFreeze",
+      "discriminator": [
+        232,
+        107,
+        157,
+        23,
+        30,
+        174,
+        203,
+        74
+      ]
+    },
+    {
+      "name": "TokenState",
+      "discriminator": [
+        218,
+        112,
+        6,
+        149,
+        55,
+        186,
+        168,
+        163
+      ]
+    },
+    {
+      "name": "TransferApproval",
+      "discriminator": [
+        153,
+        181,
+        122,
+        112,
+        80,
+        6,
+        154,
+        216
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "AgentAdded",
+      "discriminator": [
+        6,
+        81,
+        249,
+        137,
+        200,
+        47,
+        78,
+        79
+      ]
+    },
+    {
+      "name": "AgentRemoved",
+      "discriminator": [
+        174,
+        133,
+        31,
+        207,
+        113,
+        53,
+        217,
+        233
+      ]
+    },
+    {
+      "name": "ForcedTransferExecuted",
+      "discriminator": [
+        217,
+        149,
+        160,
+        88,
+        46,
+        167,
+        227,
+        48
+      ]
+    },
+    {
+      "name": "PartialFreezeUpdated",
+      "discriminator": [
+        126,
+        73,
+        250,
+        148,
+        149,
+        0,
+        163,
+        125
+      ]
+    },
+    {
+      "name": "TokenPaused",
+      "discriminator": [
+        126,
+        54,
+        76,
+        161,
+        125,
+        151,
+        148,
+        59
+      ]
+    },
+    {
+      "name": "TokenRecovery",
+      "discriminator": [
+        197,
+        114,
+        221,
+        252,
+        72,
+        147,
+        55,
+        5
+      ]
+    },
+    {
+      "name": "TokenUnpaused",
+      "discriminator": [
+        225,
+        17,
+        68,
+        81,
+        129,
+        134,
+        145,
+        169
+      ]
+    },
+    {
+      "name": "TokensBurned",
+      "discriminator": [
+        230,
+        255,
+        34,
+        113,
+        226,
+        53,
+        227,
+        9
+      ]
+    },
+    {
+      "name": "TokensMinted",
+      "discriminator": [
+        207,
+        212,
+        128,
+        194,
+        175,
+        54,
+        64,
+        24
+      ]
+    },
+    {
+      "name": "TransferExecuted",
+      "discriminator": [
+        8,
+        128,
+        224,
+        132,
+        112,
+        216,
+        192,
+        35
+      ]
+    },
+    {
+      "name": "WalletFrozen",
+      "discriminator": [
+        193,
+        14,
+        205,
+        91,
+        1,
+        121,
+        55,
+        77
+      ]
+    },
+    {
+      "name": "WalletUnfrozen",
+      "discriminator": [
+        55,
+        62,
+        221,
+        216,
+        232,
+        67,
+        159,
+        210
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 12000,
+      "name": "NotOwner",
+      "msg": "Signer is not the owner."
+    },
+    {
+      "code": 12001,
+      "name": "WalletNotVerified",
+      "msg": "Wallet is not verified."
+    },
+    {
+      "code": 12002,
+      "name": "WalletFrozen",
+      "msg": "Wallet is frozen."
+    },
+    {
+      "code": 12003,
+      "name": "TokenPaused",
+      "msg": "Token is paused."
+    },
+    {
+      "code": 12004,
+      "name": "ComplianceCheckFailed",
+      "msg": "Compliance check failed."
+    },
+    {
+      "code": 12009,
+      "name": "NotAgent",
+      "msg": "Signer is not an active agent."
+    },
+    {
+      "code": 12011,
+      "name": "UnauthorizedAuthority",
+      "msg": "Signer is neither the suite owner nor an active agent."
+    },
+    {
+      "code": 12010,
+      "name": "InsufficientBalance",
+      "msg": "Insufficient transferable balance."
+    },
+    {
+      "code": 12013,
+      "name": "InvalidRegistryReference",
+      "msg": "Registry reference is invalid."
+    },
+    {
+      "code": 12025,
+      "name": "InvalidOwner",
+      "msg": "Owner address is invalid."
+    },
+    {
+      "code": 12026,
+      "name": "MetadataTooLong",
+      "msg": "Metadata exceeds the documented length limits."
+    },
+    {
+      "code": 12029,
+      "name": "InvalidFreezeAmount",
+      "msg": "Freeze amount is invalid."
+    },
+    {
+      "code": 12030,
+      "name": "InvalidRecoveryTarget",
+      "msg": "Recovery target is invalid."
+    },
+    {
+      "code": 12031,
+      "name": "ArithmeticOverflow",
+      "msg": "Arithmetic overflow."
+    },
+    {
+      "code": 12032,
+      "name": "InvalidTokenAccount",
+      "msg": "Token-2022 account is invalid."
+    },
+    {
+      "code": 12033,
+      "name": "InvalidTokenProgram",
+      "msg": "Token-2022 program is invalid."
+    },
+    {
+      "code": 12034,
+      "name": "MissingTransferHook",
+      "msg": "Token-2022 mint is missing the FRACKS transfer hook."
+    },
+    {
+      "code": 12035,
+      "name": "MissingPermanentDelegate",
+      "msg": "Token-2022 mint is missing the FRACKS permanent delegate."
+    },
+    {
+      "code": 12036,
+      "name": "InvalidTokenAuthority",
+      "msg": "Token-2022 authority is invalid."
+    },
+    {
+      "code": 12037,
+      "name": "MissingTokenAuthority",
+      "msg": "Required Token-2022 authority did not sign."
+    },
+    {
+      "code": 12038,
+      "name": "ProgramCalledOutsideTransfer",
+      "msg": "Transfer hook was called outside an active Token-2022 transfer."
+    },
+    {
+      "code": 12039,
+      "name": "MissingTransferApproval",
+      "msg": "FRACKS transfer approval is missing or invalid."
+    }
+  ],
+  "types": [
+    {
+      "name": "AgentAdded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "by_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AgentRemoved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "by_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AgentRole",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "is_active",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ForcedTransferExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "from",
+            "type": "pubkey"
+          },
+          {
+            "name": "to",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "by_agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FrozenWallet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "frozen_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "frozen_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OwnerState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PartialFreeze",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "frozen_amount",
+            "type": "u64"
+          },
+          {
+            "name": "frozen_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PartialFreezeUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "frozen_amount",
+            "type": "u64"
+          },
+          {
+            "name": "by_agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokenPaused",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "by_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokenRecovery",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "lost_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "by_agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokenState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "identity_registry",
+            "type": "pubkey"
+          },
+          {
+            "name": "compliance",
+            "type": "pubkey"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "decimals",
+            "type": "u8"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "symbol",
+            "type": "string"
+          },
+          {
+            "name": "isin",
+            "type": "string"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokenUnpaused",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "by_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokensBurned",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "from",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "by_agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokensMinted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "to",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "by_agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TransferApproval",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "token_state",
+            "type": "pubkey"
+          },
+          {
+            "name": "source_token_account",
+            "type": "pubkey"
+          },
+          {
+            "name": "destination_token_account",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "source_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "destination_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "from_balance",
+            "type": "u64"
+          },
+          {
+            "name": "to_balance",
+            "type": "u64"
+          },
+          {
+            "name": "from_country",
+            "type": "u16"
+          },
+          {
+            "name": "to_country",
+            "type": "u16"
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "consumed",
+            "type": "bool"
+          },
+          {
+            "name": "finalized",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TransferExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "from",
+            "type": "pubkey"
+          },
+          {
+            "name": "to",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WalletFrozen",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "by_agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WalletUnfrozen",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "by_agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}

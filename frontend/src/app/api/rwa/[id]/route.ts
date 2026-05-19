@@ -46,10 +46,55 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, data: match });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('RWA Asset Fetch Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: error instanceof Error ? error.message : 'Failed to fetch asset' },
+      { status: 500 }
+    );
+  }
+}
+
+// PUT /api/rwa/[id] - Update RWA asset
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: assetId } = await params;
+
+    if (!assetId) {
+      return NextResponse.json(
+        { success: false, error: 'Asset ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const backendUrl = getBackendUrl();
+    const body = await request.json();
+    const response = await fetch(`${backendUrl}/assets/${assetId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: request.headers.get('authorization') || '',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      return NextResponse.json(
+        { success: false, error: text || 'Failed to update asset' },
+        { status: response.status }
+      );
+    }
+
+    const data = await response.json();
+    return NextResponse.json({ success: true, data });
+  } catch (error: unknown) {
+    console.error('RWA Update Error:', error);
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : 'Failed to update asset' },
       { status: 500 }
     );
   }
@@ -88,10 +133,10 @@ export async function DELETE(
 
     const data = await response.json();
     return NextResponse.json({ success: true, data });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('RWA Delete Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: error instanceof Error ? error.message : 'Failed to delete asset' },
       { status: 500 }
     );
   }

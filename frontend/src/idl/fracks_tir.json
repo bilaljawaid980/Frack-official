@@ -1,0 +1,939 @@
+{
+  "address": "8KDYYPx74w6ZLKZgcvVWrj1mCv1gcULdTh2jbxcJwGMJ",
+  "metadata": {
+    "name": "fracks_tir",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "add_trusted_issuer",
+      "discriminator": [
+        172,
+        111,
+        139,
+        169,
+        229,
+        89,
+        73,
+        214
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "tir_state"
+          ]
+        },
+        {
+          "name": "tir_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  105,
+                  114,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tir_state.token_mint",
+                "account": "TrustedIssuersState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "issuer_entry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114,
+                  95,
+                  101,
+                  110,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tir_state"
+              },
+              {
+                "kind": "arg",
+                "path": "issuer_fid"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "issuer_fid",
+          "type": "pubkey"
+        },
+        {
+          "name": "topics",
+          "type": {
+            "vec": "u64"
+          }
+        },
+        {
+          "name": "label",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "deactivate_issuer",
+      "discriminator": [
+        52,
+        10,
+        163,
+        187,
+        247,
+        22,
+        150,
+        37
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "tir_state"
+          ]
+        },
+        {
+          "name": "tir_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  105,
+                  114,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tir_state.token_mint",
+                "account": "TrustedIssuersState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "issuer_entry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114,
+                  95,
+                  101,
+                  110,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tir_state"
+              },
+              {
+                "kind": "account",
+                "path": "issuer_entry.issuer_fid",
+                "account": "IssuerEntry"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_tir",
+      "discriminator": [
+        208,
+        51,
+        155,
+        69,
+        110,
+        179,
+        90,
+        141
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "tir_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  105,
+                  114,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "token_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "token_mint",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "is_trusted_for_topic",
+      "discriminator": [
+        17,
+        100,
+        173,
+        213,
+        91,
+        86,
+        32,
+        102
+      ],
+      "accounts": [
+        {
+          "name": "tir_state"
+        },
+        {
+          "name": "issuer_entry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114,
+                  95,
+                  101,
+                  110,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tir_state"
+              },
+              {
+                "kind": "account",
+                "path": "issuer_entry.issuer_fid",
+                "account": "IssuerEntry"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "issuer_fid",
+          "type": "pubkey"
+        },
+        {
+          "name": "topic",
+          "type": "u64"
+        }
+      ],
+      "returns": "bool"
+    },
+    {
+      "name": "reactivate_issuer",
+      "discriminator": [
+        174,
+        162,
+        75,
+        94,
+        50,
+        88,
+        97,
+        99
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "tir_state"
+          ]
+        },
+        {
+          "name": "tir_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  105,
+                  114,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tir_state.token_mint",
+                "account": "TrustedIssuersState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "issuer_entry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114,
+                  95,
+                  101,
+                  110,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tir_state"
+              },
+              {
+                "kind": "account",
+                "path": "issuer_entry.issuer_fid",
+                "account": "IssuerEntry"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "remove_trusted_issuer",
+      "discriminator": [
+        249,
+        241,
+        232,
+        207,
+        37,
+        38,
+        64,
+        221
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "tir_state"
+          ]
+        },
+        {
+          "name": "tir_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  105,
+                  114,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tir_state.token_mint",
+                "account": "TrustedIssuersState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "issuer_entry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114,
+                  95,
+                  101,
+                  110,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tir_state"
+              },
+              {
+                "kind": "account",
+                "path": "issuer_entry.issuer_fid",
+                "account": "IssuerEntry"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "transfer_ownership",
+      "discriminator": [
+        65,
+        177,
+        215,
+        73,
+        53,
+        45,
+        99,
+        47
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "tir_state"
+          ]
+        },
+        {
+          "name": "tir_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  105,
+                  114,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tir_state.token_mint",
+                "account": "TrustedIssuersState"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_owner",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "update_issuer_topics",
+      "discriminator": [
+        22,
+        245,
+        20,
+        152,
+        126,
+        159,
+        240,
+        85
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "tir_state"
+          ]
+        },
+        {
+          "name": "tir_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  105,
+                  114,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tir_state.token_mint",
+                "account": "TrustedIssuersState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "issuer_entry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114,
+                  95,
+                  101,
+                  110,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tir_state"
+              },
+              {
+                "kind": "account",
+                "path": "issuer_entry.issuer_fid",
+                "account": "IssuerEntry"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_topics",
+          "type": {
+            "vec": "u64"
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "IssuerEntry",
+      "discriminator": [
+        11,
+        211,
+        245,
+        253,
+        249,
+        156,
+        104,
+        93
+      ]
+    },
+    {
+      "name": "TrustedIssuersState",
+      "discriminator": [
+        100,
+        131,
+        84,
+        52,
+        143,
+        57,
+        230,
+        207
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "IssuerTopicsUpdated",
+      "discriminator": [
+        59,
+        52,
+        232,
+        235,
+        89,
+        186,
+        129,
+        68
+      ]
+    },
+    {
+      "name": "TrustedIssuerAdded",
+      "discriminator": [
+        139,
+        120,
+        175,
+        99,
+        149,
+        197,
+        120,
+        192
+      ]
+    },
+    {
+      "name": "TrustedIssuerDeactivated",
+      "discriminator": [
+        7,
+        142,
+        58,
+        6,
+        176,
+        115,
+        173,
+        158
+      ]
+    },
+    {
+      "name": "TrustedIssuerReactivated",
+      "discriminator": [
+        138,
+        248,
+        50,
+        5,
+        225,
+        246,
+        25,
+        234
+      ]
+    },
+    {
+      "name": "TrustedIssuerRemoved",
+      "discriminator": [
+        212,
+        39,
+        137,
+        127,
+        53,
+        122,
+        111,
+        107
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 12000,
+      "name": "NotOwner",
+      "msg": "Signer is not the owner."
+    },
+    {
+      "code": 12001,
+      "name": "InvalidOwner",
+      "msg": "Owner address is invalid."
+    },
+    {
+      "code": 12007,
+      "name": "IssuerNotTrusted",
+      "msg": "Claim issuer is not trusted."
+    },
+    {
+      "code": 12035,
+      "name": "TooManyTopics",
+      "msg": "Too many topics supplied."
+    },
+    {
+      "code": 12036,
+      "name": "LabelTooLong",
+      "msg": "Issuer label is too long."
+    },
+    {
+      "code": 12037,
+      "name": "DuplicateTopic",
+      "msg": "Duplicate topic supplied."
+    },
+    {
+      "code": 12038,
+      "name": "ArithmeticOverflow",
+      "msg": "Arithmetic overflow."
+    }
+  ],
+  "types": [
+    {
+      "name": "IssuerEntry",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "issuer_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "tir",
+            "type": "pubkey"
+          },
+          {
+            "name": "allowed_topics",
+            "type": {
+              "vec": "u64"
+            }
+          },
+          {
+            "name": "is_active",
+            "type": "bool"
+          },
+          {
+            "name": "label",
+            "type": "string"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "IssuerTopicsUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "issuer_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "topics",
+            "type": {
+              "vec": "u64"
+            }
+          },
+          {
+            "name": "by_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TrustedIssuerAdded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "issuer_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "topics",
+            "type": {
+              "vec": "u64"
+            }
+          },
+          {
+            "name": "label",
+            "type": "string"
+          },
+          {
+            "name": "by_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TrustedIssuerDeactivated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "issuer_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "by_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TrustedIssuerReactivated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "issuer_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "by_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TrustedIssuerRemoved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "issuer_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "by_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TrustedIssuersState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "issuer_count",
+            "type": "u32"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}

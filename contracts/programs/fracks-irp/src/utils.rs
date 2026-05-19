@@ -67,7 +67,10 @@ pub fn verify_claim_for_topic(
             continue;
         }
 
-        let issuer_entry = find_issuer_entry(remaining_accounts, tir_state, &claim.issuer_fid)?;
+        let issuer_entry = match find_issuer_entry(remaining_accounts, tir_state, &claim.issuer_fid) {
+            Ok(entry) => entry,
+            Err(_) => continue,
+        };
         if !issuer_entry.is_active || !issuer_entry.allowed_topics.contains(&topic) {
             continue;
         }
@@ -161,6 +164,9 @@ mod tests {
             fid: Pubkey::new_unique(),
             country: 840,
             irs,
+            is_active: true,
+            activated_by: Pubkey::new_unique(),
+            activated_at: 1,
             bump: 0,
         };
         let account = account_info_with_data(wrong_key, fracks_irs::id(), serialize_account(&identity));

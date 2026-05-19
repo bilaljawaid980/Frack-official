@@ -15,6 +15,15 @@ interface AssetsListProps {
 
 export function AssetsList({ assets, loading, limit = 5 }: AssetsListProps) {
   const displayAssets = limit ? assets.slice(0, limit) : assets;
+  const getAssetKey = (asset: RWAAsset, index: number) =>
+    [
+      asset.id,
+      asset.tokenContractAddress || asset.contractAddress,
+      asset.symbol,
+      index,
+    ]
+      .filter(Boolean)
+      .join("-");
 
   if (loading) {
     return (
@@ -38,7 +47,7 @@ export function AssetsList({ assets, loading, limit = 5 }: AssetsListProps) {
   return (
     <div className="space-y-3">
       {displayAssets.map((asset, index) => (
-        <Link key={asset.id} href={`/assets/${asset.id}`} className="block">
+        <Link key={getAssetKey(asset, index)} href={`/assets/${asset.id}`} className="block">
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}

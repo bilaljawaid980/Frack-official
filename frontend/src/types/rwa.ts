@@ -49,7 +49,7 @@ export interface RWAAsset {
   total_tokenized?: string;
   reference_id?: string;
   legal_owner?: string;
-  metadata?: string;
+  metadata?: any;
 }
 
 export interface ComplianceCheck {
@@ -94,6 +94,8 @@ export interface IssuanceRequest {
     amlRequired: boolean;
     accreditedInvestorsOnly: boolean;
     jurisdiction: string[];
+    kycIssuer?: string;
+    amlIssuer?: string;
   };
   tokenDetails: {
     tokenName: string;

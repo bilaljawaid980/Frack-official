@@ -1,33 +1,32 @@
 "use client";
 
-/**
- * NOTE: TypeScript errors in this file are false positives caused by Next.js 16 Turbopack.
- *
- * The errors show "Two different types with this name exist" for react-hook-form types,
- * but this is a tooling bug - packages are correctly installed with no duplicates.
- *
- * The code works perfectly at runtime. These are editor-only warnings from type resolution
- * issues in Next.js 16's development server. They can be safely ignored.
- *
- * See: https://github.com/vercel/next.js/issues/  (known Turbopack type resolution bug)
- */
-
-import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import {
-  Upload,
-  Building2,
-  DollarSign,
-  FileText,
-  MapPin,
-  Shield,
-  CheckCircle,
+import { motion } from "framer-motion";
+import { 
+  Shield, 
+  Plus, 
+  Trash2, 
+  Loader2, 
+  Rocket, 
+  FileText, 
+  Upload, 
+  ChevronLeft, 
+  ChevronRight, 
+  CheckCircle, 
   AlertCircle,
+  DollarSign,
+  Building2,
+  Info
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   Form,
   FormControl,
@@ -44,29 +43,51 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { useAssetsContext } from "@/contexts/assets-context";
-import { useWallet } from "@/hooks/use-wallet";
-import { useIdentity } from "@/hooks/use-identity";
-import { toast } from "sonner";
-import { IssuanceRequest } from "@/types/rwa";
-import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TREX_CONTRACTS } from "@/lib/zigchain-config";
 
-// Form validation schema
+import { useWallet } from "@/hooks/use-wallet";
+import { toast } from "sonner";
+import {
+  useDeployTokenSuite,
+  useFactoryState,
+} from "@/hooks/useFactory";
+import { FACTORY_PROGRAM_ID, FID_PROGRAM_ID } from "@/lib/constants";
+import { generateSalt, isValidPublicKey } from "@/lib/utils";
+import { PublicKey, Keypair } from "@solana/web3.js";
+import { queryCache } from "@/lib/query-cache";
+import { apiFetch } from "@/lib/backend";
+
+async function parseApiResponse(response: Response, fallback: string) {
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.success === false) {
+    throw new Error(payload?.error || fallback);
+  }
+  return payload;
+}
+
+/** Derives the FID PDA from a wallet address. */
+function deriveFidFromWallet(walletAddress: string): string {
+  try {
+    const wallet = new PublicKey(walletAddress);
+    const [fid] = PublicKey.findProgramAddressSync(
+      [Buffer.from("fid"), wallet.toBuffer()],
+      FID_PROGRAM_ID
+    );
+    return fid.toBase58();
+  } catch {
+    return "";
+  }
+}
+
+// Form validation schema updated for Factory deployment
 const issuanceSchema = z.object({
   assetDetails: z.object({
-    name: z.string().min(3, "Name must be at least 3 characters"),
+    name: z.string().min(3, "Name must be at least 3 characters").max(32, "Max 32 characters"),
     symbol: z
       .string()
       .min(2, "Symbol must be at least 2 characters")
-      .max(6, "Symbol must be at most 6 characters"),
-    description: z
-      .string()
-      .min(10, "Description must be at least 10 characters"),
+      .max(8, "Max 8 characters")
+      .transform((v) => v.toUpperCase()),
+    description: z.string().min(10, "Description must be at least 10 characters"),
     assetType: z.enum([
       "real-estate",
       "commodity",
@@ -79,15 +100,18 @@ const issuanceSchema = z.object({
     totalSupply: z.number().min(1, "Must issue at least 1 token"),
     location: z.string().min(2, "Location is required"),
     currency: z.string(),
-    legalOwner: z.string().optional(),
+    issuerWallet: z.string().refine(isValidPublicKey, "Enter a valid wallet address"),
+    isin: z.string().min(1, "ISIN is required").max(12, "Max 12 characters").transform((v) => v.toUpperCase()),
   }),
   complianceRequirements: z.object({
-    kycRequired: z.boolean().default(true),
-    amlRequired: z.boolean().default(true),
-    accreditedInvestorsOnly: z.boolean().default(false),
-    jurisdiction: z
-      .array(z.string())
-      .min(1, "Select at least one jurisdiction"),
+    claimTopics: z.array(z.string().regex(/^\d+$/, "Must be a number")).min(1, "At least one topic required"),
+    trustedIssuers: z.array(z.object({
+      walletAddress: z.string().refine(isValidPublicKey, "Invalid wallet"),
+      issuerFid: z.string(),
+      topics: z.array(z.bigint()).min(1, "At least one topic required"),
+      label: z.string().min(1, "Label required"),
+    })),
+    selectedModules: z.array(z.string()),
   }),
   tokenDetails: z.object({
     decimals: z.number().min(0).max(18).default(6),
@@ -96,37 +120,37 @@ const issuanceSchema = z.object({
   documents: z.array(z.any()).min(1, "At least one document is required"),
 });
 
-type IssuanceFormValues = z.infer<typeof issuanceSchema>;
-
-const jurisdictionOptions = [
-  { value: "us", label: "United States" },
-  { value: "eu", label: "European Union" },
-  { value: "uk", label: "United Kingdom" },
-  { value: "sg", label: "Singapore" },
-  { value: "ch", label: "Switzerland" },
-  { value: "ae", label: "United Arab Emirates" },
-];
+export type IssuanceFormValues = z.infer<typeof issuanceSchema>;
 
 export function IssuanceForm({
   onSubmitOverride,
   isApplicationMode = false,
+  onDeployed,
+  initialValues,
+  deploymentRequestId,
+  submitLabel,
 }: {
   onSubmitOverride?: (data: IssuanceFormValues, uploadedFiles: File[]) => Promise<void>;
   isApplicationMode?: boolean;
+  onDeployed?: () => Promise<void> | void;
+  initialValues?: Partial<IssuanceFormValues>;
+  deploymentRequestId?: string;
+  submitLabel?: string;
 } = {}) {
-  const { address, trexClient } = useWallet();
+  const { address } = useWallet();
   const router = useRouter();
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
-  const { issueAsset } = useAssetsContext();
-  const {
-    isVerified,
-    hasOnchainId,
-    loading: identityLoading,
-  } = useIdentity();
-  const [factoryAdmin, setFactoryAdmin] = useState<string | null>(null);
-  const [factoryLoading, setFactoryLoading] = useState(false);
+  const isVerified = true;
+  const hasOnchainId = true;
+  const identityLoading = false;
+
+  // Generate a session-stable mint keypair
+  const [mintKeypair] = useState(() => Keypair.generate());
+
+  // Factory Hooks
+  const { data: factoryState, isLoading: factoryLoading } = useFactoryState();
+  const { mutate: deployTokenSuite, isPending: deploying } = useDeployTokenSuite();
 
   const form = useForm<IssuanceFormValues>({
     resolver: zodResolver(issuanceSchema) as any,
@@ -140,13 +164,13 @@ export function IssuanceForm({
         totalSupply: 1000000,
         location: "",
         currency: "USD",
-        legalOwner: "",
+        issuerWallet: address || "",
+        isin: "",
       },
       complianceRequirements: {
-        kycRequired: true,
-        amlRequired: true,
-        accreditedInvestorsOnly: false,
-        jurisdiction: ["us"],
+        claimTopics: ["1"],
+        trustedIssuers: [],
+        selectedModules: [],
       },
       tokenDetails: {
         decimals: 6,
@@ -156,117 +180,157 @@ export function IssuanceForm({
     },
   });
 
-  const isFactoryAdmin =
-    !!address &&
-    !!factoryAdmin &&
-    address.toLowerCase() === factoryAdmin.toLowerCase();
+  const configuredPlatformOwner = process.env.NEXT_PUBLIC_PLATFORM_OWNER || "";
+  const isConfiguredPlatformOwner =
+    !!address && !!configuredPlatformOwner && address === configuredPlatformOwner;
+  const factoryOwner = factoryState?.owner || "";
+  const isPlatformAdmin = !!address && !!factoryOwner && address === factoryOwner;
+  const hasFactoryOwnerMismatch =
+    !!configuredPlatformOwner && !!factoryOwner && configuredPlatformOwner !== factoryOwner;
 
   useEffect(() => {
-    if (address) {
-      form.setValue(
-        "assetDetails.legalOwner",
-        form.getValues("assetDetails.legalOwner") || address,
-      );
-
-      }
+    if (address && !form.getValues("assetDetails.issuerWallet")) {
+      form.setValue("assetDetails.issuerWallet", address);
+    }
   }, [address, form]);
 
   useEffect(() => {
-    const loadFactoryAdmin = async () => {
-      if (!trexClient) {
-        setFactoryAdmin(null);
-        return;
-      }
-
-      setFactoryLoading(true);
-      try {
-        const config = await trexClient.getFactoryConfig();
-        setFactoryAdmin(config.admin);
-      } catch (error) {
-        console.error("Failed to load factory config:", error);
-        setFactoryAdmin(null);
-      } finally {
-        setFactoryLoading(false);
-      }
-    };
-
-    loadFactoryAdmin();
-  }, [trexClient]);
+    if (!initialValues) return;
+    form.reset({
+      assetDetails: {
+        ...form.getValues("assetDetails"),
+        ...initialValues.assetDetails,
+      },
+      complianceRequirements: {
+        ...form.getValues("complianceRequirements"),
+        ...initialValues.complianceRequirements,
+      },
+      tokenDetails: {
+        ...form.getValues("tokenDetails"),
+        ...initialValues.tokenDetails,
+      },
+      documents: initialValues.documents || [],
+    });
+  }, [form, initialValues]);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
-
-    // Validate file types
     const validFiles = files.filter((file) => {
-      const validTypes = [
-        "application/pdf",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "image/jpeg",
-        "image/png",
-      ];
-      return validTypes.includes(file.type) && file.size <= 10 * 1024 * 1024; // 10MB limit
+      const validTypes = ["application/pdf", "image/jpeg", "image/png"];
+      return validTypes.includes(file.type) && file.size <= 10 * 1024 * 1024;
     });
 
     setUploadedFiles((prev) => [...prev, ...validFiles]);
     form.setValue("documents", [...uploadedFiles, ...validFiles]);
-
-    if (validFiles.length !== files.length) {
-      toast.warning(
-        "Some files were rejected (max 10MB, PDF/DOC/JPEG/PNG only)",
-      );
-    }
   };
 
   const removeFile = (index: number) => {
-    const newFiles = uploadedFiles.filter((_, i) => i !== index);
+    const newFiles = uploadedFiles.filter((_, i: number) => i !== index);
     setUploadedFiles(newFiles);
     form.setValue("documents", newFiles);
   };
 
   const onSubmit = async (data: IssuanceFormValues) => {
-    if (!isFactoryAdmin && !isApplicationMode) {
-      toast.error("Only the factory admin can create new tokens", {
-        description: "Connect with the platform owner wallet to issue tokens.",
+    if (onSubmitOverride) {
+      await onSubmitOverride(data, uploadedFiles);
+      return;
+    }
+
+    if (!isPlatformAdmin && !isApplicationMode) {
+      toast.error("Only the platform admin can deploy new tokens", {
+        description: "Connect with the factory owner wallet.",
       });
       return;
     }
 
-    setIsSubmitting(true);
+    const salt = generateSalt();
+    const priceScale = 10 ** data.tokenDetails.decimals;
+    const pricePerToken = BigInt(
+      Math.round(data.tokenDetails.initialPrice * priceScale)
+    );
 
-    try {
-      if (onSubmitOverride) {
-        await onSubmitOverride(data, uploadedFiles);
-      } else {
-        const issuanceRequest: IssuanceRequest = {
-          assetDetails: data.assetDetails,
-          complianceRequirements: data.complianceRequirements,
-          tokenDetails: {
-            tokenName: data.assetDetails.name,
-            tokenSymbol: data.assetDetails.symbol,
-            decimals: data.tokenDetails.decimals,
-            initialPrice: data.tokenDetails.initialPrice,
-            owner: data.assetDetails.legalOwner || address || "",
-            issuer: data.assetDetails.legalOwner || address || "",
-            controller: data.assetDetails.legalOwner || address || "",
-          },
-          documents: uploadedFiles,
-        };
-
-        await issueAsset(issuanceRequest);
+    deployTokenSuite(
+      {
+        mintKeypair,
+        issuer: data.assetDetails.issuerWallet,
+        tokenMint: mintKeypair.publicKey.toBase58(),
+        tokenName: data.assetDetails.name,
+        tokenSymbol: data.assetDetails.symbol,
+        decimals: data.tokenDetails.decimals,
+        isin: data.assetDetails.isin,
+        claimTopics: data.complianceRequirements.claimTopics.map((t: string) => BigInt(t)),
+        trustedIssuers: data.complianceRequirements.trustedIssuers,
+        complianceModules: data.complianceRequirements.selectedModules,
+        sharedIrs: null,
+        pricePerToken,
+        priceDecimals: data.tokenDetails.decimals,
+        paymentMint: null,
+        salt,
+      },
+      {
+        onSuccess: async (sig: string) => {
+          const response = await fetch("/api/rwa/deployed", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              tokenContract: mintKeypair.publicKey.toBase58(),
+              name: data.assetDetails.name,
+              symbol: data.assetDetails.symbol,
+              description: data.assetDetails.description,
+              issuerWallet: data.assetDetails.issuerWallet,
+              legalOwner: data.assetDetails.issuerWallet,
+              referenceId: data.assetDetails.isin,
+              deployedAt: new Date().toISOString(),
+              lifecycleState: "ISSUED",
+              metadata: {
+                assetType: data.assetDetails.assetType,
+                currency: data.assetDetails.currency,
+                location: data.assetDetails.location,
+                underlyingValue: data.assetDetails.underlyingValue,
+                totalSupply: data.assetDetails.totalSupply,
+                initialPrice: data.tokenDetails.initialPrice,
+                pricePerToken: pricePerToken.toString(),
+                priceDecimals: data.tokenDetails.decimals,
+                paymentMint: null,
+                decimals: data.tokenDetails.decimals,
+                isin: data.assetDetails.isin,
+                claimTopics: data.complianceRequirements.claimTopics,
+                trustedIssuers: data.complianceRequirements.trustedIssuers.map((issuer) => ({
+                  ...issuer,
+                  topics: issuer.topics.map((topic) => topic.toString()),
+                })),
+                complianceModules: data.complianceRequirements.selectedModules,
+                txHash: sig,
+                salt,
+              },
+            }),
+          });
+          await parseApiResponse(
+            response,
+            "Token deployed but failed to persist the asset record.",
+          );
+          if (deploymentRequestId) {
+            await apiFetch(`/asset-requests/${deploymentRequestId}/status`, {
+              method: "PATCH",
+              body: JSON.stringify({
+                status: "DEPLOYED",
+                deployedAssetId: mintKeypair.publicKey.toBase58(),
+                txHash: sig,
+                reviewedBy: address || undefined,
+              }),
+            });
+          }
+          queryCache.invalidatePrefix("assets:");
+          await onDeployed?.();
+          toast.success("Token suite deployed successfully!");
+          router.push("/issuer");
+        },
+        onError: (err: unknown) => {
+          const message = err instanceof Error ? err.message : "Unknown error";
+          toast.error("Deployment failed: " + message);
+        },
       }
-
-      // Reset form
-      form.reset();
-      setUploadedFiles([]);
-      setCurrentStep(1);
-
-      toast.success("Asset issuance request submitted!");
-    } catch (error) {
-      toast.error("Failed to issue asset");
-    } finally {
-      setIsSubmitting(false);
-    }
+    );
   };
 
   const nextStep = () => {
@@ -283,7 +347,8 @@ export function IssuanceForm({
     setCurrentStep((prev) => Math.max(prev - 1, 1));
   };
 
-  const canBypassVerification = isFactoryAdmin || isApplicationMode;
+  const canBypassVerification = isPlatformAdmin || isApplicationMode;
+
 
   // Check if user is verified before allowing issuance (factory admin can proceed)
   if (
@@ -371,21 +436,25 @@ export function IssuanceForm({
           "assetDetails.symbol",
           "assetDetails.description",
           "assetDetails.assetType",
+          "assetDetails.location",
+          "assetDetails.issuerWallet",
+          "assetDetails.isin",
         ];
       case 2:
         return [
           "assetDetails.underlyingValue",
           "assetDetails.totalSupply",
-          "assetDetails.location",
         ];
       case 3:
         return [
-          "complianceRequirements.kycRequired",
-          "complianceRequirements.jurisdiction",
+          "complianceRequirements.claimTopics",
+          "complianceRequirements.trustedIssuers",
+          "complianceRequirements.selectedModules",
         ];
       case 4:
         return [
           "tokenDetails.initialPrice",
+          "tokenDetails.decimals",
           "documents",
         ];
       default:
@@ -399,52 +468,62 @@ export function IssuanceForm({
       animate={{ opacity: 1, y: 0 }}
       className="w-full mx-auto"
     >
-      {/* Factory Admin Notice */}
+      {/* Platform Authority Notice */}
       {!isApplicationMode && (
-        <Card className="mb-6 bg-gradient-to-br from-slate-50 to-white border-2 border-slate-200 rounded-2xl shadow-[0_4px_16px_rgba(23,46,127,0.06)]">
+        <Card className="mb-8 border-2 border-slate-200 bg-white/50 backdrop-blur-sm shadow-[0_4px_24px_rgba(0,0,0,0.04)] overflow-hidden">
+          <div className="absolute top-0 left-0 w-1 h-full"/>
           <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-slate-900">
-              <div className="p-2 rounded-xl bg-gradient-to-br from-[#172E7F]/10 to-[#2A5FA6]/10 border border-[#172E7F]/20">
-                <Shield className="h-5 w-5 text-[#172E7F]" />
+            <CardTitle className="flex items-center gap-3 text-slate-900">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#172E7F] to-[#2A5FA6] text-white shadow-md">
+                <Shield className="h-5 w-5" />
               </div>
-              Factory Admin Required
+              Platform Authority Verification
             </CardTitle>
+            <CardDescription>
+              Deployment of new regulated token suites requires platform owner authorization.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-sm text-slate-600 leading-relaxed">
-              Token creation is restricted to the factory admin wallet. Connect
-              with the platform owner to issue a new fund token, then set legal
-              owner and issuer fields to the fund wallet.
-            </p>
-            <div className="space-y-1.5 p-3 rounded-xl bg-slate-50 border border-slate-200">
-              <p className="font-mono text-xs text-slate-600">
-                <span className="font-semibold text-slate-700">Factory:</span>{" "}
-                {TREX_CONTRACTS.factory}
-              </p>
-              {factoryAdmin && (
-                <p className="font-mono text-xs text-slate-600">
-                  <span className="font-semibold text-slate-700">Admin:</span>{" "}
-                  {factoryAdmin}
-                </p>
-              )}
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5 p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Factory Program</div>
+                <div className="font-mono text-xs text-slate-700 truncate">
+                  {FACTORY_PROGRAM_ID.toBase58()}
+                </div>
+              </div>
+              <div className="space-y-1.5 p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">On-chain Factory Owner</div>
+                <div className="font-mono text-xs text-slate-700 truncate">
+                  {factoryState?.owner || "Loading..."}
+                </div>
+              </div>
             </div>
+
             {address && !factoryLoading && (
               <div
-                className={`p-3 rounded-xl border-2 ${
-                  isFactoryAdmin
-                    ? "bg-emerald-50 border-emerald-200"
-                    : "bg-red-50 border-red-200"
+                className={`p-4 rounded-xl flex items-center gap-3 border-2 transition-all duration-300 ${
+                  isPlatformAdmin
+                    ? "bg-emerald-50/50 border-emerald-500/20 text-emerald-700"
+                    : "bg-amber-50/50 border-amber-500/20 text-amber-700"
                 }`}
               >
-                <p
-                  className={`text-sm font-semibold ${
-                    isFactoryAdmin ? "text-emerald-700" : "text-red-700"
-                  }`}
-                >
-                  {isFactoryAdmin
-                    ? "✓ You are connected as factory admin."
-                    : "✗ You are NOT the factory admin."}
-                </p>
+                <div className={`p-1.5 rounded-full ${isPlatformAdmin ? "bg-emerald-500/20" : "bg-amber-500/20"}`}>
+                  {isPlatformAdmin ? <CheckCircle className="h-4 w-4" /> : <Info className="h-4 w-4" />}
+                </div>
+                <div className="space-y-1 text-sm">
+                  <div className="font-semibold">
+                    {isPlatformAdmin
+                      ? "Authorization verified. You are connected as the on-chain factory owner."
+                      : "Only the on-chain factory owner can deploy token suites."}
+                  </div>
+                  {!isPlatformAdmin && (
+                    <div className="text-xs font-medium">
+                      {isConfiguredPlatformOwner && hasFactoryOwnerMismatch
+                        ? "NEXT_PUBLIC_PLATFORM_OWNER does not match the factory owner stored on-chain. Update factory ownership on-chain or point the frontend to the correct factory program."
+                        : "Switch to the factory owner wallet shown above. The .env value alone cannot authorize deployment."}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </CardContent>
@@ -485,61 +564,62 @@ export function IssuanceForm({
           ))}
         </div>
         <div className="grid grid-cols-4 gap-2 text-center">
-          <span
+          <div
             className={`text-sm font-semibold transition-colors ${
               currentStep >= 1 ? "text-slate-900" : "text-slate-400"
             }`}
           >
             Asset Details
-          </span>
-          <span
+          </div>
+          <div
             className={`text-sm font-semibold transition-colors ${
               currentStep >= 2 ? "text-slate-900" : "text-slate-400"
             }`}
           >
             Valuation
-          </span>
-          <span
+          </div>
+          <div
             className={`text-sm font-semibold transition-colors ${
               currentStep >= 3 ? "text-slate-900" : "text-slate-400"
             }`}
           >
             Compliance
-          </span>
-          <span
+          </div>
+          <div
             className={`text-sm font-semibold transition-colors ${
               currentStep >= 4 ? "text-slate-900" : "text-slate-400"
             }`}
           >
             Tokenization
-          </span>
+          </div>
         </div>
       </div>
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-          {/* Step 1: Asset Details */}
+          {/* Step 1: Asset Information */}
           {currentStep === 1 && (
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               className="space-y-6"
             >
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <Building2 className="h-5 w-5" />
-                Asset Information
+              <h3 className="text-lg font-bold flex items-center gap-2 text-slate-900">
+                <Building2 className="h-5 w-5 text-[#172E7F]" />
+                Identity & Basic Details
               </h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <FormField
                   control={form.control}
                   name="assetDetails.name"
-                  render={({ field }) => (
+                  render={({ field }: { field: any }) => (
                     <FormItem>
-                      <FormLabel>Asset Name</FormLabel>
+                      <FormLabel>Tokenized Asset Name</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="e.g., Manhattan Luxury Apartments"
+                          placeholder="e.g. London Real Estate Fund"
+                          className="h-11"
                           {...field}
                         />
                       </FormControl>
@@ -551,14 +631,14 @@ export function IssuanceForm({
                 <FormField
                   control={form.control}
                   name="assetDetails.symbol"
-                  render={({ field }) => (
+                  render={({ field }: { field: any }) => (
                     <FormItem>
-                      <FormLabel>Asset Symbol</FormLabel>
+                      <FormLabel>Token Symbol</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g., MLA" {...field} />
+                        <Input placeholder="e.g. LREF" className="h-11" {...field} />
                       </FormControl>
                       <FormDescription>
-                        3-6 characters, unique identifier
+                        Unique ticker (max 8 characters)
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -567,30 +647,40 @@ export function IssuanceForm({
 
                 <FormField
                   control={form.control}
-                  name="assetDetails.assetType"
-                  render={({ field }) => (
+                  name="assetDetails.isin"
+                  render={({ field }: { field: any }) => (
                     <FormItem>
-                      <FormLabel>Asset Type</FormLabel>
+                      <FormLabel>ISIN / Identifier</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g. US123456789" className="h-11 font-mono" {...field} />
+                      </FormControl>
+                      <FormDescription>International Securities Identification Number</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="assetDetails.assetType"
+                  render={({ field }: { field: any }) => (
+                    <FormItem>
+                      <FormLabel>Asset Class</FormLabel>
                       <Select
                         onValueChange={field.onChange}
                         defaultValue={field.value}
                       >
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select asset type" />
+                          <SelectTrigger className="h-11">
+                            <SelectValue placeholder="Select class" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="real-estate">
-                            Real Estate
-                          </SelectItem>
+                          <SelectItem value="real-estate">Real Estate</SelectItem>
                           <SelectItem value="commodity">Commodity</SelectItem>
-                          <SelectItem value="equity">Equity</SelectItem>
-                          <SelectItem value="debt">Debt Instrument</SelectItem>
-                          <SelectItem value="art">Fine Art</SelectItem>
-                          <SelectItem value="intellectual-property">
-                            Intellectual Property
-                          </SelectItem>
+                          <SelectItem value="equity">Private Equity</SelectItem>
+                          <SelectItem value="debt">Fixed Income / Debt</SelectItem>
+                          <SelectItem value="art">Collectibles / Art</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -601,11 +691,11 @@ export function IssuanceForm({
                 <FormField
                   control={form.control}
                   name="assetDetails.location"
-                  render={({ field }) => (
+                  render={({ field }: { field: any }) => (
                     <FormItem>
-                      <FormLabel>Location</FormLabel>
+                      <FormLabel>Jurisdiction / Location</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g., New York, USA" {...field} />
+                        <Input placeholder="e.g. Cayman Islands" className="h-11" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -614,16 +704,15 @@ export function IssuanceForm({
 
                 <FormField
                   control={form.control}
-                  name="assetDetails.legalOwner"
-                  render={({ field }) => (
+                  name="assetDetails.issuerWallet"
+                  render={({ field }: { field: any }) => (
                     <FormItem>
-                      <FormLabel>Legal Owner Wallet</FormLabel>
+                      <FormLabel>Issuer Wallet (Target Owner)</FormLabel>
                       <FormControl>
-                        <Input placeholder="Solana wallet address" {...field} />
+                        <Input placeholder="Solana Address" className="h-11 font-mono text-xs" {...field} />
                       </FormControl>
                       <FormDescription>
-                        Fund wallet that legally owns the asset (can differ from
-                        signer)
+                        The wallet that will own the deployed token suite.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -634,20 +723,16 @@ export function IssuanceForm({
               <FormField
                 control={form.control}
                 name="assetDetails.description"
-                render={({ field }) => (
+                render={({ field }: { field: any }) => (
                   <FormItem>
-                    <FormLabel>Description</FormLabel>
+                    <FormLabel>Asset Prospectus Summary</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Detailed description of the asset..."
-                        className="min-h-[120px]"
+                        placeholder="Provide a high-level summary of the investment..."
+                        className="min-h-[120px] resize-none"
                         {...field}
                       />
                     </FormControl>
-                    <FormDescription>
-                      Include details about the asset, its provenance, and any
-                      unique characteristics.
-                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -671,7 +756,7 @@ export function IssuanceForm({
                 <FormField
                   control={form.control}
                   name="assetDetails.underlyingValue"
-                  render={({ field }) => (
+                  render={({ field }: { field: any }) => (
                     <FormItem>
                       <FormLabel>Underlying Value (USD)</FormLabel>
                       <FormControl>
@@ -694,7 +779,7 @@ export function IssuanceForm({
                 <FormField
                   control={form.control}
                   name="assetDetails.totalSupply"
-                  render={({ field }) => (
+                  render={({ field }: { field: any }) => (
                     <FormItem>
                       <FormLabel>Total Tokens</FormLabel>
                       <FormControl>
@@ -717,7 +802,7 @@ export function IssuanceForm({
                 <FormField
                   control={form.control}
                   name="tokenDetails.initialPrice"
-                  render={({ field }) => (
+                  render={({ field }: { field: any }) => (
                     <FormItem>
                       <FormLabel>Token Price (USD)</FormLabel>
                       <FormControl>
@@ -737,231 +822,320 @@ export function IssuanceForm({
               </div>
             </motion.div>
           )}
-
-          {/* Step 3: Compliance */}
+          {/* Step 3: Compliance Configuration */}
           {currentStep === 3 && (
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               className="space-y-6"
             >
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                Compliance Requirements
+              <h3 className="text-lg font-bold flex items-center gap-2 text-slate-900">
+                <Shield className="h-5 w-5 text-[#172E7F]" />
+                Compliance & Trusted Framework
               </h3>
 
-              <div className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="complianceRequirements.kycRequired"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>KYC Verification Required</FormLabel>
-                        <FormDescription>
-                          Investors must complete Know Your Customer
-                          verification
-                        </FormDescription>
-                      </div>
-                    </FormItem>
-                  )}
-                />
+              {isApplicationMode ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
+                    <h4 className="text-sm font-bold text-slate-900">
+                      Compliance is set by the platform
+                    </h4>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      Your request captures the asset economics and legal
+                      context. The admin/compliance team decides the final
+                      on-chain claim topics, trusted issuers, and modules before
+                      deployment.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-5">
+                    <h4 className="text-sm font-bold text-blue-950">
+                      Default review baseline
+                    </h4>
+                    <p className="mt-2 text-sm leading-6 text-blue-800">
+                      The request will be submitted with a baseline KYC claim.
+                      Admins can adjust this for accredited investor checks,
+                      jurisdiction restrictions, transfer limits, or other RWA
+                      requirements.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+              <div className="space-y-6">
+                {/* Claim Topics */}
+                <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900">Required Identity Claims</h4>
+                      <p className="text-xs text-slate-500">Numeric identifiers for required investor attributes.</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 bg-white"
+                      onClick={() => {
+                        const topics = form.getValues("complianceRequirements.claimTopics");
+                        form.setValue("complianceRequirements.claimTopics", [...topics, ""]);
+                      }}
+                    >
+                      <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Topic
+                    </Button>
+                  </div>
 
-                <FormField
-                  control={form.control}
-                  name="complianceRequirements.amlRequired"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {form.watch("complianceRequirements.claimTopics").map((_, index) => (
+                      <div key={index} className="relative">
+                        <FormField
+                          control={form.control}
+                          name={`complianceRequirements.claimTopics.${index}`}
+                          render={({ field }: { field: any }) => (
+                            <FormItem>
+                              <FormControl>
+                                <Input 
+                                  placeholder="ID (e.g. 1)" 
+                                  className="h-10 bg-white font-mono text-center"
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
                         />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>AML Screening Required</FormLabel>
-                        <FormDescription>
-                          Anti-Money Laundering screening for all transactions
-                        </FormDescription>
+                        {index > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const topics = form.getValues("complianceRequirements.claimTopics");
+                              form.setValue("complianceRequirements.claimTopics", topics.filter((_, i) => i !== index));
+                            }}
+                            className="absolute -top-1.5 -right-1.5 bg-slate-200 hover:bg-slate-300 rounded-full p-1 text-slate-600 transition-colors"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        )}
                       </div>
-                    </FormItem>
-                  )}
-                />
+                    ))}
+                  </div>
+                </div>
 
-                <FormField
-                  control={form.control}
-                  name="complianceRequirements.accreditedInvestorsOnly"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>Accredited Investors Only</FormLabel>
-                        <FormDescription>
-                          Restrict to accredited investors only
-                        </FormDescription>
-                      </div>
-                    </FormItem>
-                  )}
-                />
+                {/* Trusted Issuers */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-slate-900">Trusted Claim Issuers</h4>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      onClick={() => {
+                        const issuers = form.getValues("complianceRequirements.trustedIssuers");
+                        form.setValue("complianceRequirements.trustedIssuers", [
+                          ...issuers,
+                          { walletAddress: "", issuerFid: "", topics: [1n], label: "" }
+                        ]);
+                      }}
+                    >
+                      <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Issuer
+                    </Button>
+                  </div>
 
-                <FormField
-                  control={form.control}
-                  name="complianceRequirements.jurisdiction"
-                  render={() => (
-                    <FormItem>
-                      <FormLabel>Allowed Jurisdictions</FormLabel>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                        {jurisdictionOptions.map((option) => (
-                          <FormField
-                            key={option.value}
-                            control={form.control}
-                            name="complianceRequirements.jurisdiction"
-                            render={({ field }) => (
-                              <FormItem
-                                key={option.value}
-                                className="flex flex-row items-start space-x-3 space-y-0"
+                  {form.watch("complianceRequirements.trustedIssuers").length === 0 ? (
+                    <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+                      <Shield className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                      <p className="text-sm text-slate-500 italic">No trusted issuers defined. Add at least one to verify identity claims.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {form.watch("complianceRequirements.trustedIssuers").map((issuer, index) => (
+                        <Card key={index} className="border border-slate-200 shadow-sm overflow-hidden">
+                          <div className="p-4 space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <FormField
+                                control={form.control}
+                                name={`complianceRequirements.trustedIssuers.${index}.label`}
+                                render={({ field }: { field: any }) => (
+                                  <FormItem>
+                                    <FormLabel className="text-[10px] uppercase font-bold text-slate-500">Label</FormLabel>
+                                    <FormControl>
+                                      <Input placeholder="e.g. KYC Global" className="h-9 text-sm" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name={`complianceRequirements.trustedIssuers.${index}.walletAddress`}
+                                render={({ field }: { field: any }) => (
+                                  <FormItem>
+                                    <FormLabel className="text-[10px] uppercase font-bold text-slate-500">Wallet Address</FormLabel>
+                                    <FormControl>
+                                      <Input 
+                                        placeholder="Issuer Pubkey" 
+                                        className="h-9 text-sm font-mono"
+                                        {...field} 
+                                        onChange={(e: any) => {
+                                          field.onChange(e);
+                                          const fid = deriveFidFromWallet(e.target.value);
+                                          form.setValue(`complianceRequirements.trustedIssuers.${index}.issuerFid`, fid);
+                                        }}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                              <div className="text-[10px] font-mono text-slate-400 truncate max-w-[200px]">
+                                FID: {issuer.issuerFid || "—"}
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs text-red-500 hover:text-red-600 hover:bg-red-50"
+                                onClick={() => {
+                                  const issuers = form.getValues("complianceRequirements.trustedIssuers");
+                                  form.setValue("complianceRequirements.trustedIssuers", issuers.filter((_, i) => i !== index));
+                                }}
                               >
-                                <FormControl>
-                                  <Checkbox
-                                    checked={field.value?.includes(
-                                      option.value,
-                                    )}
-                                    onCheckedChange={(checked) => {
-                                      const updatedValue = checked
-                                        ? [...(field.value || []), option.value]
-                                        : field.value?.filter(
-                                            (v: string) => v !== option.value,
-                                          );
-                                      field.onChange(updatedValue);
-                                    }}
-                                  />
-                                </FormControl>
-                                <FormLabel className="font-normal">
-                                  {option.label}
-                                </FormLabel>
-                              </FormItem>
-                            )}
-                          />
-                        ))}
-                      </div>
-                      <FormMessage />
-                    </FormItem>
+                                Remove Issuer
+                              </Button>
+                            </div>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
                   )}
-                />
+                </div>
               </div>
+              )}
             </motion.div>
           )}
 
-          {/* Step 4: Tokenization & Documents */}
+          {/* Step 4: Tokenization Confirmation */}
           {currentStep === 4 && (
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               className="space-y-6"
             >
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Token Details & Documentation
+              <h3 className="text-lg font-bold flex items-center gap-2 text-slate-900">
+                <FileText className="h-5 w-5 text-[#172E7F]" />
+                Mint Configuration & Suite Preview
               </h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField
-                  control={form.control}
-                  name="tokenDetails.decimals"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Decimals</FormLabel>
-                      <Select
-                        onValueChange={(value) =>
-                          field.onChange(parseInt(value))
-                        }
-                        defaultValue={field.value.toString()}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {[0, 2, 4, 6, 8, 10, 12, 14, 16, 18].map((dec) => (
-                            <SelectItem key={dec} value={dec.toString()}>
-                              {dec}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              {/* Document Upload */}
-              <div className="space-y-4">
-                <FormLabel>Supporting Documents</FormLabel>
-                <div className="border-2 border-dashed rounded-lg p-8 text-center">
-                  <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Upload supporting documents (PDF, DOC, JPEG, PNG up to 10MB)
-                  </p>
-                  <Input
-                    type="file"
-                    multiple
-                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                    id="document-upload"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() =>
-                      document.getElementById("document-upload")?.click()
-                    }
-                  >
-                    Select Files
-                  </Button>
+                <div className="p-5 rounded-2xl bg-[#172E7F]/5 border border-[#172E7F]/10 space-y-4">
+                  <div className="flex items-center gap-2 text-[#172E7F]">
+                    <Rocket className="h-4 w-4" />
+                    <span className="text-xs font-bold uppercase tracking-wider">On-Chain Deployment</span>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase">Token-2022 Mint Address</div>
+                    <div className="font-mono text-xs text-slate-900 bg-white p-2 rounded border border-slate-200 truncate">
+                      {mintKeypair.publicKey.toBase58()}
+                    </div>
+                    <p className="text-[10px] text-slate-400 italic">This address is deterministically generated for this session.</p>
+                  </div>
                 </div>
 
-                {/* Uploaded files list */}
-                {uploadedFiles.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Uploaded Files:</p>
-                    <ul className="space-y-1">
-                      {uploadedFiles.map((file, index) => (
-                        <li
-                          key={index}
-                          className="flex items-center justify-between p-2 bg-muted rounded"
+                <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="tokenDetails.decimals"
+                    render={({ field }: { field: any }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-bold uppercase text-slate-500">Mint Decimals</FormLabel>
+                        <Select
+                          onValueChange={(value: string) => field.onChange(parseInt(value))}
+                          defaultValue={field.value.toString()}
                         >
-                          <div className="flex items-center gap-2">
+                          <FormControl>
+                            <SelectTrigger className="bg-white">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {[0, 2, 4, 6, 8, 9, 12, 18].map((dec) => (
+                              <SelectItem key={dec} value={dec.toString()}>
+                                {dec} {dec === 6 ? "(Standard)" : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="tokenDetails.initialPrice"
+                    render={({ field }: { field: any }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-bold uppercase text-slate-500">Initial NAV (USD)</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.01" className="bg-white" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+
+              {/* Document Summary */}
+              <div className="p-5 border border-slate-200 rounded-2xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <FormLabel className="text-sm font-bold text-slate-900">Prospectus & Legal Docs</FormLabel>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-[#172E7F]"
+                    onClick={() => document.getElementById("document-upload")?.click()}
+                  >
+                    <Upload className="h-3.5 w-3.5 mr-2" /> Upload
+                  </Button>
+                </div>
+                
+                <Input
+                  type="file"
+                  multiple
+                  accept=".pdf"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  id="document-upload"
+                />
+
+                {uploadedFiles.length === 0 ? (
+                  <div className="py-8 text-center bg-slate-50/50 border border-dashed border-slate-200 rounded-xl">
+                    <p className="text-xs text-slate-500">No documents attached. PDF required for compliance audit.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-2">
+                    {uploadedFiles.map((file: File, index: number) => (
+                      <div key={index} className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-slate-50 rounded-lg text-slate-400">
                             <FileText className="h-4 w-4" />
-                            <span className="text-sm">{file.name}</span>
-                            <span className="text-xs text-muted-foreground">
-                              ({(file.size / 1024 / 1024).toFixed(2)} MB)
-                            </span>
                           </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeFile(index)}
-                          >
-                            Remove
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
+                          <div className="text-xs font-medium text-slate-700 truncate max-w-[250px]">
+                            {file.name}
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-slate-400 hover:text-red-500"
+                          onClick={() => removeFile(index)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -969,39 +1143,42 @@ export function IssuanceForm({
           )}
 
           {/* Navigation Buttons */}
-          <div className="flex justify-between pt-6 border-t">
+          <div className="flex justify-between pt-8 border-t border-slate-100">
             <Button
               type="button"
               variant="outline"
+              className="h-11 px-6 border-slate-200 text-slate-600 hover:bg-slate-50"
               onClick={prevStep}
-              disabled={currentStep === 1}
+              disabled={currentStep === 1 || deploying}
             >
-              Previous
+              <ChevronLeft className="h-4 w-4 mr-2" />
+              Back
             </Button>
 
             {currentStep < 4 ? (
-              <Button type="button" onClick={nextStep}>
-                Next Step
+              <Button 
+                type="button" 
+                className="h-11 px-8 bg-gradient-to-r from-[#172E7F] to-[#2A5FA6] text-white hover:shadow-lg transition-all"
+                onClick={nextStep}
+              >
+                Continue
+                <ChevronRight className="h-4 w-4 ml-2" />
               </Button>
             ) : (
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? (
+              <Button 
+                type="submit" 
+                className="h-11 px-10 bg-gradient-to-r from-[#172E7F] to-[#2A5FA6] text-white hover:shadow-lg transition-all"
+                disabled={deploying || (!isPlatformAdmin && !isApplicationMode)}
+              >
+                {deploying ? (
                   <>
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{
-                        duration: 1,
-                        repeat: Infinity,
-                        ease: "linear",
-                      }}
-                      className="mr-2 h-4 w-4 border-2 border-current border-t-transparent rounded-full"
-                    />
-                    {isApplicationMode ? "Submitting..." : "Issuing Asset..."}
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Deploying Suite...
                   </>
                 ) : (
                   <>
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    {isApplicationMode ? "Submit Application" : "Issue Asset"}
+                    <Rocket className="mr-2 h-4 w-4" />
+                    {submitLabel || (isApplicationMode ? "Submit Request" : "Deploy Token Suite")}
                   </>
                 )}
               </Button>

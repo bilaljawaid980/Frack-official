@@ -1,0 +1,660 @@
+{
+  "address": "HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW",
+  "metadata": {
+    "name": "mod_country_cap",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "can_transfer",
+      "discriminator": [
+        233,
+        153,
+        157,
+        96,
+        140,
+        58,
+        200,
+        137
+      ],
+      "accounts": [
+        {
+          "name": "module_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  95,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  114,
+                  121,
+                  95,
+                  99,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "module_state.token_mint",
+                "account": "InvestorCountryCapModule"
+              }
+            ]
+          }
+        },
+        {
+          "name": "country_count"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "to_balance",
+          "type": "u64"
+        },
+        {
+          "name": "to_country",
+          "type": "u16"
+        }
+      ],
+      "returns": "bool"
+    },
+    {
+      "name": "created",
+      "discriminator": [
+        181,
+        154,
+        183,
+        237,
+        76,
+        88,
+        131,
+        92
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "module_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  95,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  114,
+                  121,
+                  95,
+                  99,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "module_state.token_mint",
+                "account": "InvestorCountryCapModule"
+              }
+            ]
+          }
+        },
+        {
+          "name": "country_count",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "to_balance_after",
+          "type": "u64"
+        },
+        {
+          "name": "to_country",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "destroyed",
+      "discriminator": [
+        212,
+        251,
+        145,
+        156,
+        56,
+        131,
+        108,
+        36
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "module_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  95,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  114,
+                  121,
+                  95,
+                  99,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "module_state.token_mint",
+                "account": "InvestorCountryCapModule"
+              }
+            ]
+          }
+        },
+        {
+          "name": "country_count",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "from_balance_after",
+          "type": "u64"
+        },
+        {
+          "name": "from_country",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "initialize_country_count",
+      "discriminator": [
+        187,
+        113,
+        130,
+        75,
+        24,
+        40,
+        202,
+        11
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "module_state"
+          ]
+        },
+        {
+          "name": "module_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  95,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  114,
+                  121,
+                  95,
+                  99,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "module_state.token_mint",
+                "account": "InvestorCountryCapModule"
+              }
+            ]
+          }
+        },
+        {
+          "name": "country_count",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  114,
+                  121,
+                  95,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "module_state"
+              },
+              {
+                "kind": "arg",
+                "path": "country"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "country",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "initialize_module",
+      "discriminator": [
+        237,
+        8,
+        2,
+        139,
+        239,
+        178,
+        75,
+        161
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "module_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  95,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  114,
+                  121,
+                  95,
+                  99,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "token_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "token_mint",
+          "type": "pubkey"
+        },
+        {
+          "name": "country_caps",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "CountryCapEntry"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_hook_authority",
+      "discriminator": [
+        155,
+        21,
+        37,
+        140,
+        172,
+        113,
+        25,
+        235
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "module_state"
+          ]
+        },
+        {
+          "name": "module_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  95,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  114,
+                  121,
+                  95,
+                  99,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "module_state.token_mint",
+                "account": "InvestorCountryCapModule"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "hook_authority",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "transferred",
+      "discriminator": [
+        234,
+        216,
+        64,
+        126,
+        163,
+        136,
+        73,
+        206
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "module_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  95,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  114,
+                  121,
+                  95,
+                  99,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "module_state.token_mint",
+                "account": "InvestorCountryCapModule"
+              }
+            ]
+          }
+        },
+        {
+          "name": "from_country_count",
+          "writable": true
+        },
+        {
+          "name": "to_country_count",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "from_balance_after",
+          "type": "u64"
+        },
+        {
+          "name": "to_balance_after",
+          "type": "u64"
+        },
+        {
+          "name": "from_country",
+          "type": "u16"
+        },
+        {
+          "name": "to_country",
+          "type": "u16"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "CountryInvestorCount",
+      "discriminator": [
+        154,
+        236,
+        169,
+        228,
+        29,
+        226,
+        240,
+        182
+      ]
+    },
+    {
+      "name": "InvestorCountryCapModule",
+      "discriminator": [
+        232,
+        178,
+        139,
+        22,
+        255,
+        168,
+        159,
+        144
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 12000,
+      "name": "NotOwner",
+      "msg": "Signer is not the owner."
+    },
+    {
+      "code": 12001,
+      "name": "NotAuthorized",
+      "msg": "Signer is not authorized to update module hook state."
+    },
+    {
+      "code": 12002,
+      "name": "InvalidCountryCount",
+      "msg": "Invalid country count account."
+    },
+    {
+      "code": 12003,
+      "name": "TooManyCountryCaps",
+      "msg": "Too many country caps."
+    },
+    {
+      "code": 12004,
+      "name": "ArithmeticOverflow",
+      "msg": "Arithmetic overflow."
+    }
+  ],
+  "types": [
+    {
+      "name": "CountryCapEntry",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "country",
+            "type": "u16"
+          },
+          {
+            "name": "cap",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CountryInvestorCount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "module",
+            "type": "pubkey"
+          },
+          {
+            "name": "country",
+            "type": "u16"
+          },
+          {
+            "name": "count",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "InvestorCountryCapModule",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "hook_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "country_caps",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "CountryCapEntry"
+                }
+              }
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}

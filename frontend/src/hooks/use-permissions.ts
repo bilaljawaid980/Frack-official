@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { useAppContext } from "@/contexts/app-context";
-import { fetchPermissionsForWallet, usePermissionsContext } from "@/contexts/permissions-context";
+import {
+  RBAC_DISABLED_FOR_SOLANA_TESTING,
+  fetchPermissionsForWallet,
+  testingPermissions,
+  usePermissionsContext,
+} from "@/contexts/permissions-context";
 import type { PermissionsState as ContextPermissionsState } from "@/contexts/permissions-context";
 import { TREX_CONTRACTS } from "@/lib/zigchain-config";
 import { queryCache } from "@/lib/query-cache";
@@ -48,6 +53,17 @@ export function usePermissions(options?: UsePermissionsOptions) {
     let cancelled = false;
 
     const loadTokenPermissions = async () => {
+      if (RBAC_DISABLED_FOR_SOLANA_TESTING) {
+        setTokenPermissions({
+          isTokenOwner: true,
+          isTokenIssuer: true,
+          isTokenController: true,
+          isTokenAgent: true,
+        });
+        setTokenLoading(false);
+        return;
+      }
+
       if (!needsTokenSpecific) {
         setTokenPermissions({
           isTokenOwner: context.permissions.isTokenOwner,
@@ -113,12 +129,15 @@ export function usePermissions(options?: UsePermissionsOptions) {
     context.permissions.isTokenAgent,
   ]);
 
-  const mergedPermissions: PermissionsState = {
-    ...context.permissions,
-    ...tokenPermissions,
-  };
+  const mergedPermissions: PermissionsState = RBAC_DISABLED_FOR_SOLANA_TESTING
+    ? testingPermissions
+    : {
+        ...context.permissions,
+        ...tokenPermissions,
+      };
 
   const canSeeAdminTab =
+    RBAC_DISABLED_FOR_SOLANA_TESTING ||
     mergedPermissions.isTokenOwner ||
     mergedPermissions.isTokenIssuer ||
     mergedPermissions.isTokenController ||

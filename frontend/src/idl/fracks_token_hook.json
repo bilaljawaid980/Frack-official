@@ -1,0 +1,459 @@
+{
+  "address": "4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m",
+  "metadata": {
+    "name": "fracks_token_hook",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "FRACKS Token-2022 transfer-hook enforcement program"
+  },
+  "instructions": [
+    {
+      "name": "approve_transfer",
+      "discriminator": [
+        198,
+        217,
+        247,
+        150,
+        208,
+        60,
+        169,
+        244
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "controller_authority",
+          "signer": true
+        },
+        {
+          "name": "token_state"
+        },
+        {
+          "name": "token_mint_account"
+        },
+        {
+          "name": "source_token_account"
+        },
+        {
+          "name": "destination_token_account"
+        },
+        {
+          "name": "transfer_approval",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  110,
+                  115,
+                  102,
+                  101,
+                  114,
+                  95,
+                  97,
+                  112,
+                  112,
+                  114,
+                  111,
+                  118,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "source_token_account"
+              },
+              {
+                "kind": "account",
+                "path": "destination_token_account"
+              },
+              {
+                "kind": "account",
+                "path": "authority_seed"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority_seed"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "source_wallet",
+          "type": "pubkey"
+        },
+        {
+          "name": "destination_wallet",
+          "type": "pubkey"
+        },
+        {
+          "name": "authority",
+          "type": "pubkey"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "from_balance",
+          "type": "u64"
+        },
+        {
+          "name": "to_balance",
+          "type": "u64"
+        },
+        {
+          "name": "from_country",
+          "type": "u16"
+        },
+        {
+          "name": "to_country",
+          "type": "u16"
+        },
+        {
+          "name": "kind",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "execute_transfer_hook",
+      "discriminator": [
+        105,
+        37,
+        101,
+        197,
+        75,
+        251,
+        102,
+        26
+      ],
+      "accounts": [
+        {
+          "name": "source_token_account"
+        },
+        {
+          "name": "token_mint_account"
+        },
+        {
+          "name": "destination_token_account"
+        },
+        {
+          "name": "authority"
+        },
+        {
+          "name": "extra_account_metas"
+        },
+        {
+          "name": "controller_program"
+        },
+        {
+          "name": "token_state"
+        },
+        {
+          "name": "transfer_approval",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  110,
+                  115,
+                  102,
+                  101,
+                  114,
+                  95,
+                  97,
+                  112,
+                  112,
+                  114,
+                  111,
+                  118,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "source_token_account"
+              },
+              {
+                "kind": "account",
+                "path": "destination_token_account"
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "compliance_state"
+        },
+        {
+          "name": "compliance_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initialize_extra_account_metas",
+      "discriminator": [
+        22,
+        213,
+        130,
+        114,
+        1,
+        174,
+        121,
+        36
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_state"
+        },
+        {
+          "name": "owner_state"
+        },
+        {
+          "name": "compliance_state"
+        },
+        {
+          "name": "token_mint_account"
+        },
+        {
+          "name": "extra_account_metas",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  116,
+                  114,
+                  97,
+                  45,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_mint_account"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "TransferApproval",
+      "discriminator": [
+        153,
+        181,
+        122,
+        112,
+        80,
+        6,
+        154,
+        216
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidTokenState",
+      "msg": "Invalid FRACKS token state."
+    },
+    {
+      "code": 6001,
+      "name": "InvalidTokenAccount",
+      "msg": "Invalid Token-2022 account."
+    },
+    {
+      "code": 6002,
+      "name": "MissingTransferHook",
+      "msg": "Token-2022 mint is missing the FRACKS transfer hook."
+    },
+    {
+      "code": 6003,
+      "name": "MissingPermanentDelegate",
+      "msg": "Token-2022 mint is missing the FRACKS permanent delegate."
+    },
+    {
+      "code": 6004,
+      "name": "InvalidExtraAccountMetas",
+      "msg": "Invalid extra-account-metas account."
+    },
+    {
+      "code": 6005,
+      "name": "ProgramCalledOutsideTransfer",
+      "msg": "Transfer hook was called outside an active Token-2022 transfer."
+    },
+    {
+      "code": 6006,
+      "name": "MissingTransferApproval",
+      "msg": "FRACKS transfer approval is missing or invalid."
+    },
+    {
+      "code": 6007,
+      "name": "NotController",
+      "msg": "Invalid controller authority."
+    },
+    {
+      "code": 6008,
+      "name": "InsufficientBalance",
+      "msg": "Insufficient transferable balance."
+    },
+    {
+      "code": 6009,
+      "name": "ArithmeticOverflow",
+      "msg": "Arithmetic overflow."
+    },
+    {
+      "code": 6010,
+      "name": "InvalidCompliance",
+      "msg": "Invalid compliance account."
+    },
+    {
+      "code": 6011,
+      "name": "InvalidOwnerState",
+      "msg": "Invalid FRACKS owner state."
+    },
+    {
+      "code": 6012,
+      "name": "NotOwner",
+      "msg": "Signer is not the FRACKS token owner."
+    },
+    {
+      "code": 6013,
+      "name": "TooManyModules",
+      "msg": "Too many compliance modules for Token-2022 extra-account-metas."
+    },
+    {
+      "code": 6014,
+      "name": "InvalidComplianceModule",
+      "msg": "Invalid compliance module account."
+    }
+  ],
+  "types": [
+    {
+      "name": "TransferApproval",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "token_state",
+            "type": "pubkey"
+          },
+          {
+            "name": "source_token_account",
+            "type": "pubkey"
+          },
+          {
+            "name": "destination_token_account",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "source_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "destination_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "from_balance",
+            "type": "u64"
+          },
+          {
+            "name": "to_balance",
+            "type": "u64"
+          },
+          {
+            "name": "from_country",
+            "type": "u16"
+          },
+          {
+            "name": "to_country",
+            "type": "u16"
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "consumed",
+            "type": "bool"
+          },
+          {
+            "name": "finalized",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}

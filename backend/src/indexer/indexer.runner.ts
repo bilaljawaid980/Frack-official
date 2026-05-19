@@ -11,7 +11,11 @@ async function run() {
 
   try {
     const intervalMs = parseInt(process.env.INDEXER_INTERVAL_MS || "30000", 10);
-    await indexer.syncOnce();
+    try {
+      await indexer.syncOnce();
+    } catch (error) {
+      console.error("Initial indexer sync failed:", error);
+    }
 
     setInterval(async () => {
       try {

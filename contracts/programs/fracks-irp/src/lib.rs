@@ -6,7 +6,7 @@ use utils::{
     deserialize_view, ensure_bound_registry, find_wallet_identity, verify_claim_for_topic,
 };
 
-declare_id!("6dDKwtRbGkHJhU9LztpDkBC3fUdM46WeKJdrASFikce6");
+declare_id!("C8jtErJYtuu7pSZczfSm1JvDmv254Nmmw1KLX6rBdY8o");
 
 const MAX_IDENTITY_AGENTS: usize = 10;
 const IRP_SPACE: usize = 8 + 32 + 32 + 32 + 32 + 32 + 4 + (32 * MAX_IDENTITY_AGENTS) + 8 + 1;
@@ -87,11 +87,24 @@ pub mod fracks_irp {
         ctx: Context<UpdateRegistryOwner>,
         new_owner: Pubkey,
     ) -> Result<()> {
+        require_keys_neq!(new_owner, Pubkey::default(), FracksIrpError::InvalidOwner);
         ctx.accounts.registry_state.owner = new_owner;
         Ok(())
     }
 
     pub fn is_verified(ctx: Context<IsVerified>, wallet: Pubkey) -> Result<bool> {
+        Ok(evaluate_verification(ctx, wallet)?.verified)
+    }
+
+    pub fn verification_status(
+        ctx: Context<IsVerified>,
+        wallet: Pubkey,
+    ) -> Result<VerificationStatus> {
+        evaluate_verification(ctx, wallet)
+    }
+}
+
+fn evaluate_verification(ctx: Context<IsVerified>, wallet: Pubkey) -> Result<VerificationStatus> {
         let registry = &ctx.accounts.registry_state;
         let irs_state = deserialize_view::<IdentityRegistryStorageStateView>(&ctx.accounts.irs_state)?;
         let tir_state = deserialize_view::<TrustedIssuersStateView>(&ctx.accounts.tir_state)?;
@@ -137,11 +150,29 @@ pub mod fracks_irp {
             Some(identity) if identity.wallet == wallet && identity.irs == ctx.accounts.irs_state.key() => {
                 identity
             }
-            _ => return Ok(false),
+            _ => {
+                return Ok(VerificationStatus {
+                    verified: false,
+                    reason: VerificationReason::MissingIdentity,
+                    missing_topic: 0,
+                })
+            }
         };
 
+        if !wallet_identity.is_active {
+            return Ok(VerificationStatus {
+                verified: false,
+                reason: VerificationReason::IdentityInactive,
+                missing_topic: 0,
+            });
+        }
+
         if ctr_state.topics.is_empty() {
-            return Ok(true);
+            return Ok(VerificationStatus {
+                verified: true,
+                reason: VerificationReason::Verified,
+                missing_topic: 0,
+            });
         }
 
         let now = Clock::get()?.unix_timestamp;
@@ -154,12 +185,19 @@ pub mod fracks_irp {
                 now,
             )?;
             if !found_valid {
-                return Ok(false);
+                return Ok(VerificationStatus {
+                    verified: false,
+                    reason: VerificationReason::MissingRequiredClaim,
+                    missing_topic: topic,
+                });
             }
         }
 
-        Ok(true)
-    }
+        Ok(VerificationStatus {
+            verified: true,
+            reason: VerificationReason::Verified,
+            missing_topic: 0,
+        })
 }
 
 #[derive(Accounts)]
@@ -223,6 +261,7 @@ pub struct IdentityRegistryState {
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
 pub struct IdentityRegistryStorageStateView {
     pub owner: Pubkey,
+    pub authority_seed: Pubkey,
     pub bound_registries: Vec<Pubkey>,
     pub registered_count: u64,
     pub bump: u8,
@@ -234,7 +273,25 @@ pub struct WalletIdentityView {
     pub fid: Pubkey,
     pub country: u16,
     pub irs: Pubkey,
+    pub is_active: bool,
+    pub activated_by: Pubkey,
+    pub activated_at: i64,
     pub bump: u8,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
+pub enum VerificationReason {
+    Verified,
+    MissingIdentity,
+    IdentityInactive,
+    MissingRequiredClaim,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct VerificationStatus {
+    pub verified: bool,
+    pub reason: VerificationReason,
+    pub missing_topic: u64,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
@@ -293,6 +350,8 @@ pub struct IssuerEntryView {
 pub enum FracksIrpError {
     #[msg("Signer is not the owner.")]
     NotOwner = 6000,
+    #[msg("Owner address is invalid.")]
+    InvalidOwner = 6001,
     #[msg("Caller does not have Identity Agent permission.")]
     NotIdentityAgent = 6008,
     #[msg("Registry reference is invalid.")]

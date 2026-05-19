@@ -76,6 +76,24 @@ const emptyPermissions: PermissionsState = {
   canKycProvider: false,
 };
 
+// Temporary Solana migration switch: keep pages/actions visible while contract
+// execution is tested. Re-enable RBAC by setting this to false and validating
+// the Solana role PDA checks below against the final deployed programs.
+export const RBAC_DISABLED_FOR_SOLANA_TESTING = true;
+
+export const testingPermissions: PermissionsState = {
+  isFactoryAdmin: true,
+  isIdentityRegistryOwner: true,
+  isClaimTopicsOwner: true,
+  isComplianceOwner: true,
+  isTokenOwner: true,
+  isTokenIssuer: true,
+  isTokenController: true,
+  isTokenAgent: true,
+  isTrustedIssuer: true,
+  canKycProvider: true,
+};
+
 const PermissionsContext = createContext<PermissionsContextType | undefined>(
   undefined,
 );
@@ -141,7 +159,6 @@ export async function fetchPermissionsForWallet(
     irpInfo,
     ctrInfo,
     complianceInfo,
-    tirInfo,
     issuerEntryInfo,
   ] = await connection.getMultipleAccountsInfo(
     [
@@ -151,7 +168,6 @@ export async function fetchPermissionsForWallet(
       irpState,
       ctrState,
       complianceState,
-      tirState,
       issuerEntry,
     ],
     "confirmed",
@@ -166,7 +182,10 @@ export async function fetchPermissionsForWallet(
   if (!issuerEntryData?.isActive) {
     // MIGRATED: legacy entries may be keyed by wallet when FID was not created yet.
     // Accept both keying modes so role-gating matches on-chain TIR state.
-    const fallbackInfo = await connection.getAccountInfo(issuerEntryByWallet, "confirmed");
+    const fallbackInfo = await connection.getAccountInfo(
+      issuerEntryByWallet,
+      "confirmed",
+    );
     const fallbackData = parseIssuerEntry(fallbackInfo);
     if (fallbackData?.isActive) {
       issuerEntryData = fallbackData;
@@ -203,10 +222,16 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [permissions, setPermissions] =
-    useState<PermissionsState>(emptyPermissions);
+    useState<PermissionsState>(
+      RBAC_DISABLED_FOR_SOLANA_TESTING ? testingPermissions : emptyPermissions,
+    );
   const requestIdRef = useRef(0);
 
   useEffect(() => {
+    if (RBAC_DISABLED_FOR_SOLANA_TESTING) {
+      return;
+    }
+
     const requestId = ++requestIdRef.current;
     let isCancelled = false;
 
@@ -234,9 +259,9 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         }
 
         setPermissions(result);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Failed to load permissions:", err);
-        setError(err.message || "Failed to load permissions");
+        setError(err instanceof Error ? err.message : "Failed to load permissions");
       } finally {
         setLoading(false);
       }
@@ -249,25 +274,26 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   }, [walletAddress]);
 
   // ─ Derived visibility flags ─
+  const isEnvAdmin = !!walletAddress && !!ROLE_WALLETS.platformOwner && walletAddress.toLowerCase() === ROLE_WALLETS.platformOwner.toLowerCase();
+  const isFactoryAdmin = permissions.isFactoryAdmin || isEnvAdmin;
+
   const canSeeAdminIdentities = useMemo(
-    () => permissions.isIdentityRegistryOwner || permissions.isTrustedIssuer,
-    [permissions],
+    () => RBAC_DISABLED_FOR_SOLANA_TESTING || permissions.isIdentityRegistryOwner || permissions.isTrustedIssuer || isEnvAdmin,
+    [permissions, isEnvAdmin],
   );
-  const canSeeCompliance =
-    permissions.isComplianceOwner || permissions.isFactoryAdmin;
-  const canSeeIssuance = permissions.isFactoryAdmin;
-  const canSeeKycProvider = permissions.canKycProvider;
+  const canSeeCompliance = RBAC_DISABLED_FOR_SOLANA_TESTING || permissions.isComplianceOwner || isFactoryAdmin;
+  const canSeeIssuance = RBAC_DISABLED_FOR_SOLANA_TESTING || isFactoryAdmin;
+  const canSeeKycProvider = RBAC_DISABLED_FOR_SOLANA_TESTING || permissions.canKycProvider || isEnvAdmin;
   const canSeeAdminTab =
+    RBAC_DISABLED_FOR_SOLANA_TESTING ||
     permissions.isTokenOwner ||
     permissions.isTokenIssuer ||
     permissions.isTokenController ||
     permissions.isTokenAgent ||
     permissions.isComplianceOwner ||
     permissions.isClaimTopicsOwner ||
-    permissions.isFactoryAdmin;
-  const canSeeActivityLogs =
-    !!walletAddress &&
-    walletAddress.toLowerCase() === ROLE_WALLETS.platformOwner.toLowerCase();
+    isFactoryAdmin;
+  const canSeeActivityLogs = RBAC_DISABLED_FOR_SOLANA_TESTING || isEnvAdmin;
 
   const value: PermissionsContextType = {
     permissions,

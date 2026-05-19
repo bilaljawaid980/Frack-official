@@ -12,6 +12,8 @@ import { IndexedModule } from "./indexed/indexed.module";
 import { ActivityModule } from "./activity/activity.module";
 import { IdentitySnapshotsModule } from "./identity-snapshots/identity-snapshots.module";
 import { KycModule } from "./modules/kyc/kyc.module";
+import { AssetRequestsModule } from "./asset-requests/asset-requests.module";
+import { TokenPurchaseRequestsModule } from './token-purchase-requests/token-purchase-requests.module';
 
 @Module({
   imports: [
@@ -27,6 +29,8 @@ import { KycModule } from "./modules/kyc/kyc.module";
     ActivityModule,
     IdentitySnapshotsModule,
     KycModule,
+    AssetRequestsModule,
+    TokenPurchaseRequestsModule,
   ],
 })
 export class AppModule {}

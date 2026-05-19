@@ -98,7 +98,7 @@ export function Header() {
         </button>
 
         <Link
-          href="/issuers"
+          href="/issuer"
           className="p-2 rounded-full hover:bg-white/70 text-[#CBA135] border border-[#CBA135]/25"
           aria-label="Issuer portfolio"
         >

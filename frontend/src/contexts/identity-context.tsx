@@ -7,6 +7,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useMemo,
   ReactNode,
 } from "react";
 import { PublicKey } from "@solana/web3.js";
@@ -190,7 +191,7 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
     }
-  }, [walletAddress, pendingOnchainId, trexClient]);
+  }, [walletAddress, trexClient]);
 
   const createOnchainId = useCallback(async () => {
     if (!trexClient || !walletAddress) {
@@ -342,7 +343,7 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     loadIdentity();
   }, [walletAddress, loadIdentity]);
 
-  const value: IdentityContextType = {
+  const value = useMemo(() => ({
     identity,
     loading,
     error,
@@ -353,7 +354,15 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     hasOnchainId: !!identity?.onchainIdAddress,
     isVerified: identity?.isVerified || false,
     claims: identity?.claims || [],
-  };
+  }), [
+    identity,
+    loading,
+    error,
+    loadIdentity,
+    createOnchainId,
+    registerIdentity,
+    addClaim,
+  ]);
 
   return (
     <IdentityContext.Provider value={value}>

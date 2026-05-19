@@ -4,11 +4,12 @@ pub mod utils;
 
 use utils::{construct_claim_message, verify_ed25519_instruction};
 
-declare_id!("7Y6WJtDmRMcRYgENfKATsGnQTQJ2wAQfF3LhoBt3KbBH");
+declare_id!("EoENMXgL9GZBEVfjhn5KU4SkfjZeyoTEdd8NHAcMQsEB");
 
 const COUNTRY_MAX: u16 = 999;
 const FID_SPACE: usize = 8 + 32 + 32 + 32 + 4 + 1 + 2 + 1;
 const CLAIM_SPACE: usize = 8 + 32 + 4 + 8 + 32 + 32 + 32 + 64 + 8 + 8 + 1 + 1;
+const CLAIM_TOPIC_INDEX_SPACE: usize = 8 + 32 + 32 + 8 + 32 + 4 + 1 + 1;
 
 #[program]
 pub mod fracks_fid {
@@ -58,6 +59,36 @@ pub mod fracks_fid {
         Ok(())
     }
 
+    pub fn update_fid_profile(
+        ctx: Context<UpdateFidProfile>,
+        is_issuer: bool,
+        country: u16,
+    ) -> Result<()> {
+        let authority = ctx.accounts.authority.key();
+        let fid_pubkey = ctx.accounts.fid.key();
+        let fid = &mut ctx.accounts.fid;
+
+        require!(
+            authority == fid.owner || authority == fid.management_key,
+            FracksFidError::Unauthorized
+        );
+        validate_country(is_issuer, country)?;
+
+        fid.is_issuer = is_issuer;
+        fid.country = if is_issuer { 0 } else { country };
+
+        emit!(FidProfileUpdated {
+            owner: fid.owner,
+            fid_pubkey,
+            is_issuer,
+            country: fid.country,
+            by_authority: authority,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+
+        Ok(())
+    }
+
     pub fn add_claim(
         ctx: Context<AddClaim>,
         topic: u64,
@@ -88,7 +119,13 @@ pub mod fracks_fid {
 
         let target_fid = &mut ctx.accounts.target_fid;
         let claim = &mut ctx.accounts.claim;
+        let claim_topic_index = &mut ctx.accounts.claim_topic_index;
         let claim_id = target_fid.claim_count;
+
+        require!(
+            !claim_topic_index.is_active,
+            FracksFidError::DuplicateClaimTopicIssuer
+        );
 
         claim.fid = target_fid.key();
         claim.claim_id = claim_id;
@@ -101,6 +138,14 @@ pub mod fracks_fid {
         claim.expires_at = expires_at;
         claim.revoked = false;
         claim.bump = ctx.bumps.claim;
+
+        claim_topic_index.target_fid = target_fid.key();
+        claim_topic_index.issuer_fid = ctx.accounts.issuer_fid.key();
+        claim_topic_index.topic = topic;
+        claim_topic_index.active_claim = claim.key();
+        claim_topic_index.active_claim_id = claim_id;
+        claim_topic_index.is_active = true;
+        claim_topic_index.bump = ctx.bumps.claim_topic_index;
 
         target_fid.claim_count = target_fid
             .claim_count
@@ -133,6 +178,10 @@ pub mod fracks_fid {
 
         let claim = &mut ctx.accounts.claim;
         claim.revoked = true;
+        if ctx.accounts.claim_topic_index.active_claim == claim.key() {
+            ctx.accounts.claim_topic_index.is_active = false;
+            ctx.accounts.claim_topic_index.active_claim = Pubkey::default();
+        }
 
         emit!(ClaimRevoked {
             fid: claim.fid,
@@ -153,6 +202,11 @@ pub mod fracks_fid {
             authority == fid.owner || authority == fid.management_key,
             FracksFidError::Unauthorized
         );
+
+        if ctx.accounts.claim_topic_index.active_claim == ctx.accounts.claim.key() {
+            ctx.accounts.claim_topic_index.is_active = false;
+            ctx.accounts.claim_topic_index.active_claim = Pubkey::default();
+        }
 
         Ok(())
     }
@@ -200,6 +254,19 @@ pub struct SetSignerKey<'info> {
 }
 
 #[derive(Accounts)]
+pub struct UpdateFidProfile<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"fid", fid.owner.as_ref()],
+        bump = fid.bump
+    )]
+    pub fid: Account<'info, FidAccount>,
+}
+
+#[derive(Accounts)]
+#[instruction(topic: u64)]
 pub struct AddClaim<'info> {
     #[account(mut)]
     pub issuer_owner: Signer<'info>,
@@ -218,6 +285,14 @@ pub struct AddClaim<'info> {
         bump
     )]
     pub claim: Account<'info, ClaimAccount>,
+    #[account(
+        init_if_needed,
+        payer = issuer_owner,
+        space = CLAIM_TOPIC_INDEX_SPACE,
+        seeds = [b"claim_topic_index", target_fid.key().as_ref(), issuer_fid.key().as_ref(), &topic.to_le_bytes()],
+        bump
+    )]
+    pub claim_topic_index: Account<'info, ClaimTopicIndex>,
     /// CHECK: The sysvar account is validated inside the helper.
     pub instructions_sysvar: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
@@ -238,6 +313,15 @@ pub struct RevokeClaim<'info> {
         bump = claim.bump
     )]
     pub claim: Account<'info, ClaimAccount>,
+    #[account(
+        mut,
+        seeds = [b"claim_topic_index", claim.fid.as_ref(), issuer_fid.key().as_ref(), &claim.topic.to_le_bytes()],
+        bump = claim_topic_index.bump,
+        constraint = claim_topic_index.target_fid == claim.fid @ FracksFidError::InvalidClaimTopicIndex,
+        constraint = claim_topic_index.issuer_fid == issuer_fid.key() @ FracksFidError::InvalidClaimTopicIndex,
+        constraint = claim_topic_index.topic == claim.topic @ FracksFidError::InvalidClaimTopicIndex
+    )]
+    pub claim_topic_index: Account<'info, ClaimTopicIndex>,
 }
 
 #[derive(Accounts)]
@@ -253,6 +337,15 @@ pub struct RemoveClaim<'info> {
         constraint = claim.fid == fid.key() @ FracksFidError::ClaimFidMismatch
     )]
     pub claim: Account<'info, ClaimAccount>,
+    #[account(
+        mut,
+        seeds = [b"claim_topic_index", claim.fid.as_ref(), claim.issuer_fid.as_ref(), &claim.topic.to_le_bytes()],
+        bump = claim_topic_index.bump,
+        constraint = claim_topic_index.target_fid == claim.fid @ FracksFidError::InvalidClaimTopicIndex,
+        constraint = claim_topic_index.issuer_fid == claim.issuer_fid @ FracksFidError::InvalidClaimTopicIndex,
+        constraint = claim_topic_index.topic == claim.topic @ FracksFidError::InvalidClaimTopicIndex
+    )]
+    pub claim_topic_index: Account<'info, ClaimTopicIndex>,
 }
 
 #[account]
@@ -281,12 +374,33 @@ pub struct ClaimAccount {
     pub bump: u8,
 }
 
+#[account]
+pub struct ClaimTopicIndex {
+    pub target_fid: Pubkey,
+    pub issuer_fid: Pubkey,
+    pub topic: u64,
+    pub active_claim: Pubkey,
+    pub active_claim_id: u32,
+    pub is_active: bool,
+    pub bump: u8,
+}
+
 #[event]
 pub struct FidCreated {
     pub owner: Pubkey,
     pub fid_pubkey: Pubkey,
     pub is_issuer: bool,
     pub country: u16,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct FidProfileUpdated {
+    pub owner: Pubkey,
+    pub fid_pubkey: Pubkey,
+    pub is_issuer: bool,
+    pub country: u16,
+    pub by_authority: Pubkey,
     pub timestamp: i64,
 }
 
@@ -325,10 +439,14 @@ pub enum FracksFidError {
     ClaimFidMismatch = 6030,
     #[msg("Claim signature is invalid.")]
     InvalidClaimSignature = 6008,
+    #[msg("An active claim already exists for this issuer/topic/investor tuple.")]
+    DuplicateClaimTopicIssuer = 6009,
     #[msg("FID already exists for this wallet.")]
     FidAlreadyExists = 6012,
     #[msg("Country code is invalid.")]
     InvalidCountryCode = 6017,
+    #[msg("Claim topic index account is invalid.")]
+    InvalidClaimTopicIndex = 6018,
 }
 
 fn validate_country(is_issuer: bool, country: u16) -> Result<()> {

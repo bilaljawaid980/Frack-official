@@ -138,6 +138,7 @@ function mapIndexedAsset(asset: {
     tokenContractAddress: asset.tokenContract,
     chainId: process.env.NEXT_PUBLIC_SOLANA_CLUSTER || "mainnet-beta",
     lifecycleState: asset.lifecycleState || "ISSUED",
+    metadata: rawMetadata,
   };
 }
 

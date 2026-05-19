@@ -1,0 +1,320 @@
+{
+  "address": "8EiBd6256x7CfFE1vqGLGBqviiCs64ubZzTVmDwjnQAw",
+  "metadata": {
+    "name": "mod_max_transfer",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "can_transfer",
+      "discriminator": [
+        233,
+        153,
+        157,
+        96,
+        140,
+        58,
+        200,
+        137
+      ],
+      "accounts": [
+        {
+          "name": "module_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  95,
+                  109,
+                  97,
+                  120,
+                  95,
+                  116,
+                  114,
+                  97,
+                  110,
+                  115,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "module_state.token_mint",
+                "account": "MaxTransferModule"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ],
+      "returns": "bool"
+    },
+    {
+      "name": "created",
+      "discriminator": [
+        181,
+        154,
+        183,
+        237,
+        76,
+        88,
+        131,
+        92
+      ],
+      "accounts": [
+        {
+          "name": "module_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  95,
+                  109,
+                  97,
+                  120,
+                  95,
+                  116,
+                  114,
+                  97,
+                  110,
+                  115,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "module_state.token_mint",
+                "account": "MaxTransferModule"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "destroyed",
+      "discriminator": [
+        212,
+        251,
+        145,
+        156,
+        56,
+        131,
+        108,
+        36
+      ],
+      "accounts": [
+        {
+          "name": "module_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  95,
+                  109,
+                  97,
+                  120,
+                  95,
+                  116,
+                  114,
+                  97,
+                  110,
+                  115,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "module_state.token_mint",
+                "account": "MaxTransferModule"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_module",
+      "discriminator": [
+        237,
+        8,
+        2,
+        139,
+        239,
+        178,
+        75,
+        161
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "module_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  95,
+                  109,
+                  97,
+                  120,
+                  95,
+                  116,
+                  114,
+                  97,
+                  110,
+                  115,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "token_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "token_mint",
+          "type": "pubkey"
+        },
+        {
+          "name": "max_amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "transferred",
+      "discriminator": [
+        234,
+        216,
+        64,
+        126,
+        163,
+        136,
+        73,
+        206
+      ],
+      "accounts": [
+        {
+          "name": "module_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  95,
+                  109,
+                  97,
+                  120,
+                  95,
+                  116,
+                  114,
+                  97,
+                  110,
+                  115,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "module_state.token_mint",
+                "account": "MaxTransferModule"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "MaxTransferModule",
+      "discriminator": [
+        108,
+        137,
+        95,
+        208,
+        99,
+        247,
+        215,
+        190
+      ]
+    }
+  ],
+  "types": [
+    {
+      "name": "MaxTransferModule",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "max_amount",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, ReactNode } from 'react';
 import { TrexClient } from '@/lib/trex-client';
 
 interface AppState {
@@ -157,7 +157,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [state.trexClient, state.address, setLoading, setTokenData]);
 
-  const contextValue: AppContextType = {
+  const contextValue = useMemo(() => ({
     ...state,
     setWalletState,
     setIsConnecting,
@@ -166,7 +166,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     clearTokenData,
     setLoading,
     refreshData,
-  };
+  }), [
+    state,
+    setWalletState,
+    setIsConnecting,
+    clearWalletState,
+    setTokenData,
+    clearTokenData,
+    setLoading,
+    refreshData,
+  ]);
 
   return <AppContext.Provider value={contextValue}>{children}</AppContext.Provider>;
 }

@@ -17,7 +17,7 @@ use fracks_compliance::{
     instruction as compliance_instruction,
     ComplianceState, CountryInvestorCountView, CountryRestrictModuleView, DailyTransferLimitModuleView,
     DailyWalletUsageView, InvestorCountryCapModuleView, LockupModuleView, MaxBalanceModuleView,
-    MaxInvestorsModuleView, MaxTransferModuleView, SupplyCapModuleView,
+    MaxInvestorsModuleView, MaxTransferModuleView,
 };
 use fracks_irp::utils::{
     deserialize_view as irp_deserialize_view, ensure_bound_registry, find_wallet_identity,
@@ -31,21 +31,21 @@ use fracks_irs::program::FracksIrs;
 use fracks_token_hook::program::FracksTokenHook;
 use solana_program::hash::hash;
 
-declare_id!("Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn");
+declare_id!("92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s");
 
 const MAX_NAME_LEN: usize = 64;
 const MAX_SYMBOL_LEN: usize = 12;
 const MAX_ISIN_LEN: usize = 24;
 const TOKEN_STATE_SPACE: usize =
     8 + 32 + 32 + 32 + 1 + 1 + (4 + MAX_NAME_LEN) + (4 + MAX_SYMBOL_LEN) + (4 + MAX_ISIN_LEN) + 1;
-const OWNER_STATE_SPACE: usize = 8 + 32 + 32 + 32 + 1;
+const OWNER_STATE_SPACE: usize = 8 + 32 + 32 + 1;
 const AGENT_ROLE_SPACE: usize = 8 + 32 + 32 + 1 + 1;
 const FROZEN_WALLET_SPACE: usize = 8 + 32 + 32 + 32 + 8 + 1;
 const PARTIAL_FREEZE_SPACE: usize = 8 + 32 + 32 + 8 + 32 + 1;
 const TRANSFER_APPROVAL_KIND_TRANSFER: u8 = 0;
 const TRANSFER_APPROVAL_KIND_FORCED: u8 = 1;
 const TRANSFER_APPROVAL_KIND_RECOVERY: u8 = 2;
-const FRACKS_TOKEN_HOOK_ID: Pubkey = pubkey!("CQwdsA97gSiPMUzNXjS22AUu6HmvzMK2XZVqhswYEHLi");
+const FRACKS_TOKEN_HOOK_ID: Pubkey = pubkey!("4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m");
 
 #[program]
 pub mod fracks_token {
@@ -76,7 +76,6 @@ pub mod fracks_token {
 
         let owner_state = &mut ctx.accounts.owner_state;
         owner_state.owner = ctx.accounts.owner.key();
-        owner_state.pending_owner = Pubkey::default();
         owner_state.token_mint = token_mint;
         owner_state.bump = ctx.bumps.owner_state;
         Ok(())
@@ -143,6 +142,12 @@ pub mod fracks_token {
         amount: u64,
         to_balance_after: u64,
     ) -> Result<()> {
+        authorize_operator(
+            ctx.accounts.authority.key(),
+            &ctx.accounts.token_state,
+            &ctx.accounts.owner_state.to_account_info(),
+            &ctx.accounts.agent_role.to_account_info(),
+        )?;
         require!(!ctx.accounts.token_state.paused, FracksTokenError::TokenPaused);
         ensure_wallet_not_frozen(
             &ctx.accounts.to_frozen,
@@ -207,7 +212,7 @@ pub mod fracks_token {
         emit!(TokensMinted {
             to,
             amount,
-            by_agent: ctx.accounts.agent.key(),
+            by_agent: ctx.accounts.authority.key(),
             timestamp: Clock::get()?.unix_timestamp,
         });
         Ok(())
@@ -219,6 +224,12 @@ pub mod fracks_token {
         amount: u64,
         from_balance_after: u64,
     ) -> Result<()> {
+        authorize_operator(
+            ctx.accounts.authority.key(),
+            &ctx.accounts.token_state,
+            &ctx.accounts.owner_state.to_account_info(),
+            &ctx.accounts.agent_role.to_account_info(),
+        )?;
         require!(!ctx.accounts.token_state.paused, FracksTokenError::TokenPaused);
         let sender_identity = require_wallet_identity(
             &ctx.accounts.from_wallet_identity,
@@ -272,7 +283,7 @@ pub mod fracks_token {
         emit!(TokensBurned {
             from,
             amount,
-            by_agent: ctx.accounts.agent.key(),
+            by_agent: ctx.accounts.authority.key(),
             timestamp: Clock::get()?.unix_timestamp,
         });
         Ok(())
@@ -286,6 +297,12 @@ pub mod fracks_token {
         from_balance: u64,
         to_balance: u64,
     ) -> Result<()> {
+        authorize_operator(
+            ctx.accounts.authority.key(),
+            &ctx.accounts.token_state,
+            &ctx.accounts.owner_state.to_account_info(),
+            &ctx.accounts.agent_role.to_account_info(),
+        )?;
         require!(!ctx.accounts.token_state.paused, FracksTokenError::TokenPaused);
         ensure_wallet_not_frozen(
             &ctx.accounts.to_frozen,
@@ -345,7 +362,7 @@ pub mod fracks_token {
 
         approve_hook_transfer(
             &ctx.accounts.hook_program,
-            ctx.accounts.agent.to_account_info(),
+            ctx.accounts.authority.to_account_info(),
             ctx.accounts.token_state.to_account_info(),
             &ctx.accounts.token_state,
             &ctx.accounts.token_mint_account,
@@ -399,7 +416,7 @@ pub mod fracks_token {
             from,
             to,
             amount,
-            by_agent: ctx.accounts.agent.key(),
+            by_agent: ctx.accounts.authority.key(),
             timestamp: Clock::get()?.unix_timestamp,
         });
         Ok(())
@@ -411,6 +428,12 @@ pub mod fracks_token {
         new_wallet: Pubkey,
         amount: u64,
     ) -> Result<()> {
+        authorize_operator(
+            ctx.accounts.authority.key(),
+            &ctx.accounts.token_state,
+            &ctx.accounts.owner_state.to_account_info(),
+            &ctx.accounts.agent_role.to_account_info(),
+        )?;
         require!(!ctx.accounts.token_state.paused, FracksTokenError::TokenPaused);
         require!(lost_wallet != new_wallet, FracksTokenError::InvalidRecoveryTarget);
         ensure_wallet_not_frozen(
@@ -456,7 +479,7 @@ pub mod fracks_token {
 
         approve_hook_transfer(
             &ctx.accounts.hook_program,
-            ctx.accounts.agent.to_account_info(),
+            ctx.accounts.authority.to_account_info(),
             ctx.accounts.token_state.to_account_info(),
             &ctx.accounts.token_state,
             &ctx.accounts.token_mint_account,
@@ -511,6 +534,12 @@ pub mod fracks_token {
         new_wallet: Pubkey,
         amount: u64,
     ) -> Result<()> {
+        authorize_operator(
+            ctx.accounts.authority.key(),
+            &ctx.accounts.token_state,
+            &ctx.accounts.owner_state.to_account_info(),
+            &ctx.accounts.agent_role.to_account_info(),
+        )?;
         require!(
             ctx.accounts.transfer_approval.kind == TRANSFER_APPROVAL_KIND_RECOVERY
                 && ctx.accounts.transfer_approval.consumed
@@ -555,7 +584,7 @@ pub mod fracks_token {
             CpiContext::new(
                 ctx.accounts.irs_program.to_account_info(),
                 fracks_irs::cpi::accounts::MutateWalletIdentity {
-                    authority: ctx.accounts.agent.to_account_info(),
+                    authority: ctx.accounts.authority.to_account_info(),
                     irs_state: ctx.accounts.irs_state.to_account_info(),
                     registry_state: ctx.accounts.irp_state.to_account_info(),
                     wallet_identity: ctx.accounts.new_wallet_identity.to_account_info(),
@@ -567,7 +596,7 @@ pub mod fracks_token {
             CpiContext::new(
                 ctx.accounts.irs_program.to_account_info(),
                 fracks_irs::cpi::accounts::MutateWalletIdentity {
-                    authority: ctx.accounts.agent.to_account_info(),
+                    authority: ctx.accounts.authority.to_account_info(),
                     irs_state: ctx.accounts.irs_state.to_account_info(),
                     registry_state: ctx.accounts.irp_state.to_account_info(),
                     wallet_identity: ctx.accounts.new_wallet_identity.to_account_info(),
@@ -578,7 +607,7 @@ pub mod fracks_token {
         fracks_irs::cpi::remove_identity(CpiContext::new(
             ctx.accounts.irs_program.to_account_info(),
             fracks_irs::cpi::accounts::RemoveIdentity {
-                authority: ctx.accounts.agent.to_account_info(),
+                authority: ctx.accounts.authority.to_account_info(),
                 irs_state: ctx.accounts.irs_state.to_account_info(),
                 registry_state: ctx.accounts.irp_state.to_account_info(),
                 wallet_identity: ctx.accounts.lost_wallet_identity.to_account_info(),
@@ -589,7 +618,7 @@ pub mod fracks_token {
             lost_wallet,
             new_wallet,
             amount,
-            by_agent: ctx.accounts.agent.key(),
+            by_agent: ctx.accounts.authority.key(),
             timestamp: Clock::get()?.unix_timestamp,
         });
         ctx.accounts.transfer_approval.finalized = true;
@@ -652,47 +681,55 @@ pub mod fracks_token {
     }
 
     pub fn transfer_ownership(ctx: Context<UpdateOwnerState>, new_owner: Pubkey) -> Result<()> {
-        ctx.accounts.owner_state.pending_owner = new_owner;
-        Ok(())
-    }
-
-    pub fn accept_ownership(ctx: Context<AcceptOwnership>) -> Result<()> {
-        require_keys_eq!(
-            ctx.accounts.owner_state.pending_owner,
-            ctx.accounts.pending_owner.key(),
-            FracksTokenError::NotPendingOwner
-        );
-        ctx.accounts.owner_state.owner = ctx.accounts.pending_owner.key();
-        ctx.accounts.owner_state.pending_owner = Pubkey::default();
+        require_keys_neq!(new_owner, Pubkey::default(), FracksTokenError::InvalidOwner);
+        ctx.accounts.owner_state.owner = new_owner;
         Ok(())
     }
 
     pub fn freeze_wallet(ctx: Context<FreezeWallet>) -> Result<()> {
+        authorize_operator(
+            ctx.accounts.authority.key(),
+            &ctx.accounts.token_state,
+            &ctx.accounts.owner_state.to_account_info(),
+            &ctx.accounts.agent_role.to_account_info(),
+        )?;
         let frozen = &mut ctx.accounts.frozen_wallet;
         frozen.wallet = ctx.accounts.wallet.key();
         frozen.token_mint = ctx.accounts.token_state.token_mint;
-        frozen.frozen_by = ctx.accounts.agent.key();
+        frozen.frozen_by = ctx.accounts.authority.key();
         frozen.frozen_at = Clock::get()?.unix_timestamp;
         frozen.bump = ctx.bumps.frozen_wallet;
 
         emit!(WalletFrozen {
             wallet: frozen.wallet,
-            by_agent: ctx.accounts.agent.key(),
+            by_agent: ctx.accounts.authority.key(),
             timestamp: frozen.frozen_at,
         });
         Ok(())
     }
 
     pub fn unfreeze_wallet(ctx: Context<UnfreezeWallet>) -> Result<()> {
+        authorize_operator(
+            ctx.accounts.authority.key(),
+            &ctx.accounts.token_state,
+            &ctx.accounts.owner_state.to_account_info(),
+            &ctx.accounts.agent_role.to_account_info(),
+        )?;
         emit!(WalletUnfrozen {
             wallet: ctx.accounts.frozen_wallet.wallet,
-            by_agent: ctx.accounts.agent.key(),
+            by_agent: ctx.accounts.authority.key(),
             timestamp: Clock::get()?.unix_timestamp,
         });
         Ok(())
     }
 
     pub fn freeze_partial(ctx: Context<FreezePartial>, amount: u64) -> Result<()> {
+        authorize_operator(
+            ctx.accounts.authority.key(),
+            &ctx.accounts.token_state,
+            &ctx.accounts.owner_state.to_account_info(),
+            &ctx.accounts.agent_role.to_account_info(),
+        )?;
         require!(amount > 0, FracksTokenError::InvalidFreezeAmount);
         let partial = &mut ctx.accounts.partial_freeze;
         partial.wallet = ctx.accounts.wallet.key();
@@ -701,19 +738,25 @@ pub mod fracks_token {
             .frozen_amount
             .checked_add(amount)
             .ok_or_else(|| error!(FracksTokenError::ArithmeticOverflow))?;
-        partial.frozen_by = ctx.accounts.agent.key();
+        partial.frozen_by = ctx.accounts.authority.key();
         partial.bump = ctx.bumps.partial_freeze;
 
         emit!(PartialFreezeUpdated {
             wallet: partial.wallet,
             frozen_amount: partial.frozen_amount,
-            by_agent: ctx.accounts.agent.key(),
+            by_agent: ctx.accounts.authority.key(),
             timestamp: Clock::get()?.unix_timestamp,
         });
         Ok(())
     }
 
     pub fn unfreeze_partial(ctx: Context<FreezePartial>, amount: u64) -> Result<()> {
+        authorize_operator(
+            ctx.accounts.authority.key(),
+            &ctx.accounts.token_state,
+            &ctx.accounts.owner_state.to_account_info(),
+            &ctx.accounts.agent_role.to_account_info(),
+        )?;
         require!(amount > 0, FracksTokenError::InvalidFreezeAmount);
         let partial = &mut ctx.accounts.partial_freeze;
         require!(
@@ -725,12 +768,12 @@ pub mod fracks_token {
         emit!(PartialFreezeUpdated {
             wallet: partial.wallet,
             frozen_amount: partial.frozen_amount,
-            by_agent: ctx.accounts.agent.key(),
+            by_agent: ctx.accounts.authority.key(),
             timestamp: Clock::get()?.unix_timestamp,
         });
 
         if partial.frozen_amount == 0 {
-            partial.close(ctx.accounts.agent.to_account_info())?;
+            partial.close(ctx.accounts.authority.to_account_info())?;
         }
         Ok(())
     }
@@ -776,18 +819,6 @@ pub struct UpdateOwnerState<'info> {
         bump = owner_state.bump,
         constraint = owner_state.token_mint == token_state.token_mint @ FracksTokenError::InvalidRegistryReference,
         constraint = owner_state.owner == owner.key() @ FracksTokenError::NotOwner
-    )]
-    pub owner_state: Account<'info, OwnerState>,
-}
-
-#[derive(Accounts)]
-pub struct AcceptOwnership<'info> {
-    #[account(mut)]
-    pub pending_owner: Signer<'info>,
-    #[account(
-        mut,
-        seeds = [b"owner", owner_state.token_mint.as_ref()],
-        bump = owner_state.bump
     )]
     pub owner_state: Account<'info, OwnerState>,
 }
@@ -841,23 +872,6 @@ pub struct RemoveAgent<'info> {
         close = owner,
         seeds = [b"agent", token_state.token_mint.as_ref(), agent_role.agent.as_ref()],
         bump = agent_role.bump
-    )]
-    pub agent_role: Account<'info, AgentRole>,
-}
-
-#[derive(Accounts)]
-pub struct AgentOperation<'info> {
-    #[account(mut)]
-    pub agent: Signer<'info>,
-    #[account(
-        seeds = [b"token_state", token_state.token_mint.as_ref()],
-        bump = token_state.bump
-    )]
-    pub token_state: Account<'info, TokenState>,
-    #[account(
-        seeds = [b"agent", token_state.token_mint.as_ref(), agent.key().as_ref()],
-        bump = agent_role.bump,
-        constraint = agent_role.is_active @ FracksTokenError::NotAgent
     )]
     pub agent_role: Account<'info, AgentRole>,
 }
@@ -917,18 +931,16 @@ pub struct TransferEvaluation<'info> {
 #[derive(Accounts)]
 pub struct MintOperation<'info> {
     #[account(mut)]
-    pub agent: Signer<'info>,
+    pub authority: Signer<'info>,
     #[account(
         seeds = [b"token_state", token_state.token_mint.as_ref()],
         bump = token_state.bump
     )]
     pub token_state: Account<'info, TokenState>,
-    #[account(
-        seeds = [b"agent", token_state.token_mint.as_ref(), agent.key().as_ref()],
-        bump = agent_role.bump,
-        constraint = agent_role.is_active @ FracksTokenError::NotAgent
-    )]
-    pub agent_role: Account<'info, AgentRole>,
+    /// CHECK: Optional owner state for direct issuer authority; verified in instruction.
+    pub owner_state: UncheckedAccount<'info>,
+    /// CHECK: Optional agent role for delegated authority; verified in instruction.
+    pub agent_role: UncheckedAccount<'info>,
     /// CHECK: Verified in instruction against token_state.identity_registry.
     pub irp_state: UncheckedAccount<'info>,
     /// CHECK: Verified in instruction against the IRP and IRS views.
@@ -958,18 +970,16 @@ pub struct MintOperation<'info> {
 #[derive(Accounts)]
 pub struct BurnOperation<'info> {
     #[account(mut)]
-    pub agent: Signer<'info>,
+    pub authority: Signer<'info>,
     #[account(
         seeds = [b"token_state", token_state.token_mint.as_ref()],
         bump = token_state.bump
     )]
     pub token_state: Account<'info, TokenState>,
-    #[account(
-        seeds = [b"agent", token_state.token_mint.as_ref(), agent.key().as_ref()],
-        bump = agent_role.bump,
-        constraint = agent_role.is_active @ FracksTokenError::NotAgent
-    )]
-    pub agent_role: Account<'info, AgentRole>,
+    /// CHECK: Optional owner state for direct issuer authority; verified in instruction.
+    pub owner_state: UncheckedAccount<'info>,
+    /// CHECK: Optional agent role for delegated authority; verified in instruction.
+    pub agent_role: UncheckedAccount<'info>,
     /// CHECK: Verified in instruction against token_state.compliance.
     pub compliance_state: UncheckedAccount<'info>,
     /// CHECK: Verified in instruction against compliance_state.owner.
@@ -991,18 +1001,16 @@ pub struct BurnOperation<'info> {
 #[derive(Accounts)]
 pub struct ForcedTransferOperation<'info> {
     #[account(mut)]
-    pub agent: Signer<'info>,
+    pub authority: Signer<'info>,
     #[account(
         seeds = [b"token_state", token_state.token_mint.as_ref()],
         bump = token_state.bump
     )]
     pub token_state: Account<'info, TokenState>,
-    #[account(
-        seeds = [b"agent", token_state.token_mint.as_ref(), agent.key().as_ref()],
-        bump = agent_role.bump,
-        constraint = agent_role.is_active @ FracksTokenError::NotAgent
-    )]
-    pub agent_role: Account<'info, AgentRole>,
+    /// CHECK: Optional owner state for direct issuer authority; verified in instruction.
+    pub owner_state: UncheckedAccount<'info>,
+    /// CHECK: Optional agent role for delegated authority; verified in instruction.
+    pub agent_role: UncheckedAccount<'info>,
     /// CHECK: Verified in instruction against token_state.identity_registry.
     pub irp_state: UncheckedAccount<'info>,
     /// CHECK: Verified in instruction against the IRP and IRS views.
@@ -1053,18 +1061,16 @@ pub struct ForcedTransferOperation<'info> {
 #[derive(Accounts)]
 pub struct RecoveryOperation<'info> {
     #[account(mut)]
-    pub agent: Signer<'info>,
+    pub authority: Signer<'info>,
     #[account(
         seeds = [b"token_state", token_state.token_mint.as_ref()],
         bump = token_state.bump
     )]
     pub token_state: Account<'info, TokenState>,
-    #[account(
-        seeds = [b"agent", token_state.token_mint.as_ref(), agent.key().as_ref()],
-        bump = agent_role.bump,
-        constraint = agent_role.is_active @ FracksTokenError::NotAgent
-    )]
-    pub agent_role: Account<'info, AgentRole>,
+    /// CHECK: Optional owner state for direct issuer authority; verified in instruction.
+    pub owner_state: UncheckedAccount<'info>,
+    /// CHECK: Optional agent role for delegated authority; verified in instruction.
+    pub agent_role: UncheckedAccount<'info>,
     /// CHECK: Verified in instruction against token_state.identity_registry.
     pub irp_state: UncheckedAccount<'info>,
     #[account(mut)]
@@ -1113,18 +1119,16 @@ pub struct RecoveryOperation<'info> {
 #[derive(Accounts)]
 pub struct FinalizeRecovery<'info> {
     #[account(mut)]
-    pub agent: Signer<'info>,
+    pub authority: Signer<'info>,
     #[account(
         seeds = [b"token_state", token_state.token_mint.as_ref()],
         bump = token_state.bump
     )]
     pub token_state: Account<'info, TokenState>,
-    #[account(
-        seeds = [b"agent", token_state.token_mint.as_ref(), agent.key().as_ref()],
-        bump = agent_role.bump,
-        constraint = agent_role.is_active @ FracksTokenError::NotAgent
-    )]
-    pub agent_role: Account<'info, AgentRole>,
+    /// CHECK: Optional owner state for direct issuer authority; verified in instruction.
+    pub owner_state: UncheckedAccount<'info>,
+    /// CHECK: Optional agent role for delegated authority; verified in instruction.
+    pub agent_role: UncheckedAccount<'info>,
     #[account(mut)]
     /// CHECK: Verified by the IRS CPI.
     pub irs_state: UncheckedAccount<'info>,
@@ -1144,23 +1148,21 @@ pub struct FinalizeRecovery<'info> {
 #[derive(Accounts)]
 pub struct FreezeWallet<'info> {
     #[account(mut)]
-    pub agent: Signer<'info>,
+    pub authority: Signer<'info>,
     #[account(
         seeds = [b"token_state", token_state.token_mint.as_ref()],
         bump = token_state.bump
     )]
     pub token_state: Account<'info, TokenState>,
-    #[account(
-        seeds = [b"agent", token_state.token_mint.as_ref(), agent.key().as_ref()],
-        bump = agent_role.bump,
-        constraint = agent_role.is_active @ FracksTokenError::NotAgent
-    )]
-    pub agent_role: Account<'info, AgentRole>,
+    /// CHECK: Optional owner state for direct issuer authority; verified in instruction.
+    pub owner_state: UncheckedAccount<'info>,
+    /// CHECK: Optional agent role for delegated authority; verified in instruction.
+    pub agent_role: UncheckedAccount<'info>,
     /// CHECK: Used as a PDA seed only.
     pub wallet: UncheckedAccount<'info>,
     #[account(
         init,
-        payer = agent,
+        payer = authority,
         space = FROZEN_WALLET_SPACE,
         seeds = [b"frozen", token_state.token_mint.as_ref(), wallet.key().as_ref()],
         bump
@@ -1172,21 +1174,19 @@ pub struct FreezeWallet<'info> {
 #[derive(Accounts)]
 pub struct UnfreezeWallet<'info> {
     #[account(mut)]
-    pub agent: Signer<'info>,
+    pub authority: Signer<'info>,
     #[account(
         seeds = [b"token_state", token_state.token_mint.as_ref()],
         bump = token_state.bump
     )]
     pub token_state: Account<'info, TokenState>,
-    #[account(
-        seeds = [b"agent", token_state.token_mint.as_ref(), agent.key().as_ref()],
-        bump = agent_role.bump,
-        constraint = agent_role.is_active @ FracksTokenError::NotAgent
-    )]
-    pub agent_role: Account<'info, AgentRole>,
+    /// CHECK: Optional owner state for direct issuer authority; verified in instruction.
+    pub owner_state: UncheckedAccount<'info>,
+    /// CHECK: Optional agent role for delegated authority; verified in instruction.
+    pub agent_role: UncheckedAccount<'info>,
     #[account(
         mut,
-        close = agent,
+        close = authority,
         seeds = [b"frozen", token_state.token_mint.as_ref(), frozen_wallet.wallet.as_ref()],
         bump = frozen_wallet.bump
     )]
@@ -1196,23 +1196,21 @@ pub struct UnfreezeWallet<'info> {
 #[derive(Accounts)]
 pub struct FreezePartial<'info> {
     #[account(mut)]
-    pub agent: Signer<'info>,
+    pub authority: Signer<'info>,
     #[account(
         seeds = [b"token_state", token_state.token_mint.as_ref()],
         bump = token_state.bump
     )]
     pub token_state: Account<'info, TokenState>,
-    #[account(
-        seeds = [b"agent", token_state.token_mint.as_ref(), agent.key().as_ref()],
-        bump = agent_role.bump,
-        constraint = agent_role.is_active @ FracksTokenError::NotAgent
-    )]
-    pub agent_role: Account<'info, AgentRole>,
+    /// CHECK: Optional owner state for direct issuer authority; verified in instruction.
+    pub owner_state: UncheckedAccount<'info>,
+    /// CHECK: Optional agent role for delegated authority; verified in instruction.
+    pub agent_role: UncheckedAccount<'info>,
     /// CHECK: Used as a PDA seed only.
     pub wallet: UncheckedAccount<'info>,
     #[account(
         init_if_needed,
-        payer = agent,
+        payer = authority,
         space = PARTIAL_FREEZE_SPACE,
         seeds = [b"partial_freeze", token_state.token_mint.as_ref(), wallet.key().as_ref()],
         bump
@@ -1237,7 +1235,6 @@ pub struct TokenState {
 #[account]
 pub struct OwnerState {
     pub owner: Pubkey,
-    pub pending_owner: Pubkey,
     pub token_mint: Pubkey,
     pub bump: u8,
 }
@@ -1372,12 +1369,14 @@ pub enum FracksTokenError {
     ComplianceCheckFailed = 6004,
     #[msg("Signer is not an active agent.")]
     NotAgent = 6009,
+    #[msg("Signer is neither the suite owner nor an active agent.")]
+    UnauthorizedAuthority = 6011,
     #[msg("Insufficient transferable balance.")]
     InsufficientBalance = 6010,
     #[msg("Registry reference is invalid.")]
     InvalidRegistryReference = 6013,
-    #[msg("Pending owner mismatch.")]
-    NotPendingOwner = 6025,
+    #[msg("Owner address is invalid.")]
+    InvalidOwner = 6025,
     #[msg("Metadata exceeds the documented length limits.")]
     MetadataTooLong = 6026,
     #[msg("Freeze amount is invalid.")]
@@ -1409,6 +1408,64 @@ fn validate_metadata(name: &str, symbol: &str, isin: &str) -> Result<()> {
     require!(symbol.len() <= MAX_SYMBOL_LEN, FracksTokenError::MetadataTooLong);
     require!(isin.len() <= MAX_ISIN_LEN, FracksTokenError::MetadataTooLong);
     Ok(())
+}
+
+fn authorize_operator<'info>(
+    authority: Pubkey,
+    token_state: &Account<'info, TokenState>,
+    owner_state_info: &AccountInfo<'info>,
+    agent_role_info: &AccountInfo<'info>,
+) -> Result<()> {
+    let expected_owner_state = Pubkey::find_program_address(
+        &[b"owner", token_state.token_mint.as_ref()],
+        &id(),
+    )
+    .0;
+    if owner_state_info.owner == &id()
+        && !owner_state_info.data_is_empty()
+        && owner_state_info.key() == expected_owner_state
+    {
+        let owner_state = deserialize_account_data::<OwnerState>(owner_state_info)?;
+        require_keys_eq!(
+            owner_state.token_mint,
+            token_state.token_mint,
+            FracksTokenError::InvalidRegistryReference
+        );
+        if owner_state.owner == authority {
+            return Ok(());
+        }
+    }
+
+    let expected_agent_role = Pubkey::find_program_address(
+        &[
+            b"agent",
+            token_state.token_mint.as_ref(),
+            authority.as_ref(),
+        ],
+        &id(),
+    )
+    .0;
+    if agent_role_info.owner == &id()
+        && !agent_role_info.data_is_empty()
+        && agent_role_info.key() == expected_agent_role
+    {
+        let agent_role = deserialize_account_data::<AgentRole>(agent_role_info)?;
+        require_keys_eq!(
+            agent_role.token_mint,
+            token_state.token_mint,
+            FracksTokenError::InvalidRegistryReference
+        );
+        require!(agent_role.is_active, FracksTokenError::NotAgent);
+        return Ok(());
+    }
+
+    err!(FracksTokenError::UnauthorizedAuthority)
+}
+
+fn deserialize_account_data<T: AccountDeserialize>(account: &AccountInfo) -> Result<T> {
+    let data = account.try_borrow_data()?;
+    let mut slice: &[u8] = &data;
+    T::try_deserialize(&mut slice).map_err(Into::into)
 }
 
 fn evaluate_transfer<'info>(
@@ -1478,10 +1535,15 @@ fn evaluate_transfer_components<'info>(
     let transferable = from_balance.saturating_sub(frozen_amount);
     require!(amount <= transferable, FracksTokenError::InsufficientBalance);
 
-    let sender_identity = require_wallet_identity(
-        from_wallet_identity,
+    let sender_identity = verify_wallet_against_irp(
+        token_state,
         &from_wallet.key(),
-        &irs_state.key(),
+        irp_state,
+        irs_state,
+        tir_state,
+        ctr_state,
+        from_wallet_identity,
+        remaining_accounts,
     )?;
     let receiver_identity = verify_wallet_against_irp(
         token_state,
@@ -1574,6 +1636,7 @@ fn verify_wallet_against_irp<'info>(
     let identity = find_wallet_identity(wallet, &irs_state_info.key(), wallet_identity_info)
         .map_err(|_| error!(FracksTokenError::WalletNotVerified))?
         .ok_or_else(|| error!(FracksTokenError::WalletNotVerified))?;
+    require!(identity.is_active, FracksTokenError::WalletNotVerified);
 
     let now = Clock::get()?.unix_timestamp;
     for topic in ctr_state.topics {
@@ -1596,9 +1659,11 @@ fn require_wallet_identity<'info>(
     wallet: &Pubkey,
     irs: &Pubkey,
 ) -> Result<WalletIdentityView> {
-    find_wallet_identity(wallet, irs, wallet_identity_info)
+    let identity = find_wallet_identity(wallet, irs, wallet_identity_info)
         .map_err(|_| error!(FracksTokenError::InvalidRegistryReference))?
-        .ok_or_else(|| error!(FracksTokenError::WalletNotVerified))
+        .ok_or_else(|| error!(FracksTokenError::WalletNotVerified))?;
+    require!(identity.is_active, FracksTokenError::WalletNotVerified);
+    Ok(identity)
 }
 
 fn read_token_account<'info>(

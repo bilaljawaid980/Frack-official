@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("B15EFQKwnfbNHXHhPVvVcw18PaBeTDsRLNRno3QS8Yna");
+declare_id!("12rCF9fuSth8T3o6sfpfWdGyaDEQ1jNsxe1ZvKH7q2tS");
 
 const MAX_TOPICS: usize = 20;
 const CTR_SPACE: usize = 8 + 32 + 32 + 4 + (8 * MAX_TOPICS) + 1;
@@ -53,6 +53,12 @@ pub mod fracks_ctr {
             timestamp: Clock::get()?.unix_timestamp,
         });
 
+        Ok(())
+    }
+
+    pub fn transfer_ownership(ctx: Context<MutateCtr>, new_owner: Pubkey) -> Result<()> {
+        require_keys_neq!(new_owner, Pubkey::default(), FracksCtrError::InvalidOwner);
+        ctx.accounts.ctr_state.owner = new_owner;
         Ok(())
     }
 }
@@ -118,4 +124,6 @@ pub enum FracksCtrError {
     TopicAlreadyExists = 6040,
     #[msg("Topic not found.")]
     TopicNotFound = 6041,
+    #[msg("Owner address is invalid.")]
+    InvalidOwner = 6042,
 }

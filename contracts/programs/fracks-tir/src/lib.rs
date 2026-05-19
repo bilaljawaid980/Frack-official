@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("Am5W7oEe8NCU4jdLP8qyUT3gjUPCDsvTSxGhdCQp1ETS");
+declare_id!("8KDYYPx74w6ZLKZgcvVWrj1mCv1gcULdTh2jbxcJwGMJ");
 
 const MAX_TOPICS_PER_ISSUER: usize = 20;
 const MAX_LABEL_LENGTH: usize = 64;
@@ -114,6 +114,12 @@ pub mod fracks_tir {
         Ok(())
     }
 
+    pub fn transfer_ownership(ctx: Context<TransferTirOwnership>, new_owner: Pubkey) -> Result<()> {
+        require_keys_neq!(new_owner, Pubkey::default(), FracksTirError::InvalidOwner);
+        ctx.accounts.tir_state.owner = new_owner;
+        Ok(())
+    }
+
     pub fn is_trusted_for_topic(
         ctx: Context<ReadIssuerEntry>,
         issuer_fid: Pubkey,
@@ -208,6 +214,19 @@ pub struct RemoveTrustedIssuer<'info> {
 }
 
 #[derive(Accounts)]
+pub struct TransferTirOwnership<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"tir_state", tir_state.token_mint.as_ref()],
+        bump = tir_state.bump,
+        has_one = owner @ FracksTirError::NotOwner
+    )]
+    pub tir_state: Account<'info, TrustedIssuersState>,
+}
+
+#[derive(Accounts)]
 pub struct ReadIssuerEntry<'info> {
     pub tir_state: Account<'info, TrustedIssuersState>,
     #[account(
@@ -278,6 +297,8 @@ pub struct TrustedIssuerRemoved {
 pub enum FracksTirError {
     #[msg("Signer is not the owner.")]
     NotOwner = 6000,
+    #[msg("Owner address is invalid.")]
+    InvalidOwner = 6001,
     #[msg("Claim issuer is not trusted.")]
     IssuerNotTrusted = 6007,
     #[msg("Too many topics supplied.")]

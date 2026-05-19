@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/lib/theme-provider";
 import { AppStoreProvider } from "@/contexts/app-store";
 import { SolanaWalletProvider } from "@/contexts/solana-wallet-provider";
 import { RootLayoutWrapper } from "@/components/layout/root-layout-wrapper";
+import { QueryProvider } from "@/providers/QueryProvider";
 
 const publicSans = Public_Sans({
   subsets: ["latin"],
@@ -15,7 +16,7 @@ const publicSans = Public_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "RWA Platform | Tokenized Real World Assets",
+  title: "FRACKS | Tokenized Real World Assets",
   description:
     "TRex-compatible RWA platform on Solana with Anchor programs",
 };
@@ -32,9 +33,11 @@ export default function RootLayout({
       >
         <ThemeProvider>
           <SolanaWalletProvider>
-            <AppStoreProvider>
-              <RootLayoutWrapper>{children}</RootLayoutWrapper>
-            </AppStoreProvider>
+            <QueryProvider>
+              <AppStoreProvider>
+                <RootLayoutWrapper>{children}</RootLayoutWrapper>
+              </AppStoreProvider>
+            </QueryProvider>
           </SolanaWalletProvider>
         </ThemeProvider>
       </body>
