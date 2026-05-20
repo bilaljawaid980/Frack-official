@@ -4,13 +4,15 @@
 // identity registry state, wallet identities, and FID accounts.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { AnchorProvider, BN, Idl, Program } from "@coral-xyz/anchor";
+import { AnchorProvider, Idl, Program } from "@coral-xyz/anchor";
 import {
   Ed25519Program,
   Keypair,
   PublicKey,
   SYSVAR_INSTRUCTIONS_PUBKEY,
   SystemProgram,
+  Transaction,
+  TransactionInstruction,
 } from "@solana/web3.js";
 import nacl from "tweetnacl";
 import {
@@ -26,11 +28,35 @@ import IrpIdl from "@/lib/solana/idl/fracks_irp.json";
 import IrsIdl from "@/lib/solana/idl/fracks_irs.json";
 import FidIdl from "@/lib/solana/idl/fracks_fid.json";
 import TirIdl from "@/lib/solana/idl/fracks_tir.json";
+import { fetchFactoryStateAccount, type FactoryStateAccount } from "@/lib/solana";
 
 type IrpProgram = Program<Idl>;
 type IrsProgram = Program<Idl>;
 type FidProgram = Program<Idl>;
 type TirProgram = Program<Idl>;
+
+const DEPLOYED_FID_PROGRAM_ID = new PublicKey(
+  "EoENMXgL9GZBEVfjhn5KU4SkfjZeyoTEdd8NHAcMQsEB",
+);
+const DEPLOYED_IRP_PROGRAM_ID = new PublicKey(
+  "C8jtErJYtuu7pSZczfSm1JvDmv254Nmmw1KLX6rBdY8o",
+);
+const DEPLOYED_IRS_PROGRAM_ID = new PublicKey(
+  "GSLErK4bEfF6ZozTWfjYikWfnBitMYrdbbgfXubJBgVJ",
+);
+const DEPLOYED_TIR_PROGRAM_ID = new PublicKey(
+  "8KDYYPx74w6ZLKZgcvVWrj1mCv1gcULdTh2jbxcJwGMJ",
+);
+
+const ADD_CLAIM_DISCRIMINATOR = Buffer.from([
+  70, 114, 85, 106, 66, 244, 46, 99,
+]);
+const REGISTER_IDENTITY_DISCRIMINATOR = Buffer.from([
+  164, 118, 227, 177, 47, 176, 187, 248,
+]);
+const SET_IDENTITY_ACTIVATION_DISCRIMINATOR = Buffer.from([
+  116, 97, 228, 110, 7, 8, 137, 48,
+]);
 
 // Discriminator for WalletIdentity accounts (from fracks_irs IDL accounts array)
 const WALLET_IDENTITY_DISCRIMINATOR = Buffer.from([
@@ -47,6 +73,43 @@ function i64Le(value: bigint): Uint8Array {
   const bytes = new Uint8Array(8);
   new DataView(bytes.buffer).setBigInt64(0, value, true);
   return bytes;
+}
+
+function encodeAddClaimArgs(
+  topic: bigint,
+  dataHash: Uint8Array,
+  signature: Uint8Array,
+  expiresAt: bigint,
+): Buffer {
+  return Buffer.concat([
+    ADD_CLAIM_DISCRIMINATOR,
+    Buffer.from(u64Le(topic)),
+    Buffer.from(dataHash),
+    Buffer.from(signature),
+    Buffer.from(i64Le(expiresAt)),
+  ]);
+}
+
+function encodeRegisterIdentityArgs(
+  wallet: PublicKey,
+  fid: PublicKey,
+  country: number,
+): Buffer {
+  const countryBytes = Buffer.alloc(2);
+  countryBytes.writeUInt16LE(country);
+  return Buffer.concat([
+    REGISTER_IDENTITY_DISCRIMINATOR,
+    wallet.toBuffer(),
+    fid.toBuffer(),
+    countryBytes,
+  ]);
+}
+
+function encodeSetIdentityActivationArgs(active: boolean): Buffer {
+  return Buffer.concat([
+    SET_IDENTITY_ACTIVATION_DISCRIMINATOR,
+    Buffer.from([active ? 1 : 0]),
+  ]);
 }
 
 function getLocalClaimSigner(owner: PublicKey): Keypair {
@@ -71,50 +134,139 @@ function getLocalClaimSigner(owner: PublicKey): Keypair {
   return signer;
 }
 
+function parseFidOwner(data: Buffer): PublicKey | null {
+  if (data.length < 40) return null;
+  return new PublicKey(data.subarray(8, 40));
+}
+
+function parseIssuerEntry(data: Buffer): {
+  issuerFid: PublicKey;
+  tir: PublicKey;
+  topics: bigint[];
+  isActive: boolean;
+} | null {
+  let offset = 8 + 32 + 32;
+  if (data.length < offset + 4) return null;
+
+  let accountOffset = 8;
+  const issuerFid = new PublicKey(data.subarray(accountOffset, accountOffset + 32));
+  accountOffset += 32;
+  const tir = new PublicKey(data.subarray(accountOffset, accountOffset + 32));
+
+  const topicsLength = data.readUInt32LE(offset);
+  offset += 4;
+
+  const topics: bigint[] = [];
+  for (let index = 0; index < topicsLength; index += 1) {
+    if (data.length < offset + 8) return null;
+    topics.push(data.readBigUInt64LE(offset));
+    offset += 8;
+  }
+
+  if (data.length < offset + 1) return null;
+  const isActive = data.readUInt8(offset) === 1;
+  return { issuerFid, tir, topics, isActive };
+}
+
+function parseIssuerEntryTopics(data: Buffer): bigint[] {
+  const parsed = parseIssuerEntry(data);
+  if (!parsed?.isActive) return [];
+  return parsed.topics;
+}
+
+function parseWalletIdentity(data: Buffer): WalletIdentity | null {
+  const minimumSize = 8 + 32 + 32 + 2 + 32 + 1 + 32 + 8 + 1;
+  if (data.length < minimumSize) return null;
+
+  let offset = 8;
+  const wallet = new PublicKey(data.subarray(offset, offset + 32));
+  offset += 32;
+  const fid = new PublicKey(data.subarray(offset, offset + 32));
+  offset += 32;
+  const country = data.readUInt16LE(offset);
+  offset += 2;
+  const irs = new PublicKey(data.subarray(offset, offset + 32));
+  offset += 32;
+  const isActive = data.readUInt8(offset) === 1;
+  offset += 1;
+  const activatedBy = new PublicKey(data.subarray(offset, offset + 32));
+  offset += 32;
+  const activatedAt = data.readBigInt64LE(offset);
+  offset += 8;
+  const bump = data.readUInt8(offset);
+
+  return {
+    wallet: wallet.toBase58(),
+    fid: fid.toBase58(),
+    country,
+    irs: irs.toBase58(),
+    isActive,
+    activatedBy: activatedBy.toBase58(),
+    activatedAt,
+    bump,
+  };
+}
+
 // ─── IdentityService ──────────────────────────────────────────────────────────
 
 export class IdentityService {
-  private irpProgram: IrpProgram;
-  private irsProgram: IrsProgram;
-  private fidProgram: FidProgram;
-  private tirProgram: TirProgram;
   private provider: AnchorProvider;
+  private factoryStatePromise: Promise<FactoryStateAccount | null> | null = null;
 
   constructor(provider: AnchorProvider) {
     this.provider = provider;
-    
-    const irpIdlWithAddress = {
-      ...(IrpIdl as unknown as Record<string, unknown>),
-      address: IRP_PROGRAM_ID.toBase58()
-    } as Idl;
-    this.irpProgram = new Program(irpIdlWithAddress, provider);
+  }
 
-    const irsIdlWithAddress = {
-      ...(IrsIdl as unknown as Record<string, unknown>),
-      address: IRS_PROGRAM_ID.toBase58()
-    } as Idl;
-    this.irsProgram = new Program(irsIdlWithAddress, provider);
+  private async getFactoryState(): Promise<FactoryStateAccount | null> {
+    if (!this.factoryStatePromise) {
+      this.factoryStatePromise = fetchFactoryStateAccount().catch(() => null);
+    }
+    return this.factoryStatePromise;
+  }
 
-    const fidIdlWithAddress = {
-      ...(FidIdl as unknown as Record<string, unknown>),
-      address: FID_PROGRAM_ID.toBase58()
-    } as Idl;
-    this.fidProgram = new Program(fidIdlWithAddress, provider);
+  private async getProgramIds() {
+    const state = await this.getFactoryState();
+    return {
+      fid: state?.fidProgramId ?? DEPLOYED_FID_PROGRAM_ID,
+      irp: state?.irpProgramId ?? DEPLOYED_IRP_PROGRAM_ID,
+      irs: state?.irsProgramId ?? DEPLOYED_IRS_PROGRAM_ID,
+      tir: state?.tirProgramId ?? DEPLOYED_TIR_PROGRAM_ID,
+    };
+  }
 
-    const tirIdlWithAddress = {
-      ...(TirIdl as unknown as Record<string, unknown>),
-      address: TIR_PROGRAM_ID.toBase58()
-    } as Idl;
-    this.tirProgram = new Program(tirIdlWithAddress, provider);
+  private getProgram<T extends Idl>(idl: T, programId: PublicKey): Program<T> {
+    return new Program(
+      { ...(idl as Record<string, unknown>), address: programId.toBase58() } as T,
+      this.provider,
+    );
+  }
+
+  private getFidProgram(programId: PublicKey): FidProgram {
+    return this.getProgram(FidIdl as unknown as Idl, programId);
+  }
+
+  private getIrpProgram(programId: PublicKey): IrpProgram {
+    return this.getProgram(IrpIdl as unknown as Idl, programId);
+  }
+
+  private getIrsProgram(programId: PublicKey): IrsProgram {
+    return this.getProgram(IrsIdl as unknown as Idl, programId);
+  }
+
+  private getTirProgram(programId: PublicKey): TirProgram {
+    return this.getProgram(TirIdl as unknown as Idl, programId);
   }
 
   // ── PDA Derivation ───────────────────────────────────────────────────────────
 
   /** Seeds: ["irp_state", mint] */
-  findIrpStatePda(mint: PublicKey): [PublicKey, number] {
+  findIrpStatePda(
+    mint: PublicKey,
+    programId: PublicKey = IRP_PROGRAM_ID,
+  ): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [SEED_IRP_STATE, mint.toBuffer()],
-      IRP_PROGRAM_ID
+      programId
     );
   }
 
@@ -125,40 +277,54 @@ export class IdentityService {
    */
   findWalletIdentityPda(
     irsStatePubkey: PublicKey,
-    wallet: PublicKey
+    wallet: PublicKey,
+    programId: PublicKey = IRS_PROGRAM_ID,
   ): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [SEED_WALLET_IDENTITY, irsStatePubkey.toBuffer(), wallet.toBuffer()],
-      IRS_PROGRAM_ID
+      programId
     );
   }
 
   /** Seeds: ["onboarding_application", irs_state, wallet] */
   findOnboardingApplicationPda(
     irsStatePubkey: PublicKey,
-    wallet: PublicKey
+    wallet: PublicKey,
+    programId: PublicKey = IRS_PROGRAM_ID,
   ): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [Buffer.from("onboarding_application"), irsStatePubkey.toBuffer(), wallet.toBuffer()],
-      IRS_PROGRAM_ID
+      programId
     );
   }
 
   /** Seeds: ["fid", wallet] */
-  findFidPda(wallet: PublicKey): [PublicKey, number] {
+  findFidPda(
+    wallet: PublicKey,
+    programId: PublicKey = FID_PROGRAM_ID,
+  ): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [Buffer.from("fid"), wallet.toBuffer()],
-      FID_PROGRAM_ID
+      programId
     );
   }
 
+  async findActiveFidPda(wallet: PublicKey): Promise<[PublicKey, number]> {
+    const ids = await this.getProgramIds();
+    return this.findFidPda(wallet, ids.fid);
+  }
+
   /** Seeds: ["claim", target_fid, claim_id_le] */
-  findClaimPda(fid: PublicKey, claimId: number): [PublicKey, number] {
+  findClaimPda(
+    fid: PublicKey,
+    claimId: number,
+    programId: PublicKey = FID_PROGRAM_ID,
+  ): [PublicKey, number] {
     const claimIdLe = Buffer.alloc(4);
     claimIdLe.writeUInt32LE(claimId, 0);
     return PublicKey.findProgramAddressSync(
       [Buffer.from("claim"), fid.toBuffer(), claimIdLe],
-      FID_PROGRAM_ID
+      programId
     );
   }
 
@@ -166,7 +332,8 @@ export class IdentityService {
   findClaimTopicIndexPda(
     targetFid: PublicKey,
     issuerFid: PublicKey,
-    topic: bigint
+    topic: bigint,
+    programId: PublicKey = FID_PROGRAM_ID,
   ): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [
@@ -175,23 +342,30 @@ export class IdentityService {
         issuerFid.toBuffer(),
         Buffer.from(u64Le(topic)),
       ],
-      FID_PROGRAM_ID
+      programId
     );
   }
 
   /** Seeds: ["tir_state", mint] */
-  findTirStatePda(mint: PublicKey): [PublicKey, number] {
+  findTirStatePda(
+    mint: PublicKey,
+    programId: PublicKey = TIR_PROGRAM_ID,
+  ): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [Buffer.from("tir_state"), mint.toBuffer()],
-      TIR_PROGRAM_ID
+      programId
     );
   }
 
   /** Seeds: ["issuer_entry", tir_state, issuer_fid] */
-  findIssuerEntryPda(tirState: PublicKey, issuerFid: PublicKey): [PublicKey, number] {
+  findIssuerEntryPda(
+    tirState: PublicKey,
+    issuerFid: PublicKey,
+    programId: PublicKey = TIR_PROGRAM_ID,
+  ): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [Buffer.from("issuer_entry"), tirState.toBuffer(), issuerFid.toBuffer()],
-      TIR_PROGRAM_ID
+      programId
     );
   }
 
@@ -201,8 +375,10 @@ export class IdentityService {
    * Fetches the IRP (Identity Registry Protocol) state for a given mint.
    */
   async fetchIrpState(mint: PublicKey): Promise<IrpState> {
-    const [irpStatePda] = this.findIrpStatePda(mint);
-    const raw = await (this.irpProgram.account as any).identityRegistryState.fetch(
+    const ids = await this.getProgramIds();
+    const irpProgram = this.getIrpProgram(ids.irp);
+    const [irpStatePda] = this.findIrpStatePda(mint, ids.irp);
+    const raw = await (irpProgram.account as any).identityRegistryState.fetch(
       irpStatePda
     );
     return {
@@ -226,26 +402,20 @@ export class IdentityService {
     wallet: PublicKey
   ): Promise<WalletIdentity | null> {
     try {
+      const ids = await this.getProgramIds();
       // First get the IRP state to find the IRS account
       const irpState = await this.fetchIrpState(mint);
       const irsStatePubkey = new PublicKey(irpState.irsAccount);
       const [walletIdentityPda] = this.findWalletIdentityPda(
         irsStatePubkey,
-        wallet
+        wallet,
+        ids.irs,
       );
-      const raw = await (this.irsProgram.account as any).walletIdentity.fetch(
-        walletIdentityPda
+      const info = await this.provider.connection.getAccountInfo(
+        walletIdentityPda,
+        "confirmed",
       );
-      return {
-        wallet: raw.wallet.toBase58(),
-        fid: raw.fid.toBase58(),
-        country: raw.country as number,
-        irs: raw.irs.toBase58(),
-        isActive: Boolean(raw.isActive),
-        activatedBy: raw.activatedBy.toBase58(),
-        activatedAt: BigInt(raw.activatedAt.toString()),
-        bump: raw.bump,
-      };
+      return info ? parseWalletIdentity(info.data) : null;
     } catch {
       return null;
     }
@@ -253,8 +423,10 @@ export class IdentityService {
 
   async fetchFid(wallet: PublicKey): Promise<FidAccount | null> {
     try {
-      const [fidPda] = this.findFidPda(wallet);
-      const raw = await (this.fidProgram.account as any).fidAccount.fetch(fidPda);
+      const ids = await this.getProgramIds();
+      const fidProgram = this.getFidProgram(ids.fid);
+      const [fidPda] = this.findFidPda(wallet, ids.fid);
+      const raw = await (fidProgram.account as any).fidAccount.fetch(fidPda);
       return {
         owner: raw.owner.toBase58(),
         managementKey: raw.managementKey.toBase58(),
@@ -274,14 +446,44 @@ export class IdentityService {
     issuerWallet: PublicKey
   ): Promise<bigint[]> {
     try {
-      const [issuerFid] = this.findFidPda(issuerWallet);
-      const [tirState] = this.findTirStatePda(mint);
-      const [issuerEntry] = this.findIssuerEntryPda(tirState, issuerFid);
-      const raw = await (this.tirProgram.account as any).issuerEntry.fetch(issuerEntry);
-      if (!raw.isActive) return [];
-      return (raw.allowedTopics as Array<{ toString(): string }>).map((topic) =>
-        BigInt(topic.toString())
+      const ids = await this.getProgramIds();
+      const [issuerFid] = this.findFidPda(issuerWallet, ids.fid);
+      const [tirState] = this.findTirStatePda(mint, ids.tir);
+      const [issuerEntry] = this.findIssuerEntryPda(tirState, issuerFid, ids.tir);
+      const info = await this.provider.connection.getAccountInfo(
+        issuerEntry,
+        "confirmed",
       );
+      const directTopics = info ? parseIssuerEntryTopics(info.data) : [];
+      if (directTopics.length > 0) return directTopics;
+
+      const accounts = await this.provider.connection.getProgramAccounts(ids.tir, {
+        commitment: "confirmed",
+        filters: [
+          {
+            memcmp: {
+              offset: 40,
+              bytes: tirState.toBase58(),
+            },
+          },
+        ],
+      });
+
+      for (const { account } of accounts) {
+        const parsed = parseIssuerEntry(account.data);
+        if (!parsed?.isActive) continue;
+
+        const fidInfo = await this.provider.connection.getAccountInfo(
+          parsed.issuerFid,
+          "confirmed",
+        );
+        const owner = fidInfo ? parseFidOwner(fidInfo.data) : null;
+        if (owner?.equals(issuerWallet)) {
+          return parsed.topics;
+        }
+      }
+
+      return [];
     } catch {
       return [];
     }
@@ -292,31 +494,41 @@ export class IdentityService {
     issuerWallet: PublicKey,
     topic: bigint
   ): Promise<boolean> {
-    const [targetFid] = this.findFidPda(targetWallet);
-    const [issuerFid] = this.findFidPda(issuerWallet);
+    const ids = await this.getProgramIds();
+    const [targetFid] = this.findFidPda(targetWallet, ids.fid);
+    const [issuerFid] = this.findFidPda(issuerWallet, ids.fid);
     const [claimTopicIndex] = this.findClaimTopicIndexPda(
       targetFid,
       issuerFid,
       topic,
+      ids.fid,
     );
 
     try {
-      const raw = await (this.fidProgram.account as any).claimTopicIndex.fetch(
+      const info = await this.provider.connection.getAccountInfo(
         claimTopicIndex,
+        "confirmed",
       );
-      return Boolean(raw.isActive);
+      if (!info) return false;
+
+      // ClaimTopicIndex layout:
+      // discriminator(8) + target_fid(32) + issuer_fid(32) + topic(8)
+      // + active_claim(32) + active_claim_id(4) + is_active(1) + bump(1)
+      return info.data.length > 116 && info.data.readUInt8(116) === 1;
     } catch {
       return false;
     }
   }
 
   async ensureOwnFid(country = 0, isIssuer = false): Promise<string | null> {
+    const ids = await this.getProgramIds();
+    const fidProgram = this.getFidProgram(ids.fid);
     const owner = this.provider.wallet.publicKey;
-    const [fidPda] = this.findFidPda(owner);
+    const [fidPda] = this.findFidPda(owner, ids.fid);
     const existing = await this.fetchFid(owner);
     if (existing) {
       if (existing.isIssuer !== isIssuer || (!isIssuer && existing.country !== country)) {
-        return await (this.fidProgram.methods as any)
+        return await (fidProgram.methods as any)
           .updateFidProfile(isIssuer, country)
           .accounts({
             authority: owner,
@@ -327,7 +539,7 @@ export class IdentityService {
       return null;
     }
 
-    return await (this.fidProgram.methods as any)
+    return await (fidProgram.methods as any)
       .createFid(isIssuer, country)
       .accounts({
         owner,
@@ -380,6 +592,8 @@ export class IdentityService {
    * the IRS program accounts with discriminator + IRS state filters.
    */
   async fetchAllIdentities(mint: PublicKey): Promise<WalletIdentity[]> {
+    const ids = await this.getProgramIds();
+    const irsProgram = this.getIrsProgram(ids.irs);
     // Get IRS state address from IRP
     let irsStatePubkey: PublicKey;
     try {
@@ -391,7 +605,7 @@ export class IdentityService {
 
     // Fetch all WalletIdentity accounts filtering on the irs field
     const accounts = await this.provider.connection.getProgramAccounts(
-      IRS_PROGRAM_ID,
+      ids.irs,
       {
         commitment: "confirmed",
         filters: [
@@ -416,7 +630,7 @@ export class IdentityService {
     const identities: WalletIdentity[] = [];
     for (const { account } of accounts) {
       try {
-        const decoded = this.irsProgram.coder.accounts.decode(
+        const decoded = irsProgram.coder.accounts.decode(
           "WalletIdentity",
           account.data
         );
@@ -446,12 +660,18 @@ export class IdentityService {
     wallet: PublicKey,
     metadataHash: number[] | Uint8Array
   ): Promise<string> {
+    const ids = await this.getProgramIds();
+    const irsProgram = this.getIrsProgram(ids.irs);
     const irpState = await this.fetchIrpState(mint);
     const irsStatePubkey = new PublicKey(irpState.irsAccount);
-    const [application] = this.findOnboardingApplicationPda(irsStatePubkey, wallet);
+    const [application] = this.findOnboardingApplicationPda(
+      irsStatePubkey,
+      wallet,
+      ids.irs,
+    );
     const hash = Array.from(metadataHash);
 
-    return await (this.irsProgram.methods as any)
+    return await (irsProgram.methods as any)
       .submitOnboardingApplication(wallet, hash)
       .accounts({
         applicant: this.provider.wallet.publicKey,
@@ -470,16 +690,22 @@ export class IdentityService {
     wallet: PublicKey,
     approved: boolean
   ): Promise<string> {
+    const ids = await this.getProgramIds();
+    const irsProgram = this.getIrsProgram(ids.irs);
     const irpState = await this.fetchIrpState(mint);
     const irsStatePubkey = new PublicKey(irpState.irsAccount);
-    const [application] = this.findOnboardingApplicationPda(irsStatePubkey, wallet);
+    const [application] = this.findOnboardingApplicationPda(
+      irsStatePubkey,
+      wallet,
+      ids.irs,
+    );
 
-    return await (this.irsProgram.methods as any)
+    return await (irsProgram.methods as any)
       .reviewOnboardingApplication(approved)
       .accounts({
         authority: this.provider.wallet.publicKey,
         irsState: irsStatePubkey,
-        registryState: this.findIrpStatePda(mint)[0],
+        registryState: this.findIrpStatePda(mint, ids.irp)[0],
         application,
       })
       .rpc();
@@ -491,22 +717,32 @@ export class IdentityService {
     fid: PublicKey,
     country: number
   ): Promise<string> {
+    const ids = await this.getProgramIds();
     const irpState = await this.fetchIrpState(mint);
     const irsStatePubkey = new PublicKey(irpState.irsAccount);
-    const [registryState] = this.findIrpStatePda(mint);
-    const [walletIdentity] = this.findWalletIdentityPda(irsStatePubkey, wallet);
+    const [registryState] = this.findIrpStatePda(mint, ids.irp);
+    const [walletIdentity] = this.findWalletIdentityPda(
+      irsStatePubkey,
+      wallet,
+      ids.irs,
+    );
 
-    return await (this.irsProgram.methods as any)
-      .registerIdentity(wallet, fid, country)
-      .accounts({
-        authority: this.provider.wallet.publicKey,
-        irsState: irsStatePubkey,
-        registryState,
-        fidAccount: fid,
-        walletIdentity,
-        systemProgram: SystemProgram.programId,
-      })
-      .rpc();
+    const ix = new TransactionInstruction({
+      programId: ids.irs,
+      keys: [
+        { pubkey: this.provider.wallet.publicKey, isSigner: true, isWritable: true },
+        { pubkey: irsStatePubkey, isSigner: false, isWritable: true },
+        { pubkey: registryState, isSigner: false, isWritable: false },
+        { pubkey: fid, isSigner: false, isWritable: false },
+        { pubkey: walletIdentity, isSigner: false, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      data: encodeRegisterIdentityArgs(wallet, fid, country),
+    });
+
+    return await this.provider.sendAndConfirm(new Transaction().add(ix), [], {
+      commitment: "confirmed",
+    });
   }
 
   /**
@@ -517,18 +753,28 @@ export class IdentityService {
     wallet: PublicKey,
     active: boolean
   ): Promise<string> {
+    const ids = await this.getProgramIds();
     const irpState = await this.fetchIrpState(mint);
     const irsStatePubkey = new PublicKey(irpState.irsAccount);
-    const [walletIdentity] = this.findWalletIdentityPda(irsStatePubkey, wallet);
+    const [walletIdentity] = this.findWalletIdentityPda(
+      irsStatePubkey,
+      wallet,
+      ids.irs,
+    );
 
-    return await (this.irsProgram.methods as any)
-      .setIdentityActivation(active)
-      .accounts({
-        owner: this.provider.wallet.publicKey,
-        irsState: irsStatePubkey,
-        walletIdentity,
-      })
-      .rpc();
+    const ix = new TransactionInstruction({
+      programId: ids.irs,
+      keys: [
+        { pubkey: this.provider.wallet.publicKey, isSigner: true, isWritable: true },
+        { pubkey: irsStatePubkey, isSigner: false, isWritable: false },
+        { pubkey: walletIdentity, isSigner: false, isWritable: true },
+      ],
+      data: encodeSetIdentityActivationArgs(active),
+    });
+
+    return await this.provider.sendAndConfirm(new Transaction().add(ix), [], {
+      commitment: "confirmed",
+    });
   }
 
   async issueClaim(
@@ -536,9 +782,11 @@ export class IdentityService {
     topic: bigint,
     signMessage?: (message: Uint8Array) => Promise<Uint8Array>
   ): Promise<string> {
+    const ids = await this.getProgramIds();
+    const fidProgram = this.getFidProgram(ids.fid);
     const issuerOwner = this.provider.wallet.publicKey;
-    const [issuerFid] = this.findFidPda(issuerOwner);
-    const [targetFid] = this.findFidPda(targetWallet);
+    const [issuerFid] = this.findFidPda(issuerOwner, ids.fid);
+    const [targetFid] = this.findFidPda(targetWallet, ids.fid);
     let issuerFidAccount = await this.fetchFid(issuerOwner);
     if (!issuerFidAccount) {
       await this.ensureOwnFid(0, true);
@@ -548,10 +796,15 @@ export class IdentityService {
       throw new Error("Connected wallet must have an issuer FID to issue claims.");
     }
 
-    const targetFidAccount = await (this.fidProgram.account as any).fidAccount.fetch(targetFid);
+    const targetFidAccount = await (fidProgram.account as any).fidAccount.fetch(targetFid);
     const claimCount = Number(targetFidAccount.claimCount);
-    const [claim] = this.findClaimPda(targetFid, claimCount);
-    const [claimTopicIndex] = this.findClaimTopicIndexPda(targetFid, issuerFid, topic);
+    const [claim] = this.findClaimPda(targetFid, claimCount, ids.fid);
+    const [claimTopicIndex] = this.findClaimTopicIndexPda(
+      targetFid,
+      issuerFid,
+      topic,
+      ids.fid,
+    );
     const expiresAt = BigInt(Math.floor(Date.now() / 1000) + 365 * 24 * 60 * 60);
     const dataHash = await this.sha256Bytes(
       new TextEncoder().encode(`${issuerFid.toBase58()}:${targetFid.toBase58()}:${topic.toString()}:${expiresAt}`)
@@ -571,7 +824,7 @@ export class IdentityService {
     if (!signature) {
       const localSigner = getLocalClaimSigner(issuerOwner);
       if (!claimSigner.equals(localSigner.publicKey)) {
-        await (this.fidProgram.methods as any)
+        await (fidProgram.methods as any)
           .setSignerKey(localSigner.publicKey)
           .accounts({
             authority: issuerOwner,
@@ -589,19 +842,24 @@ export class IdentityService {
       signature,
     });
 
-    return await (this.fidProgram.methods as any)
-      .addClaim(new BN(topic.toString()), Array.from(dataHash), Array.from(signature), new BN(expiresAt.toString()))
-      .accounts({
-        issuerOwner,
-        issuerFid,
-        targetFid,
-        claim,
-        claimTopicIndex,
-        instructionsSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
-        systemProgram: SystemProgram.programId,
-      })
-      .preInstructions([ed25519Ix])
-      .rpc();
+    const addClaimIx = new TransactionInstruction({
+      programId: ids.fid,
+      keys: [
+        { pubkey: issuerOwner, isSigner: true, isWritable: true },
+        { pubkey: issuerFid, isSigner: false, isWritable: false },
+        { pubkey: targetFid, isSigner: false, isWritable: true },
+        { pubkey: claim, isSigner: false, isWritable: true },
+        { pubkey: claimTopicIndex, isSigner: false, isWritable: true },
+        { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      data: encodeAddClaimArgs(topic, dataHash, signature, expiresAt),
+    });
+
+    const tx = new Transaction().add(ed25519Ix, addClaimIx);
+    return await this.provider.sendAndConfirm(tx, [], {
+      commitment: "confirmed",
+    });
   }
 
   private async claimMessage(

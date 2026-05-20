@@ -19,6 +19,7 @@ import { FactoryService } from "@/services/factory";
 import { useAnchorProvider } from "./useAnchorProvider";
 import { useAppStore } from "@/store/appStore";
 import type { FactoryState, TokenDeployment, DeployTokenSuiteArgs } from "@/types";
+import { fetchFactoryStateAccount } from "@/lib/solana";
 
 const STALE_TIME = 2 * 60_000;
 const DEPLOYMENT_SCAN_TIMEOUT_MS = 4_000;
@@ -38,14 +39,26 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
  * Fetches the singleton FactoryState account.
  */
 export function useFactoryState(): UseQueryResult<FactoryState> {
-  const { connection } = useConnection();
-
   return useQuery({
     queryKey: ["factoryState"],
     queryFn: async () => {
-      const provider = createReadonlyProvider(connection);
-      const service = new FactoryService(provider);
-      return service.fetchFactoryState();
+      const state = await fetchFactoryStateAccount();
+      if (!state) {
+        throw new Error("Factory state account not found for the configured factory program.");
+      }
+
+      return {
+        owner: state.owner.toBase58(),
+        tokenProgramId: state.tokenProgramId.toBase58(),
+        fidProgramId: state.fidProgramId.toBase58(),
+        irpProgramId: state.irpProgramId.toBase58(),
+        irsProgramId: state.irsProgramId.toBase58(),
+        tirProgramId: state.tirProgramId.toBase58(),
+        ctrProgramId: state.ctrProgramId.toBase58(),
+        complianceProgramId: state.complianceProgramId.toBase58(),
+        deploymentCount: state.deploymentCount,
+        bump: state.bump,
+      };
     },
     staleTime: STALE_TIME,
     refetchOnWindowFocus: false,

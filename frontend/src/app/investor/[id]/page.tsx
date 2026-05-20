@@ -37,7 +37,6 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { useAnchorProvider } from "@/hooks/useAnchorProvider";
-import { FID_PROGRAM_ID } from "@/lib/constants";
 import { IdentityService } from "@/services/identity";
 import type { TokenPurchaseRequest } from "@/types/token-purchase-request";
 
@@ -62,14 +61,6 @@ function solscanTokenUrl(tokenContract: string) {
 
 function solscanAccountUrl(address: string) {
   return `https://solscan.io/account/${address}?cluster=testnet`;
-}
-
-function deriveFidAddress(walletAddress: string) {
-  const wallet = new PublicKey(walletAddress);
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from("fid"), wallet.toBuffer()],
-    FID_PROGRAM_ID,
-  )[0];
 }
 
 export default function InvestorDashboardPage() {
@@ -109,8 +100,8 @@ export default function InvestorDashboardPage() {
       setFidLoading(true);
       try {
         const wallet = new PublicKey(investorWallet);
-        const fid = deriveFidAddress(investorWallet);
         const service = new IdentityService(anchorProvider);
+        const [fid] = await service.findActiveFidPda(wallet);
         const fidAccount = await service.fetchFid(wallet);
 
         setFidAddress(fid.toBase58());
@@ -410,13 +401,26 @@ export default function InvestorDashboardPage() {
                   : "Register your FID once before a provider can issue KYC or AML claims for your token purchase requests."}
               </p>
               {fidRegistered && (
-                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-                  <span className="font-mono text-slate-700">
-                    {fidAddress ? shortAddress(fidAddress) : "Unavailable"}
-                  </span>
-                  <span className="text-slate-500">
-                    Country code {fidCountry ?? "N/A"}
-                  </span>
+                <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
+                  <div className="min-w-0">
+                    <span className="mr-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                      Derived FID PDA
+                    </span>
+                    <span
+                      className="font-mono text-slate-700"
+                      title={fidAddress || undefined}
+                    >
+                      {fidAddress ? shortAddress(fidAddress) : "Unavailable"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="mr-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                      Country
+                    </span>
+                    <span className="text-slate-600">
+                      {fidCountry ?? "N/A"}
+                    </span>
+                  </div>
                   {fidAddress && (
                     <button
                       className="inline-flex items-center gap-1 font-medium text-[#172E7F] underline-offset-4 hover:underline"

@@ -1,58 +1,11 @@
 {
-  "address": "3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M",
+  "address": "6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe",
   "metadata": {
     "name": "fracks_factory",
     "version": "0.1.0",
     "spec": "0.1.0"
   },
   "instructions": [
-    {
-      "name": "accept_factory_ownership",
-      "discriminator": [
-        139,
-        160,
-        88,
-        249,
-        133,
-        166,
-        222,
-        9
-      ],
-      "accounts": [
-        {
-          "name": "pending_owner",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "factory_state",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  102,
-                  97,
-                  99,
-                  116,
-                  111,
-                  114,
-                  121,
-                  95,
-                  115,
-                  116,
-                  97,
-                  116,
-                  101
-                ]
-              }
-            ]
-          }
-        }
-      ],
-      "args": []
-    },
     {
       "name": "create_token_mint",
       "discriminator": [
@@ -81,7 +34,7 @@
         },
         {
           "name": "hook_program",
-          "address": "CQwdsA97gSiPMUzNXjS22AUu6HmvzMK2XZVqhswYEHLi"
+          "address": "4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m"
         },
         {
           "name": "token_2022_program",
@@ -113,7 +66,7 @@
       ],
       "accounts": [
         {
-          "name": "issuer",
+          "name": "admin",
           "writable": true,
           "signer": true
         },
@@ -144,6 +97,9 @@
           }
         },
         {
+          "name": "issuer"
+        },
+        {
           "name": "deployment",
           "writable": true,
           "pda": {
@@ -164,12 +120,43 @@
                 ]
               },
               {
-                "kind": "account",
-                "path": "issuer"
+                "kind": "arg",
+                "path": "args.issuer"
               },
               {
                 "kind": "arg",
                 "path": "args.salt"
+              }
+            ]
+          }
+        },
+        {
+          "name": "offering_terms",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114,
+                  105,
+                  110,
+                  103,
+                  95,
+                  116,
+                  101,
+                  114,
+                  109,
+                  115
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "args.token_mint"
               }
             ]
           }
@@ -211,31 +198,31 @@
         },
         {
           "name": "token_program",
-          "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn"
+          "address": "92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s"
         },
         {
           "name": "hook_program",
-          "address": "CQwdsA97gSiPMUzNXjS22AUu6HmvzMK2XZVqhswYEHLi"
+          "address": "4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m"
         },
         {
           "name": "irp_program",
-          "address": "6dDKwtRbGkHJhU9LztpDkBC3fUdM46WeKJdrASFikce6"
+          "address": "C8jtErJYtuu7pSZczfSm1JvDmv254Nmmw1KLX6rBdY8o"
         },
         {
           "name": "irs_program",
-          "address": "CsrdR7QK3ma6hxU46Cp4DZHAdbGPWPiwmGjhKsR9VzdS"
+          "address": "GSLErK4bEfF6ZozTWfjYikWfnBitMYrdbbgfXubJBgVJ"
         },
         {
           "name": "tir_program",
-          "address": "Am5W7oEe8NCU4jdLP8qyUT3gjUPCDsvTSxGhdCQp1ETS"
+          "address": "8KDYYPx74w6ZLKZgcvVWrj1mCv1gcULdTh2jbxcJwGMJ"
         },
         {
           "name": "ctr_program",
-          "address": "B15EFQKwnfbNHXHhPVvVcw18PaBeTDsRLNRno3QS8Yna"
+          "address": "12rCF9fuSth8T3o6sfpfWdGyaDEQ1jNsxe1ZvKH7q2tS"
         },
         {
           "name": "compliance_program",
-          "address": "9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d"
+          "address": "FhMXw2VmYYksR4VcjQCUNWYrhzba1rmfiU1EDvaTsxHj"
         },
         {
           "name": "system_program",
@@ -299,27 +286,27 @@
         },
         {
           "name": "token_program",
-          "address": "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn"
+          "address": "92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s"
         },
         {
           "name": "irp_program",
-          "address": "6dDKwtRbGkHJhU9LztpDkBC3fUdM46WeKJdrASFikce6"
+          "address": "C8jtErJYtuu7pSZczfSm1JvDmv254Nmmw1KLX6rBdY8o"
         },
         {
           "name": "irs_program",
-          "address": "CsrdR7QK3ma6hxU46Cp4DZHAdbGPWPiwmGjhKsR9VzdS"
+          "address": "GSLErK4bEfF6ZozTWfjYikWfnBitMYrdbbgfXubJBgVJ"
         },
         {
           "name": "tir_program",
-          "address": "Am5W7oEe8NCU4jdLP8qyUT3gjUPCDsvTSxGhdCQp1ETS"
+          "address": "8KDYYPx74w6ZLKZgcvVWrj1mCv1gcULdTh2jbxcJwGMJ"
         },
         {
           "name": "ctr_program",
-          "address": "B15EFQKwnfbNHXHhPVvVcw18PaBeTDsRLNRno3QS8Yna"
+          "address": "12rCF9fuSth8T3o6sfpfWdGyaDEQ1jNsxe1ZvKH7q2tS"
         },
         {
           "name": "compliance_program",
-          "address": "9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d"
+          "address": "FhMXw2VmYYksR4VcjQCUNWYrhzba1rmfiU1EDvaTsxHj"
         },
         {
           "name": "system_program",
@@ -458,6 +445,19 @@
       ]
     },
     {
+      "name": "OfferingTerms",
+      "discriminator": [
+        44,
+        29,
+        22,
+        211,
+        63,
+        217,
+        231,
+        196
+      ]
+    },
+    {
       "name": "TokenDeployment",
       "discriminator": [
         253,
@@ -491,6 +491,11 @@
       "code": 12000,
       "name": "NotOwner",
       "msg": "Signer is not the owner."
+    },
+    {
+      "code": 12001,
+      "name": "InvalidIssuer",
+      "msg": "Issuer address is invalid."
     },
     {
       "code": 12060,
@@ -564,13 +569,28 @@
     },
     {
       "code": 12074,
-      "name": "NotPendingOwner",
-      "msg": "Pending owner mismatch."
+      "name": "InvalidOwner",
+      "msg": "Owner address is invalid."
     },
     {
       "code": 12075,
-      "name": "InvalidPendingOwner",
-      "msg": "Pending owner cannot be the default pubkey."
+      "name": "SharedIrsUnsupported",
+      "msg": "Shared IRS deployment is disabled for the direct admin-to-issuer authority model."
+    },
+    {
+      "code": 12076,
+      "name": "IrsAlreadyInitialized",
+      "msg": "IRS state is already initialized for this token suite."
+    },
+    {
+      "code": 12077,
+      "name": "InvalidOfferingPrice",
+      "msg": "Offering price is invalid."
+    },
+    {
+      "code": 12078,
+      "name": "InvalidPaymentMint",
+      "msg": "Payment mint is invalid."
     }
   ],
   "types": [
@@ -579,6 +599,10 @@
       "type": {
         "kind": "struct",
         "fields": [
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
           {
             "name": "token_mint",
             "type": "pubkey"
@@ -628,6 +652,20 @@
             }
           },
           {
+            "name": "price_per_token",
+            "type": "u64"
+          },
+          {
+            "name": "price_decimals",
+            "type": "u8"
+          },
+          {
+            "name": "payment_mint",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
             "name": "salt",
             "type": {
               "array": [
@@ -646,10 +684,6 @@
         "fields": [
           {
             "name": "owner",
-            "type": "pubkey"
-          },
-          {
-            "name": "pending_owner",
             "type": "pubkey"
           },
           {
@@ -683,6 +717,48 @@
           {
             "name": "deployment_count",
             "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OfferingTerms",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "price_per_token",
+            "type": "u64"
+          },
+          {
+            "name": "price_decimals",
+            "type": "u8"
+          },
+          {
+            "name": "payment_mint",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
           },
           {
             "name": "bump",
@@ -832,6 +908,24 @@
           {
             "name": "compliance_state",
             "type": "pubkey"
+          },
+          {
+            "name": "offering_terms",
+            "type": "pubkey"
+          },
+          {
+            "name": "price_per_token",
+            "type": "u64"
+          },
+          {
+            "name": "price_decimals",
+            "type": "u8"
+          },
+          {
+            "name": "payment_mint",
+            "type": {
+              "option": "pubkey"
+            }
           },
           {
             "name": "deployed_at",

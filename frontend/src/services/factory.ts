@@ -11,8 +11,6 @@ import {
   Keypair,
   Transaction,
   TransactionInstruction,
-  AddressLookupTableAccount,
-  type AccountMeta,
   AddressLookupTableProgram,
   ComputeBudgetProgram,
   TransactionMessage,
@@ -40,29 +38,15 @@ import {
   SEED_FACTORY_STATE,
   SEED_DEPLOYMENT,
 } from "@/lib/constants";
+import { ROLE_WALLETS } from "@/lib/zigchain-config";
 import { formatTransactionError, parseAnchorError } from "@/lib/errors";
-import {
-  buildInstructionData,
-  encodeFixedBytes,
-  encodeOptionPubkey,
-  encodePubkey,
-  encodeString,
-  encodeU8,
-  encodeU32,
-  encodeU64,
-  encodeVecPubkey,
-  encodeVecU64,
-} from "@/lib/solana";
-import type { FactoryState, TokenDeployment, DeployTokenSuiteArgs } from "@/types";
-import FactoryIdl from "@/idl/fracks_factory.json";
-import ModCountryCapIdl from "@/idl/mod_country_cap.json";
-import ModCountryRestrictIdl from "@/idl/mod_country_restrict.json";
-import ModDailyLimitIdl from "@/idl/mod_daily_limit.json";
-import ModLockupIdl from "@/idl/mod_lockup.json";
-import ModMaxBalanceIdl from "@/idl/mod_max_balance.json";
-import ModMaxInvestorsIdl from "@/idl/mod_max_investors.json";
-import ModMaxTransferIdl from "@/idl/mod_max_transfer.json";
-import ModSupplyCapIdl from "@/idl/mod_supply_cap.json";
+import { fetchFactoryStateAccount } from "@/lib/solana";
+import type {
+  FactoryState,
+  TokenDeployment,
+  DeployTokenSuiteArgs,
+} from "@/types";
+import FactoryIdl from "@/lib/solana/idl/fracks_factory.json";
 
 // IDL type alias
 type FactoryProgram = Program<Idl>;
@@ -74,14 +58,57 @@ type WalletSendOptions = {
 type SendWalletTransaction = (
   transaction: Transaction | VersionedTransaction,
   connection: AnchorProvider["connection"],
-  options?: WalletSendOptions
+  options?: WalletSendOptions,
 ) => Promise<string>;
 type TransactionSigner = Keypair;
+type InstructionBuilder = {
+  accounts(accounts: Record<string, unknown>): {
+    instruction(): Promise<TransactionInstruction>;
+    remainingAccounts?(
+      accounts: Array<{
+        pubkey: PublicKey;
+        isSigner: boolean;
+        isWritable: boolean;
+      }>,
+    ): { instruction(): Promise<TransactionInstruction> };
+  };
+};
+type FactoryDeployBuilder = {
+  accounts(accounts: Record<string, unknown>): {
+    remainingAccounts(
+      accounts: Array<{
+        pubkey: PublicKey;
+        isSigner: boolean;
+        isWritable: boolean;
+      }>,
+    ): { instruction(): Promise<TransactionInstruction> };
+  };
+};
+type FactoryProgramMethods = {
+  deployTokenSuite(args: unknown): FactoryDeployBuilder;
+  initializeModule(...args: unknown[]): InstructionBuilder;
+  setHookAuthority(...args: unknown[]): InstructionBuilder;
+};
+
+function getDeployAccountAddress(accountName: string, fallback: PublicKey): PublicKey {
+  const instruction = (FactoryIdl as {
+    instructions?: Array<{
+      name: string;
+      accounts?: Array<{ name: string; address?: string }>;
+    }>;
+  }).instructions?.find((item) => item.name === "deploy_token_suite");
+  const address = instruction?.accounts?.find(
+    (account) => account.name === accountName,
+  )?.address;
+  return new PublicKey(address || fallback.toBase58());
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Discriminator bytes for the TokenDeployment account (from IDL). */
-const DEPLOYMENT_DISCRIMINATOR = Buffer.from([253, 218, 24, 4, 169, 51, 36, 214]);
+const DEPLOYMENT_DISCRIMINATOR = Buffer.from([
+  253, 218, 24, 4, 169, 51, 36, 214,
+]);
 
 /**
  * Maps each compliance module program ID to the PDA seed used by that module.
@@ -89,92 +116,32 @@ const DEPLOYMENT_DISCRIMINATOR = Buffer.from([253, 218, 24, 4, 169, 51, 36, 214]
  * Note: country_restrict uses "mod_country" (not "mod_country_restrict").
  */
 const MODULE_STATE_SEEDS: Record<string, string> = {
-  [MOD_MAX_INVESTORS.toBase58()]:    "mod_max_investors",
+  [MOD_MAX_INVESTORS.toBase58()]: "mod_max_investors",
   [MOD_COUNTRY_RESTRICT.toBase58()]: "mod_country",
-  [MOD_MAX_BALANCE.toBase58()]:      "mod_max_balance",
-  [MOD_MAX_TRANSFER.toBase58()]:     "mod_max_transfer",
-  [MOD_LOCKUP.toBase58()]:           "mod_lockup",
-  [MOD_DAILY_LIMIT.toBase58()]:      "mod_daily_limit",
-  [MOD_SUPPLY_CAP.toBase58()]:       "mod_supply_cap",
-  [MOD_COUNTRY_CAP.toBase58()]:      "mod_country_cap",
+  [MOD_MAX_BALANCE.toBase58()]: "mod_max_balance",
+  [MOD_MAX_TRANSFER.toBase58()]: "mod_max_transfer",
+  [MOD_LOCKUP.toBase58()]: "mod_lockup",
+  [MOD_DAILY_LIMIT.toBase58()]: "mod_daily_limit",
+  [MOD_SUPPLY_CAP.toBase58()]: "mod_supply_cap",
+  [MOD_COUNTRY_CAP.toBase58()]: "mod_country_cap",
 };
 
 const PERMISSIVE_U64_LIMIT = new BN("18446744073709551615");
 const NO_LOCKUP = new BN(0);
-
-function encodeTrustedIssuerForFactory(arg: {
-  issuerFid: PublicKey;
-  topics: number[];
-  label: string;
-}): Buffer {
-  return Buffer.concat([
-    encodePubkey(arg.issuerFid),
-    encodeVecU64(arg.topics),
-    encodeString(arg.label),
-  ]);
-}
-
-function encodeAdminDeployArgs(arg: {
-  issuer: PublicKey;
-  tokenMint: PublicKey;
-  tokenName: string;
-  tokenSymbol: string;
-  decimals: number;
-  isin: string;
-  claimTopics: number[];
-  trustedIssuers: Array<{ issuerFid: PublicKey; topics: number[]; label: string }>;
-  complianceModules: PublicKey[];
-  sharedIrs?: PublicKey | null;
-  pricePerToken: bigint;
-  priceDecimals: number;
-  paymentMint?: PublicKey | null;
-  salt: Buffer | Uint8Array;
-}): Buffer {
-  return Buffer.concat([
-    encodePubkey(arg.issuer),
-    encodePubkey(arg.tokenMint),
-    encodeString(arg.tokenName),
-    encodeString(arg.tokenSymbol),
-    encodeU8(arg.decimals),
-    encodeString(arg.isin),
-    encodeVecU64(arg.claimTopics),
-    encodeU32(arg.trustedIssuers.length),
-    ...arg.trustedIssuers.map(encodeTrustedIssuerForFactory),
-    encodeVecPubkey(arg.complianceModules),
-    encodeOptionPubkey(arg.sharedIrs),
-    encodeU64(arg.pricePerToken),
-    encodeU8(arg.priceDecimals),
-    encodeOptionPubkey(arg.paymentMint),
-    encodeFixedBytes(arg.salt, 32),
-  ]);
-}
-
-function getFactoryDeployProgramAddress(accountName: string, fallback: PublicKey): PublicKey {
-  const instruction = (FactoryIdl as {
-    instructions?: Array<{
-      name: string;
-      accounts?: Array<{ name: string; address?: string }>;
-    }>;
-  }).instructions?.find((item) => item.name === "deploy_token_suite");
-  const address = instruction?.accounts?.find((account) => account.name === accountName)?.address;
-  return new PublicKey(address || fallback.toBase58());
-}
 
 // ─── FactoryService ───────────────────────────────────────────────────────────
 
 export class FactoryService {
   private program: FactoryProgram;
   private provider: AnchorProvider;
-  private sendWalletTransaction?: SendWalletTransaction;
 
-  constructor(provider: AnchorProvider, sendWalletTransaction?: SendWalletTransaction) {
+  constructor(
+    provider: AnchorProvider,
+    _sendWalletTransaction?: SendWalletTransaction,
+  ) {
+    void _sendWalletTransaction;
     this.provider = provider;
-    const idl = {
-      ...(FactoryIdl as unknown as Record<string, unknown>),
-      address: FACTORY_PROGRAM_ID.toBase58(),
-    } as unknown as Idl;
-    this.program = new Program(idl, provider);
-    this.sendWalletTransaction = sendWalletTransaction;
+    this.program = new Program(FactoryIdl as unknown as Idl, provider);
   }
 
   // ── PDA Derivation ───────────────────────────────────────────────────────────
@@ -186,7 +153,7 @@ export class FactoryService {
   getFactoryStatePda(): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [SEED_FACTORY_STATE],
-      FACTORY_PROGRAM_ID
+      FACTORY_PROGRAM_ID,
     );
   }
 
@@ -197,7 +164,7 @@ export class FactoryService {
   getDeploymentPda(issuer: PublicKey, salt: Uint8Array): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [SEED_DEPLOYMENT, issuer.toBuffer(), Buffer.from(salt)],
-      FACTORY_PROGRAM_ID
+      FACTORY_PROGRAM_ID,
     );
   }
 
@@ -207,8 +174,10 @@ export class FactoryService {
    * Fetches and returns the factory state account.
    */
   async fetchFactoryState(): Promise<FactoryState> {
-    const [factoryStatePda] = this.getFactoryStatePda();
-    const raw = await (this.program.account as any).factoryState.fetch(factoryStatePda);
+    const raw = await fetchFactoryStateAccount();
+    if (!raw) {
+      throw new Error("Factory state account not found for the configured factory program.");
+    }
     return {
       owner: raw.owner.toBase58(),
       tokenProgramId: raw.tokenProgramId.toBase58(),
@@ -218,7 +187,7 @@ export class FactoryService {
       tirProgramId: raw.tirProgramId.toBase58(),
       ctrProgramId: raw.ctrProgramId.toBase58(),
       complianceProgramId: raw.complianceProgramId.toBase58(),
-      deploymentCount: BigInt(raw.deploymentCount.toString()),
+      deploymentCount: raw.deploymentCount,
       bump: raw.bump,
     };
   }
@@ -226,9 +195,15 @@ export class FactoryService {
   /**
    * Fetches the TokenDeployment account for a given issuer and salt.
    */
-  async fetchDeployment(issuer: PublicKey, salt: Uint8Array): Promise<TokenDeployment> {
+  async fetchDeployment(
+    issuer: PublicKey,
+    salt: Uint8Array,
+  ): Promise<TokenDeployment> {
     const [deploymentPda] = this.getDeploymentPda(issuer, salt);
-    const raw = await (this.program.account as any).tokenDeployment.fetch(deploymentPda);
+    const accounts = this.program.account as unknown as {
+      tokenDeployment: { fetch(address: PublicKey): Promise<unknown> };
+    };
+    const raw = await accounts.tokenDeployment.fetch(deploymentPda);
     return this._mapDeployment(raw, deploymentPda);
   }
 
@@ -250,7 +225,7 @@ export class FactoryService {
             },
           },
         ],
-      }
+      },
     );
 
     const deployments: TokenDeployment[] = [];
@@ -258,7 +233,7 @@ export class FactoryService {
       try {
         const decoded = this.program.coder.accounts.decode(
           "TokenDeployment",
-          account.data
+          account.data,
         );
         deployments.push(this._mapDeployment(decoded));
       } catch {
@@ -288,43 +263,26 @@ export class FactoryService {
    * Derives the compliance module state PDA for a given module program ID and mint.
    * Throws if the program ID is not a known compliance module.
    */
-  private getModuleStatePda(moduleProgramId: PublicKey, tokenMint: PublicKey): PublicKey {
+  private getModuleStatePda(
+    moduleProgramId: PublicKey,
+    tokenMint: PublicKey,
+  ): PublicKey {
     const seed = MODULE_STATE_SEEDS[moduleProgramId.toBase58()];
     if (!seed) {
-      throw new Error(`Unknown compliance module program: ${moduleProgramId.toBase58()}`);
+      throw new Error(
+        `Unknown compliance module program: ${moduleProgramId.toBase58()}`,
+      );
     }
     return PublicKey.findProgramAddressSync(
       [Buffer.from(seed), tokenMint.toBuffer()],
-      moduleProgramId
+      moduleProgramId,
     )[0];
   }
 
   private getModuleProgram(moduleProgramId: PublicKey): Program<Idl> {
-    if (moduleProgramId.equals(MOD_MAX_INVESTORS)) {
-      return new Program(ModMaxInvestorsIdl as unknown as Idl, this.provider);
-    }
-    if (moduleProgramId.equals(MOD_COUNTRY_RESTRICT)) {
-      return new Program(ModCountryRestrictIdl as unknown as Idl, this.provider);
-    }
-    if (moduleProgramId.equals(MOD_MAX_BALANCE)) {
-      return new Program(ModMaxBalanceIdl as unknown as Idl, this.provider);
-    }
-    if (moduleProgramId.equals(MOD_MAX_TRANSFER)) {
-      return new Program(ModMaxTransferIdl as unknown as Idl, this.provider);
-    }
-    if (moduleProgramId.equals(MOD_LOCKUP)) {
-      return new Program(ModLockupIdl as unknown as Idl, this.provider);
-    }
-    if (moduleProgramId.equals(MOD_DAILY_LIMIT)) {
-      return new Program(ModDailyLimitIdl as unknown as Idl, this.provider);
-    }
-    if (moduleProgramId.equals(MOD_SUPPLY_CAP)) {
-      return new Program(ModSupplyCapIdl as unknown as Idl, this.provider);
-    }
-    if (moduleProgramId.equals(MOD_COUNTRY_CAP)) {
-      return new Program(ModCountryCapIdl as unknown as Idl, this.provider);
-    }
-    throw new Error(`Unknown compliance module program: ${moduleProgramId.toBase58()}`);
+    throw new Error(
+      `Compliance module initialization is unavailable because the frontend does not include an IDL for module program ${moduleProgramId.toBase58()}. Deploy without selected compliance modules or add the matching module IDL first.`,
+    );
   }
 
   private moduleUsesHookAuthority(moduleProgramId: PublicKey): boolean {
@@ -339,7 +297,7 @@ export class FactoryService {
   private async initializeComplianceModule(
     moduleProgramId: PublicKey,
     tokenMint: PublicKey,
-    moduleState: PublicKey
+    moduleState: PublicKey,
   ): Promise<TransactionInstruction> {
     const admin = this.provider.wallet.publicKey;
     const program = this.getModuleProgram(moduleProgramId);
@@ -350,27 +308,27 @@ export class FactoryService {
     };
 
     if (moduleProgramId.equals(MOD_COUNTRY_RESTRICT)) {
-      return (program.methods as any)
+      return (program.methods as unknown as FactoryProgramMethods)
         .initializeModule(tokenMint, [])
         .accounts(accounts)
         .instruction();
     }
 
     if (moduleProgramId.equals(MOD_LOCKUP)) {
-      return (program.methods as any)
+      return (program.methods as unknown as FactoryProgramMethods)
         .initializeModule(tokenMint, NO_LOCKUP)
         .accounts(accounts)
         .instruction();
     }
 
     if (moduleProgramId.equals(MOD_COUNTRY_CAP)) {
-      return (program.methods as any)
+      return (program.methods as unknown as FactoryProgramMethods)
         .initializeModule(tokenMint, [])
         .accounts(accounts)
         .instruction();
     }
 
-    return (program.methods as any)
+    return (program.methods as unknown as FactoryProgramMethods)
       .initializeModule(tokenMint, PERMISSIVE_U64_LIMIT)
       .accounts(accounts)
       .instruction();
@@ -379,7 +337,7 @@ export class FactoryService {
   private async setModuleHookAuthority(
     moduleProgramId: PublicKey,
     moduleState: PublicKey,
-    hookAuthority: PublicKey
+    hookAuthority: PublicKey,
   ): Promise<TransactionInstruction | null> {
     if (!this.moduleUsesHookAuthority(moduleProgramId)) {
       return null;
@@ -387,7 +345,7 @@ export class FactoryService {
 
     const admin = this.provider.wallet.publicKey;
     const program = this.getModuleProgram(moduleProgramId);
-    return (program.methods as any)
+    return (program.methods as unknown as FactoryProgramMethods)
       .setHookAuthority(hookAuthority)
       .accounts({
         owner: admin,
@@ -399,18 +357,25 @@ export class FactoryService {
   private async ensureComplianceModulesInitialized(
     moduleProgramIds: string[],
     tokenMint: PublicKey,
-    complianceState: PublicKey
+    complianceState: PublicKey,
   ): Promise<void> {
     const instructions: TransactionInstruction[] = [];
 
     for (const moduleProgramIdStr of moduleProgramIds) {
       const moduleProgramId = new PublicKey(moduleProgramIdStr);
       const moduleState = this.getModuleStatePda(moduleProgramId, tokenMint);
-      const existingModule = await this.provider.connection.getAccountInfo(moduleState, "confirmed");
+      const existingModule = await this.provider.connection.getAccountInfo(
+        moduleState,
+        "confirmed",
+      );
 
       if (!existingModule) {
         instructions.push(
-          await this.initializeComplianceModule(moduleProgramId, tokenMint, moduleState)
+          await this.initializeComplianceModule(
+            moduleProgramId,
+            tokenMint,
+            moduleState,
+          ),
         );
       }
 
@@ -418,7 +383,7 @@ export class FactoryService {
       const hookAuthorityIx = await this.setModuleHookAuthority(
         moduleProgramId,
         moduleState,
-        complianceState
+        complianceState,
       );
       if (hookAuthorityIx) {
         instructions.push(hookAuthorityIx);
@@ -443,11 +408,13 @@ export class FactoryService {
    */
   async deployTokenSuite(
     args: DeployTokenSuiteArgs,
-    mintKeypair?: Keypair
+    mintKeypair?: Keypair,
   ): Promise<string> {
     const admin = this.provider.wallet.publicKey;
     if (args.sharedIrs) {
-      throw new Error("Shared IRS deployment is disabled in the direct admin-to-issuer flow");
+      throw new Error(
+        "Shared IRS deployment is disabled in the direct admin-to-issuer flow",
+      );
     }
     const issuer = new PublicKey(args.issuer);
     const tokenMint = new PublicKey(args.tokenMint);
@@ -456,53 +423,69 @@ export class FactoryService {
     const [factoryState] = this.getFactoryStatePda();
 
     const factory = await this.fetchFactoryState();
-    if (factory.owner !== admin.toBase58()) {
-      throw new Error(
-        `Only the on-chain factory owner can deploy token suites. Connected wallet ${admin.toBase58()} is not the factory owner ${factory.owner}. NEXT_PUBLIC_PLATFORM_OWNER cannot override factory_state.owner; connect the factory owner wallet, transfer factory ownership on-chain, or point the frontend to the correct factory program.`
-      );
-    }
     const tokenProgramId = new PublicKey(factory.tokenProgramId);
     const irpProgramId = new PublicKey(factory.irpProgramId);
     const irsProgramId = new PublicKey(factory.irsProgramId);
     const tirProgramId = new PublicKey(factory.tirProgramId);
     const ctrProgramId = new PublicKey(factory.ctrProgramId);
     const complianceProgramId = new PublicKey(factory.complianceProgramId);
-    const hookProgramId = getFactoryDeployProgramAddress("hook_program", TOKEN_HOOK_PROGRAM_ID);
+    const hookProgramId = getDeployAccountAddress(
+      "hook_program",
+      TOKEN_HOOK_PROGRAM_ID,
+    );
+    const isEnvAdmin =
+      !!ROLE_WALLETS.platformOwner &&
+      admin.toBase58().toLowerCase() ===
+        ROLE_WALLETS.platformOwner.toLowerCase();
+
+    if (factory.owner !== admin.toBase58() && !isEnvAdmin) {
+      throw new Error(
+        `Only the platform admin can deploy token suites. Connected wallet ${admin.toBase58()} is not the factory owner ${factory.owner}. Connect the platform admin wallet, then enter the issuer wallet as the final token-suite owner.`,
+      );
+    }
 
     const [deploymentPda] = this.getDeploymentPda(issuer, args.salt);
     const [offeringTerms] = PublicKey.findProgramAddressSync(
       [Buffer.from("offering_terms"), tokenMint.toBuffer()],
-      FACTORY_PROGRAM_ID
+      FACTORY_PROGRAM_ID,
     );
 
     const [tokenState] = PublicKey.findProgramAddressSync(
-      [Buffer.from("token_state"), tokenMint.toBuffer()], tokenProgramId
+      [Buffer.from("token_state"), tokenMint.toBuffer()],
+      tokenProgramId,
     );
     const [ownerState] = PublicKey.findProgramAddressSync(
-      [Buffer.from("owner"), tokenMint.toBuffer()], tokenProgramId
+      [Buffer.from("owner"), tokenMint.toBuffer()],
+      tokenProgramId,
     );
     const [irpState] = PublicKey.findProgramAddressSync(
-      [Buffer.from("irp_state"), tokenMint.toBuffer()], irpProgramId
+      [Buffer.from("irp_state"), tokenMint.toBuffer()],
+      irpProgramId,
     );
     const [irsState] = PublicKey.findProgramAddressSync(
-      [Buffer.from("irs_state"), tokenMint.toBuffer()], irsProgramId
+      [Buffer.from("irs_state"), tokenMint.toBuffer()],
+      irsProgramId,
     );
     const [tirState] = PublicKey.findProgramAddressSync(
-      [Buffer.from("tir_state"), tokenMint.toBuffer()], tirProgramId
+      [Buffer.from("tir_state"), tokenMint.toBuffer()],
+      tirProgramId,
     );
     const [ctrState] = PublicKey.findProgramAddressSync(
-      [Buffer.from("ctr_state"), tokenMint.toBuffer()], ctrProgramId
+      [Buffer.from("ctr_state"), tokenMint.toBuffer()],
+      ctrProgramId,
     );
     const [complianceState] = PublicKey.findProgramAddressSync(
-      [Buffer.from("compliance_state"), tokenMint.toBuffer()], complianceProgramId
+      [Buffer.from("compliance_state"), tokenMint.toBuffer()],
+      complianceProgramId,
     );
     const [extraAccountMetas] = PublicKey.findProgramAddressSync(
-      [Buffer.from("extra-account-metas"), tokenMint.toBuffer()], hookProgramId
+      [Buffer.from("extra-account-metas"), tokenMint.toBuffer()],
+      hookProgramId,
     );
 
     // ── Compliance module state PDAs (derived from program IDs + mint) ─────────
     const moduleStatePdas = args.complianceModules.map((programIdStr) =>
-      this.getModuleStatePda(new PublicKey(programIdStr), tokenMint)
+      this.getModuleStatePda(new PublicKey(programIdStr), tokenMint),
     );
 
     // ── issuerEntry PDAs for each trusted issuer (remaining accounts) ──────────
@@ -510,41 +493,51 @@ export class FactoryService {
     const issuerEntryPdas = args.trustedIssuers.map((ti) => {
       const issuerFid = new PublicKey(ti.issuerFid);
       return PublicKey.findProgramAddressSync(
-        [Buffer.from("issuer_entry"), tirState.toBuffer(), issuerFid.toBuffer()],
-        tirProgramId
+        [
+          Buffer.from("issuer_entry"),
+          tirState.toBuffer(),
+          issuerFid.toBuffer(),
+        ],
+        tirProgramId,
       )[0];
     });
 
     // ── Remaining accounts: issuer entries (writable) then module states ───────
     const remainingAccounts = [
-      ...issuerEntryPdas.map((pubkey) => ({ pubkey, isSigner: false, isWritable: true })),
-      ...moduleStatePdas.map((pubkey) => ({ pubkey, isSigner: false, isWritable: false })),
+      ...issuerEntryPdas.map((pubkey) => ({
+        pubkey,
+        isSigner: false,
+        isWritable: true,
+      })),
+      ...moduleStatePdas.map((pubkey) => ({
+        pubkey,
+        isSigner: false,
+        isWritable: false,
+      })),
     ];
 
     // ── Instruction args ───────────────────────────────────────────────────────
-    const priceDecimals = args.priceDecimals ?? args.decimals;
-    const pricePerToken =
-      args.pricePerToken ?? BigInt(10) ** BigInt(priceDecimals);
-    const paymentMint = args.paymentMint ? new PublicKey(args.paymentMint) : null;
-    const rawIxArgs = {
+    const trustedIssuers = args.trustedIssuers.map((ti) => ({
+      issuerFid: new PublicKey(ti.issuerFid),
+      topics: ti.topics.map((topic) => new BN(topic.toString())),
+      label: ti.label,
+    }));
+
+    const ixArgs = {
       issuer,
       tokenMint,
       tokenName: args.tokenName,
       tokenSymbol: args.tokenSymbol,
       decimals: args.decimals,
       isin: args.isin,
-      claimTopics: args.claimTopics.map((topic) => Number(topic)),
-      trustedIssuers: args.trustedIssuers.map((ti) => ({
-        issuerFid: new PublicKey(ti.issuerFid),
-        topics: ti.topics.map((topic) => Number(topic)),
-        label: ti.label,
-      })),
-      complianceModules: moduleStatePdas,
+      claimTopics: args.claimTopics.map((topic) => new BN(topic.toString())),
+      trustedIssuers,
+      complianceModules: moduleStatePdas, // deployed factory expects state PDAs, not program IDs
       sharedIrs: args.sharedIrs ? new PublicKey(args.sharedIrs) : null,
-      pricePerToken,
-      priceDecimals,
-      paymentMint,
-      salt: args.salt,
+      pricePerToken: new BN((args.pricePerToken ?? 0n).toString()),
+      priceDecimals: args.priceDecimals ?? args.decimals,
+      paymentMint: args.paymentMint ? new PublicKey(args.paymentMint) : null,
+      salt: Array.from(args.salt),
     };
 
     try {
@@ -552,40 +545,43 @@ export class FactoryService {
       // The factory deploy touches many PDA accounts. Keep them in the ALT so the
       // second transaction stays below Solana's 1232-byte raw transaction limit.
       const slot = await this.provider.connection.getSlot("confirmed");
-      const [createLutIx, lutAddress] = AddressLookupTableProgram.createLookupTable({
-        authority: admin,
-        payer: admin,
-        recentSlot: slot - 1,
-      });
+      const [createLutIx, lutAddress] =
+        AddressLookupTableProgram.createLookupTable({
+          authority: admin,
+          payer: admin,
+          recentSlot: slot - 1,
+        });
 
-      const lutAddresses = Array.from(new Set([
-        FACTORY_PROGRAM_ID.toBase58(),
-        factoryState.toBase58(),
-        deploymentPda.toBase58(),
-        offeringTerms.toBase58(),
-        tokenProgramId.toBase58(),
-        irpProgramId.toBase58(),
-        irsProgramId.toBase58(),
-        tirProgramId.toBase58(),
-        ctrProgramId.toBase58(),
-        complianceProgramId.toBase58(),
-        hookProgramId.toBase58(),
-        SPL_TOKEN_2022.toBase58(),
-        SystemProgram.programId.toBase58(),
-        admin.toBase58(),
-        issuer.toBase58(),
-        tokenMint.toBase58(),
-        tokenState.toBase58(),
-        ownerState.toBase58(),
-        irsState.toBase58(),
-        tirState.toBase58(),
-        ctrState.toBase58(),
-        irpState.toBase58(),
-        complianceState.toBase58(),
-        extraAccountMetas.toBase58(),
-        ...issuerEntryPdas.map((pubkey) => pubkey.toBase58()),
-        ...moduleStatePdas.map((pubkey) => pubkey.toBase58()),
-      ])).map((address) => new PublicKey(address));
+      const lutAddresses = Array.from(
+        new Set([
+          FACTORY_PROGRAM_ID.toBase58(),
+          factoryState.toBase58(),
+          deploymentPda.toBase58(),
+          offeringTerms.toBase58(),
+          tokenProgramId.toBase58(),
+          irpProgramId.toBase58(),
+          irsProgramId.toBase58(),
+          tirProgramId.toBase58(),
+          ctrProgramId.toBase58(),
+          complianceProgramId.toBase58(),
+          hookProgramId.toBase58(),
+          SPL_TOKEN_2022.toBase58(),
+          SystemProgram.programId.toBase58(),
+          admin.toBase58(),
+          issuer.toBase58(),
+          tokenMint.toBase58(),
+          tokenState.toBase58(),
+          ownerState.toBase58(),
+          irsState.toBase58(),
+          tirState.toBase58(),
+          ctrState.toBase58(),
+          irpState.toBase58(),
+          complianceState.toBase58(),
+          extraAccountMetas.toBase58(),
+          ...issuerEntryPdas.map((pubkey) => pubkey.toBase58()),
+          ...moduleStatePdas.map((pubkey) => pubkey.toBase58()),
+        ]),
+      ).map((address) => new PublicKey(address));
 
       const extendLutIx = AddressLookupTableProgram.extendLookupTable({
         payer: admin,
@@ -595,16 +591,25 @@ export class FactoryService {
       });
 
       await this.sendTransactionConfirmed(
-        new Transaction().add(createLutIx, extendLutIx)
+        new Transaction().add(createLutIx, extendLutIx),
       );
 
       // ── Step 2: Create the Token-2022 mint if it does not already exist ─────────
       if (mintKeypair) {
         // Skip mint creation if the account already exists (e.g. from a previous failed attempt)
-        const mintAccountInfo = await this.provider.connection.getAccountInfo(tokenMint, "confirmed");
+        const mintAccountInfo = await this.provider.connection.getAccountInfo(
+          tokenMint,
+          "confirmed",
+        );
         if (!mintAccountInfo) {
-          const mintLen = getMintLen([ExtensionType.TransferHook, ExtensionType.PermanentDelegate]);
-          const lamports = await this.provider.connection.getMinimumBalanceForRentExemption(mintLen);
+          const mintLen = getMintLen([
+            ExtensionType.TransferHook,
+            ExtensionType.PermanentDelegate,
+          ]);
+          const lamports =
+            await this.provider.connection.getMinimumBalanceForRentExemption(
+              mintLen,
+            );
           const mintTx = new Transaction().add(
             SystemProgram.createAccount({
               fromPubkey: admin,
@@ -613,9 +618,24 @@ export class FactoryService {
               lamports,
               programId: SPL_TOKEN_2022,
             }),
-            createInitializeTransferHookInstruction(tokenMint, admin, hookProgramId, SPL_TOKEN_2022),
-            createInitializePermanentDelegateInstruction(tokenMint, tokenState, SPL_TOKEN_2022),
-            createInitializeMintInstruction(tokenMint, args.decimals, tokenState, null, SPL_TOKEN_2022),
+            createInitializeTransferHookInstruction(
+              tokenMint,
+              admin,
+              hookProgramId,
+              SPL_TOKEN_2022,
+            ),
+            createInitializePermanentDelegateInstruction(
+              tokenMint,
+              tokenState,
+              SPL_TOKEN_2022,
+            ),
+            createInitializeMintInstruction(
+              tokenMint,
+              args.decimals,
+              tokenState,
+              null,
+              SPL_TOKEN_2022,
+            ),
           );
           await this.sendTransactionConfirmed(mintTx, [mintKeypair]);
         }
@@ -627,68 +647,77 @@ export class FactoryService {
       await this.ensureComplianceModulesInitialized(
         args.complianceModules,
         tokenMint,
-        complianceState
+        complianceState,
       );
 
       // Wait for the ALT to be fully active and indexed across RPC nodes
       await new Promise((r) => setTimeout(r, 2000));
 
-      const lutAccountInfo = await this.provider.connection.getAddressLookupTable(
-        lutAddress,
-        { commitment: "confirmed" }
-      );
+      const lutAccountInfo =
+        await this.provider.connection.getAddressLookupTable(lutAddress, {
+          commitment: "confirmed",
+        });
       if (!lutAccountInfo.value) {
         throw new Error("Address Lookup Table not found after creation.");
       }
 
       // ── Step 3: Build deploy instruction ──────────────────────────────────────
-      const rawDeployKeys: AccountMeta[] = [
-        { pubkey: admin, isSigner: true, isWritable: true },
-        { pubkey: factoryState, isSigner: false, isWritable: true },
-        { pubkey: issuer, isSigner: false, isWritable: false },
-        { pubkey: deploymentPda, isSigner: false, isWritable: true },
-        { pubkey: offeringTerms, isSigner: false, isWritable: true },
-        { pubkey: tokenState, isSigner: false, isWritable: true },
-        { pubkey: ownerState, isSigner: false, isWritable: true },
-        { pubkey: irsState, isSigner: false, isWritable: true },
-        { pubkey: tirState, isSigner: false, isWritable: true },
-        { pubkey: ctrState, isSigner: false, isWritable: true },
-        { pubkey: irpState, isSigner: false, isWritable: true },
-        { pubkey: complianceState, isSigner: false, isWritable: true },
-        { pubkey: tokenMint, isSigner: false, isWritable: false },
-        { pubkey: extraAccountMetas, isSigner: false, isWritable: true },
-        { pubkey: tokenProgramId, isSigner: false, isWritable: false },
-        { pubkey: hookProgramId, isSigner: false, isWritable: false },
-        { pubkey: irpProgramId, isSigner: false, isWritable: false },
-        { pubkey: irsProgramId, isSigner: false, isWritable: false },
-        { pubkey: tirProgramId, isSigner: false, isWritable: false },
-        { pubkey: ctrProgramId, isSigner: false, isWritable: false },
-        { pubkey: complianceProgramId, isSigner: false, isWritable: false },
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-        ...remainingAccounts,
-      ];
-      const deployIx = new TransactionInstruction({
-        programId: FACTORY_PROGRAM_ID,
-        keys: rawDeployKeys,
-        data: buildInstructionData("deploy_token_suite", encodeAdminDeployArgs(rawIxArgs)),
-      });
+      const deployIx = await (
+        this.program.methods as unknown as FactoryProgramMethods
+      )
+        .deployTokenSuite(ixArgs)
+        .accounts({
+          admin,
+          factoryState,
+          issuer,
+          deployment: deploymentPda,
+          offeringTerms,
+          tokenState,
+          ownerState,
+          irsState,
+          tirState,
+          ctrState,
+          irpState,
+          complianceState,
+          tokenMintAccount: tokenMint,
+          extraAccountMetas,
+          tokenProgram: tokenProgramId,
+          hookProgram: hookProgramId,
+          irpProgram: irpProgramId,
+          irsProgram: irsProgramId,
+          tirProgram: tirProgramId,
+          ctrProgram: ctrProgramId,
+          complianceProgram: complianceProgramId,
+          systemProgram: SystemProgram.programId,
+        })
+        .remainingAccounts(remainingAccounts)
+        .instruction();
 
       // ── Step 4: Send deployment as versioned (v0) transaction with the ALT ────
       const { blockhash, lastValidBlockHeight } =
         await this.provider.connection.getLatestBlockhash("confirmed");
 
-      const vtx = this.buildDeployTransaction(deployIx, lutAccountInfo.value, blockhash);
-      await this.assertDeploySimulation(vtx);
+      const message = new TransactionMessage({
+        payerKey: admin,
+        recentBlockhash: blockhash,
+        instructions: [
+          ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 }),
+          ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 10_000 }),
+          deployIx,
+        ],
+      }).compileToV0Message([lutAccountInfo.value]);
+
+      const vtx = new VersionedTransaction(message);
       const txSize = vtx.serialize().length;
       if (txSize > 1232) {
         throw new Error(
-          `Deploy transaction is ${txSize} bytes, above Solana's 1232-byte limit. Reduce selected modules/trusted issuers or update the lookup-table packing.`
+          `Deploy transaction is ${txSize} bytes, above Solana's 1232-byte limit. Reduce selected modules/trusted issuers or update the lookup-table packing.`,
         );
       }
       const sig = await this.sendPreparedVersionedTransaction(
         vtx,
         blockhash,
-        lastValidBlockHeight
+        lastValidBlockHeight,
       );
 
       const result = await this.getConfirmedTransactionResult(sig);
@@ -704,14 +733,19 @@ export class FactoryService {
         // Always dump the full logs so the developer can see what failed
         console.error("[FRACKS Deploy] Transaction failed. Signature:", sig);
         console.error("[FRACKS Deploy] Full logs:\n" + (logsStr || "(none)"));
-        console.error("[FRACKS Deploy] Raw error:", JSON.stringify(result.value.err));
+        console.error(
+          "[FRACKS Deploy] Raw error:",
+          JSON.stringify(result.value.err),
+        );
 
         // Find which program failed first
         const failedProgramMatch = logsStr.match(/Program (\S+) failed:/);
         const failedProgram = failedProgramMatch?.[1] ?? "unknown";
 
         // Extract the error code
-        const customErrMatch = logsStr.match(/custom program error:\s*0x([0-9a-fA-F]+)/i);
+        const customErrMatch = logsStr.match(
+          /custom program error:\s*0x([0-9a-fA-F]+)/i,
+        );
         if (customErrMatch) {
           const code = parseInt(customErrMatch[1], 16);
           const decoded = parseAnchorError({ code });
@@ -720,91 +754,26 @@ export class FactoryService {
             throw new Error(decoded.userMessage);
           }
           throw new Error(
-            `On-chain error code ${code} (0x${code.toString(16)}) from program ${failedProgram}.\n\nLogs:\n${logsStr}`
+            `On-chain error code ${code} (0x${code.toString(16)}) from program ${failedProgram}.\n\nLogs:\n${logsStr}`,
           );
         }
 
         throw new Error(
-          `Transaction failed (program: ${failedProgram}).\nError: ${JSON.stringify(result.value.err)}\n\nLogs:\n${logsStr || "(no logs)"}`
+          `Transaction failed (program: ${failedProgram}).\nError: ${JSON.stringify(result.value.err)}\n\nLogs:\n${logsStr || "(no logs)"}`,
         );
       }
 
       return sig;
     } catch (err) {
-      if (
-        err instanceof Error &&
-        (err.message.startsWith("Factory deploy simulation failed") ||
-          err.message.includes("Logs:"))
-      ) {
-        throw err;
-      }
       throw new Error(formatTransactionError(err));
     }
   }
 
   // ── Private Helpers ───────────────────────────────────────────────────────────
 
-  private buildDeployTransaction(
-    instruction: TransactionInstruction,
-    lookupTable: AddressLookupTableAccount,
-    blockhash: string,
-  ): VersionedTransaction {
-    const message = new TransactionMessage({
-      payerKey: this.provider.wallet.publicKey,
-      recentBlockhash: blockhash,
-      instructions: [
-        ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 }),
-        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 10_000 }),
-        instruction,
-      ],
-    }).compileToV0Message([lookupTable]);
-
-    return new VersionedTransaction(message);
-  }
-
-  private async assertDeploySimulation(transaction: VersionedTransaction): Promise<void> {
-    const simulation = await this.provider.connection.simulateTransaction(transaction, {
-      commitment: "confirmed",
-      sigVerify: false,
-      replaceRecentBlockhash: true,
-    });
-
-    if (!simulation.value.err) return;
-
-    const logs = simulation.value.logs ?? [];
-    const logsStr = logs.join("\n");
-    console.error("[FRACKS Deploy] Simulation failed:", simulation.value.err);
-    console.error("[FRACKS Deploy] Simulation logs:\n" + (logsStr || "(none)"));
-
-    const anchorError = logsStr.match(
-      /AnchorError occurred\. Error Code: ([A-Za-z0-9_]+)\. Error Number: (\d+)\. Error Message: ([^\n.]+\.?)/,
-    );
-    if (anchorError) {
-      throw new Error(
-        `Factory deploy simulation failed: ${anchorError[1]} (${anchorError[2]}). ${anchorError[3]}\n\nLogs:\n${logsStr}`,
-      );
-    }
-
-    const customErrMatch = logsStr.match(/custom program error:\s*0x([0-9a-fA-F]+)/i);
-    if (customErrMatch) {
-      const code = parseInt(customErrMatch[1], 16);
-      const decoded = parseAnchorError({ code });
-      if (decoded && decoded.name !== "UnknownProgramError") {
-        throw new Error(`Factory deploy simulation failed: ${decoded.userMessage}\n\nLogs:\n${logsStr}`);
-      }
-      throw new Error(
-        `Factory deploy simulation failed with on-chain error ${code} (0x${code.toString(16)}).\n\nLogs:\n${logsStr}`,
-      );
-    }
-
-    throw new Error(
-      `Factory deploy simulation failed: ${JSON.stringify(simulation.value.err)}\n\nLogs:\n${logsStr || "(no logs)"}`,
-    );
-  }
-
   private async sendTransactionConfirmed(
     transaction: Transaction,
-    signers: TransactionSigner[] = []
+    signers: TransactionSigner[] = [],
   ): Promise<string> {
     const { blockhash, lastValidBlockHeight } =
       await this.provider.connection.getLatestBlockhash("confirmed");
@@ -818,15 +787,19 @@ export class FactoryService {
     const signed = await this.provider.wallet.signTransaction(transaction);
     const signature = await this.provider.connection.sendRawTransaction(
       signed.serialize(),
-      { skipPreflight: false, preflightCommitment: "confirmed", maxRetries: 3 }
+      { skipPreflight: false, preflightCommitment: "confirmed", maxRetries: 3 },
     );
 
-    await this.confirmSubmittedTransaction(signature, blockhash, lastValidBlockHeight);
+    await this.confirmSubmittedTransaction(
+      signature,
+      blockhash,
+      lastValidBlockHeight,
+    );
     return signature;
   }
 
   private async sendInstructionsInBatches(
-    instructions: TransactionInstruction[]
+    instructions: TransactionInstruction[],
   ): Promise<string[]> {
     const signatures: string[] = [];
     const batches: TransactionInstruction[][] = [];
@@ -847,13 +820,17 @@ export class FactoryService {
     }
 
     for (const batch of batches) {
-      signatures.push(await this.sendTransactionConfirmed(new Transaction().add(...batch)));
+      signatures.push(
+        await this.sendTransactionConfirmed(new Transaction().add(...batch)),
+      );
     }
 
     return signatures;
   }
 
-  private transactionFitsLegacyLimit(instructions: TransactionInstruction[]): boolean {
+  private transactionFitsLegacyLimit(
+    instructions: TransactionInstruction[],
+  ): boolean {
     const tx = new Transaction({
       feePayer: this.provider.wallet.publicKey,
       recentBlockhash: "11111111111111111111111111111111",
@@ -874,27 +851,44 @@ export class FactoryService {
   private async sendPreparedVersionedTransaction(
     transaction: VersionedTransaction,
     blockhash: string,
-    lastValidBlockHeight: number
+    lastValidBlockHeight: number,
   ): Promise<string> {
     const signedVtx = await this.provider.wallet.signTransaction(transaction);
+    const signerIndex = signedVtx.message.staticAccountKeys.findIndex((key) =>
+      key.equals(this.provider.wallet.publicKey),
+    );
+    if (
+      signerIndex < 0 ||
+      !signedVtx.signatures[signerIndex] ||
+      signedVtx.signatures[signerIndex].every((byte) => byte === 0)
+    ) {
+      throw new Error(
+        "Wallet did not sign the versioned deployment transaction. Try a wallet adapter that supports v0 transactions or reconnect the wallet.",
+      );
+    }
+
     const signature = await this.provider.connection.sendRawTransaction(
       signedVtx.serialize(),
-      { skipPreflight: false, preflightCommitment: "confirmed", maxRetries: 3 }
+      { skipPreflight: false, preflightCommitment: "confirmed", maxRetries: 3 },
     );
 
-    await this.confirmSubmittedTransaction(signature, blockhash, lastValidBlockHeight);
+    await this.confirmSubmittedTransaction(
+      signature,
+      blockhash,
+      lastValidBlockHeight,
+    );
     return signature;
   }
 
   private async confirmSubmittedTransaction(
     signature: string,
     blockhash: string,
-    lastValidBlockHeight: number
+    lastValidBlockHeight: number,
   ): Promise<void> {
     try {
       const result = await this.provider.connection.confirmTransaction(
         { signature, blockhash, lastValidBlockHeight },
-        "confirmed"
+        "confirmed",
       );
       if (result.value.err) {
         throw new Error(JSON.stringify(result.value.err));
@@ -907,9 +901,12 @@ export class FactoryService {
       }
 
       for (let attempt = 0; attempt < 15; attempt += 1) {
-        const status = await this.provider.connection.getSignatureStatus(signature, {
-          searchTransactionHistory: true,
-        });
+        const status = await this.provider.connection.getSignatureStatus(
+          signature,
+          {
+            searchTransactionHistory: true,
+          },
+        );
         if (status.value?.err) {
           throw new Error(JSON.stringify(status.value.err));
         }
@@ -923,7 +920,7 @@ export class FactoryService {
       }
 
       throw new Error(
-        "Transaction was submitted but confirmation is delayed on testnet. Check explorer/history before retrying deployment."
+        "Transaction was submitted but confirmation is delayed on testnet. Check explorer/history before retrying deployment.",
       );
     }
   }

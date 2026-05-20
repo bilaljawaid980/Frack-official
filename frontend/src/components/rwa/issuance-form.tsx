@@ -50,7 +50,7 @@ import {
   useDeployTokenSuite,
   useFactoryState,
 } from "@/hooks/useFactory";
-import { FACTORY_PROGRAM_ID, FID_PROGRAM_ID } from "@/lib/constants";
+import { FACTORY_PROGRAM_ID } from "@/lib/constants";
 import { generateSalt, isValidPublicKey } from "@/lib/utils";
 import { PublicKey, Keypair } from "@solana/web3.js";
 import { queryCache } from "@/lib/query-cache";
@@ -64,13 +64,17 @@ async function parseApiResponse(response: Response, fallback: string) {
   return payload;
 }
 
-/** Derives the FID PDA from a wallet address. */
-function deriveFidFromWallet(walletAddress: string): string {
+/** Derives the canonical FID PDA from a wallet address for the active FID program. */
+function deriveFidFromWallet(
+  walletAddress: string,
+  fidProgramId?: PublicKey,
+): string {
   try {
+    if (!fidProgramId) return "";
     const wallet = new PublicKey(walletAddress);
     const [fid] = PublicKey.findProgramAddressSync(
       [Buffer.from("fid"), wallet.toBuffer()],
-      FID_PROGRAM_ID
+      fidProgramId
     );
     return fid.toBase58();
   } catch {
@@ -248,6 +252,22 @@ export function IssuanceForm({
     const pricePerToken = BigInt(
       Math.round(data.tokenDetails.initialPrice * priceScale)
     );
+    if (!factoryState?.fidProgramId) {
+      toast.error("Factory state is still loading. Try again in a moment.");
+      return;
+    }
+    const activeFidProgramId = new PublicKey(factoryState.fidProgramId);
+
+    const trustedIssuers = data.complianceRequirements.trustedIssuers.map(
+      (issuer) => ({
+        ...issuer,
+        issuerFid: deriveFidFromWallet(issuer.walletAddress, activeFidProgramId),
+      }),
+    );
+    if (trustedIssuers.some((issuer) => !issuer.issuerFid)) {
+      toast.error("One or more trusted issuer wallets could not be resolved to an active FID PDA.");
+      return;
+    }
 
     deployTokenSuite(
       {
@@ -259,7 +279,7 @@ export function IssuanceForm({
         decimals: data.tokenDetails.decimals,
         isin: data.assetDetails.isin,
         claimTopics: data.complianceRequirements.claimTopics.map((t: string) => BigInt(t)),
-        trustedIssuers: data.complianceRequirements.trustedIssuers,
+        trustedIssuers,
         complianceModules: data.complianceRequirements.selectedModules,
         sharedIrs: null,
         pricePerToken,
@@ -295,7 +315,7 @@ export function IssuanceForm({
                 decimals: data.tokenDetails.decimals,
                 isin: data.assetDetails.isin,
                 claimTopics: data.complianceRequirements.claimTopics,
-                trustedIssuers: data.complianceRequirements.trustedIssuers.map((issuer) => ({
+                trustedIssuers: trustedIssuers.map((issuer) => ({
                   ...issuer,
                   topics: issuer.topics.map((topic) => topic.toString()),
                 })),
@@ -976,7 +996,12 @@ export function IssuanceForm({
                                         {...field} 
                                         onChange={(e: any) => {
                                           field.onChange(e);
-                                          const fid = deriveFidFromWallet(e.target.value);
+                                          const fid = deriveFidFromWallet(
+                                            e.target.value,
+                                            factoryState?.fidProgramId
+                                              ? new PublicKey(factoryState.fidProgramId)
+                                              : undefined,
+                                          );
                                           form.setValue(`complianceRequirements.trustedIssuers.${index}.issuerFid`, fid);
                                         }}
                                       />

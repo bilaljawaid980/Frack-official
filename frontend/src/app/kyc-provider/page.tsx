@@ -251,6 +251,28 @@ export default function KycProviderPage() {
         id: loadingToast,
       });
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Approval failed";
+      if (
+        message.includes("DuplicateClaimTopicIssuer") ||
+        message.includes("active claim already exists")
+      ) {
+        try {
+          await updateRequestStatus(request, nextStatus);
+          toast.success(
+            `${reviewType} claim already exists. Request forwarded.`,
+            { id: loadingToast },
+          );
+          return;
+        } catch (statusError) {
+          toast.error(
+            statusError instanceof Error
+              ? statusError.message
+              : "Claim exists, but request forwarding failed.",
+            { id: loadingToast },
+          );
+          return;
+        }
+      }
       toast.error(error instanceof Error ? error.message : "Approval failed", {
         id: loadingToast,
       });

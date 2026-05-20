@@ -1790,6 +1790,10 @@ async createAssetToken(params: CreateAssetParams): Promise<{ assetId: number; to
   const saltBuf = Buffer.from(salt);
   const [deployment] = deriveDeploymentPDA(issuer, saltBuf);
   const [factoryStatePda] = deriveFactoryStatePDA();
+  const [offeringTerms] = PublicKey.findProgramAddressSync(
+    [Buffer.from('offering_terms'), tokenMint.publicKey.toBuffer()],
+    PROGRAM_IDS.factory,
+  );
 
   const trustedIssuers: Array<{ issuerFid: PublicKey; topics: number[]; label: string }> = [];
   const issuerWallets = params.claimDetails?.issuers || [];
@@ -1868,6 +1872,7 @@ async createAssetToken(params: CreateAssetParams): Promise<{ assetId: number; to
   }));
 
   const deployArgs = {
+    issuer,
     tokenMint: tokenMint.publicKey,
     tokenName: params.tokenName,
     tokenSymbol: params.tokenSymbol,
@@ -1877,13 +1882,18 @@ async createAssetToken(params: CreateAssetParams): Promise<{ assetId: number; to
     trustedIssuers,
     complianceModules: moduleList,
     sharedIrs,
+    pricePerToken: BigInt(Math.max(0, Math.round(Number(params.underlyingValue || 0) * 10 ** decimals))),
+    priceDecimals: decimals,
+    paymentMint: null,
     salt: saltBuf,
   };
 
-  const deployCommonPrefix: AccountMeta[] = [
+  const deployKeys: AccountMeta[] = [
     { pubkey: issuer, isSigner: true, isWritable: true },
     { pubkey: factoryStatePda, isSigner: false, isWritable: true },
+    { pubkey: issuer, isSigner: false, isWritable: false },
     { pubkey: deployment, isSigner: false, isWritable: true },
+    { pubkey: offeringTerms, isSigner: false, isWritable: true },
     { pubkey: tokenState, isSigner: false, isWritable: true },
     { pubkey: ownerState, isSigner: false, isWritable: true },
     { pubkey: irsState, isSigner: false, isWritable: true },
@@ -1891,19 +1901,8 @@ async createAssetToken(params: CreateAssetParams): Promise<{ assetId: number; to
     { pubkey: ctrState, isSigner: false, isWritable: true },
     { pubkey: irpState, isSigner: false, isWritable: true },
     { pubkey: complianceState, isSigner: false, isWritable: true },
-  ];
-
-  const deployProgramTailNoHook: AccountMeta[] = [
-    { pubkey: PROGRAM_IDS.token, isSigner: false, isWritable: false },
-    { pubkey: PROGRAM_IDS.irp, isSigner: false, isWritable: false },
-    { pubkey: PROGRAM_IDS.irs, isSigner: false, isWritable: false },
-    { pubkey: PROGRAM_IDS.tir, isSigner: false, isWritable: false },
-    { pubkey: PROGRAM_IDS.ctr, isSigner: false, isWritable: false },
-    { pubkey: PROGRAM_IDS.compliance, isSigner: false, isWritable: false },
-    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-  ];
-
-  const deployProgramTailWithHook: AccountMeta[] = [
+    { pubkey: tokenMint.publicKey, isSigner: false, isWritable: false },
+    { pubkey: extraAccountMetas, isSigner: false, isWritable: true },
     { pubkey: PROGRAM_IDS.token, isSigner: false, isWritable: false },
     { pubkey: PROGRAM_IDS.tokenHook, isSigner: false, isWritable: false },
     { pubkey: PROGRAM_IDS.irp, isSigner: false, isWritable: false },
@@ -1912,97 +1911,9 @@ async createAssetToken(params: CreateAssetParams): Promise<{ assetId: number; to
     { pubkey: PROGRAM_IDS.ctr, isSigner: false, isWritable: false },
     { pubkey: PROGRAM_IDS.compliance, isSigner: false, isWritable: false },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ...issuerEntryMetas,
+    ...moduleMetas,
   ];
-
-  const deployVariants: Array<{ name: string; keys: AccountMeta[] }> = [
-    {
-      // Latest rust struct in ERC-3436/programs/fracks-factory/src/lib.rs.
-      name: 'full_current',
-      keys: [
-        ...deployCommonPrefix,
-        { pubkey: tokenMint.publicKey, isSigner: false, isWritable: false },
-        { pubkey: extraAccountMetas, isSigner: false, isWritable: true },
-        ...deployProgramTailWithHook,
-        ...issuerEntryMetas,
-        ...moduleMetas,
-      ],
-    },
-    {
-      // Compatibility: deployed factory builds without hook_program in fixed accounts.
-      name: 'no_hook_program',
-      keys: [
-        ...deployCommonPrefix,
-        { pubkey: tokenMint.publicKey, isSigner: false, isWritable: false },
-        { pubkey: extraAccountMetas, isSigner: false, isWritable: true },
-        ...deployProgramTailNoHook,
-        { pubkey: PROGRAM_IDS.tokenHook, isSigner: false, isWritable: false },
-        ...issuerEntryMetas,
-        ...moduleMetas,
-      ],
-    },
-    {
-      // Compatibility: legacy deployments where token_program comes immediately after compliance_state.
-      name: 'legacy_minimal',
-      keys: [
-        ...deployCommonPrefix,
-        ...deployProgramTailNoHook,
-        { pubkey: tokenMint.publicKey, isSigner: false, isWritable: false },
-        { pubkey: extraAccountMetas, isSigner: false, isWritable: true },
-        { pubkey: PROGRAM_IDS.tokenHook, isSigner: false, isWritable: false },
-        ...issuerEntryMetas,
-        ...moduleMetas,
-      ],
-    },
-    {
-      // Compatibility: older factory deploy ABI where token_mint/hook/extra are NOT fixed accounts.
-      // In this layout, remaining accounts must start directly with trusted issuer entry PDAs.
-      name: 'legacy_no_mint_hook_extra',
-      keys: [
-        ...deployCommonPrefix,
-        ...deployProgramTailNoHook,
-        ...issuerEntryMetas,
-        ...moduleMetas,
-      ],
-    },
-  ];
-
-  const simulateDeploy = async (keys: AccountMeta[]) => {
-    const deployIx = buildDeployTokenSuiteInstruction(keys, deployArgs);
-    const latest = await connection.getLatestBlockhash('confirmed');
-    const message = new TransactionMessage({
-      payerKey: issuer,
-      recentBlockhash: latest.blockhash,
-      instructions: [deployIx],
-    }).compileToLegacyMessage();
-    const tx = new VersionedTransaction(message);
-    return connection.simulateTransaction(tx, {
-      commitment: 'confirmed',
-      sigVerify: false,
-      replaceRecentBlockhash: true,
-    });
-  };
-
-  const pickDeployKeys = async (): Promise<AccountMeta[]> => {
-    const failures: string[] = [];
-    for (const variant of deployVariants) {
-      try {
-        const simulated = await simulateDeploy(variant.keys);
-        if (!simulated.value.err) return variant.keys;
-        const logs = (simulated.value.logs || []).join('\n');
-        failures.push(`${variant.name}: ${JSON.stringify(simulated.value.err)} ${logs}`);
-      } catch (error: any) {
-        const message = String(error?.message || error);
-        failures.push(`${variant.name}: ${message}`);
-        if (!message.includes('429')) {
-          continue;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      }
-    }
-    throw new Error(
-      `Factory deploy account layout mismatch across all compatibility variants.\n${failures.join('\n\n')}`,
-    );
-  };
 
   const sendDeploy = async (keys: AccountMeta[]) => {
     const deployIx = buildDeployTokenSuiteInstruction(keys, deployArgs);
@@ -2019,7 +1930,6 @@ async createAssetToken(params: CreateAssetParams): Promise<{ assetId: number; to
     return deployTx;
   };
 
-  const deployKeys = await pickDeployKeys();
   const deployTx = await sendDeploy(deployKeys);
 
   const deploymentState = await fetchDeploymentAccount(issuer, saltBuf);

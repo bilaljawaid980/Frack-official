@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Idl, Program } from "@coral-xyz/anchor";
 import {
   useConnection,
   useWallet as useSolanaWallet,
 } from "@solana/wallet-adapter-react";
-import { PublicKey, SystemProgram } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import {
   CheckCircle2,
   Copy,
@@ -23,32 +22,28 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FID_PROGRAM_ID, getExplorerAccountUrl } from "@/lib/constants";
+import { getExplorerAccountUrl } from "@/lib/constants";
 import { createAnchorProvider } from "@/lib/anchor";
+import { fetchFactoryStateAccount } from "@/lib/solana";
 import { copyToClipboard } from "@/lib/utils";
-import FidIdl from "@/idl/fracks_fid.json";
+import { IdentityService } from "@/services/identity";
 import { toast } from "sonner";
 
-function deriveFid(wallet: PublicKey) {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from("fid"), wallet.toBuffer()],
-    FID_PROGRAM_ID,
-  )[0];
+const DEPLOYED_FID_PROGRAM_ID = new PublicKey(
+  "EoENMXgL9GZBEVfjhn5KU4SkfjZeyoTEdd8NHAcMQsEB",
+);
+
+async function getActiveFidProgramId() {
+  const factoryState = await fetchFactoryStateAccount().catch(() => null);
+  return factoryState?.fidProgramId ?? DEPLOYED_FID_PROGRAM_ID;
 }
 
-type CreateFidBuilder = {
-  accounts(accounts: {
-    owner: PublicKey;
-    fid: PublicKey;
-    systemProgram: PublicKey;
-  }): {
-    rpc(options: { commitment: "confirmed" }): Promise<string>;
-  };
-};
-
-type FidMethods = {
-  createFid(isActive: boolean, country: number): CreateFidBuilder;
-};
+function deriveFid(wallet: PublicKey, fidProgramId: PublicKey) {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("fid"), wallet.toBuffer()],
+    fidProgramId,
+  )[0];
+}
 
 export default function IssuerIdentityPage() {
   const { publicKey, signTransaction, signAllTransactions } = useSolanaWallet();
@@ -68,12 +63,15 @@ export default function IssuerIdentityPage() {
         return;
       }
 
-      const fid = deriveFid(publicKey);
-      setFidAddress(fid.toBase58());
+      setFidAddress("");
       setFidExists(null);
 
-      connection
-        .getAccountInfo(fid, "confirmed")
+      getActiveFidProgramId()
+        .then(async (fidProgramId) => {
+          const fid = deriveFid(publicKey, fidProgramId);
+          if (!cancelled) setFidAddress(fid.toBase58());
+          return connection.getAccountInfo(fid, "confirmed");
+        })
         .then((info) => {
           if (!cancelled) setFidExists(info !== null);
         })
@@ -101,19 +99,12 @@ export default function IssuerIdentityPage() {
         signTransaction,
         signAllTransactions,
       });
-      const fidProgram = new Program(FidIdl as unknown as Idl, provider);
-      const fidPda = deriveFid(publicKey);
-      const fidMethods = fidProgram.methods as unknown as FidMethods;
+      const service = new IdentityService(provider);
+      await service.ensureOwnFid(0, true);
+      const fidProgramId = await getActiveFidProgramId();
+      const fidPda = deriveFid(publicKey, fidProgramId);
 
-      await fidMethods
-        .createFid(true, 0)
-        .accounts({
-          owner: publicKey,
-          fid: fidPda,
-          systemProgram: SystemProgram.programId,
-        })
-        .rpc({ commitment: "confirmed" });
-
+      setFidAddress(fidPda.toBase58());
       setFidExists(true);
       toast.success("Issuer FID registered successfully");
     } catch (error: unknown) {

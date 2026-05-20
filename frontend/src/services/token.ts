@@ -5,14 +5,16 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { AnchorProvider, Idl, Program, BN } from "@coral-xyz/anchor";
-import { PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
+import {
+  PublicKey,
+  SystemProgram,
+  Transaction,
+  TransactionInstruction,
+} from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
   COMPLIANCE_PROGRAM_ID,
-  FID_PROGRAM_ID,
   IRS_PROGRAM_ID,
-  TIR_PROGRAM_ID,
-  CTR_PROGRAM_ID,
   MOD_COUNTRY_CAP,
   MOD_COUNTRY_RESTRICT,
   MOD_DAILY_LIMIT,
@@ -27,17 +29,28 @@ import {
   SEED_WALLET_IDENTITY,
 } from "@/lib/constants";
 import { formatTransactionError } from "@/lib/errors";
+import { fetchFactoryStateAccount, type FactoryStateAccount } from "@/lib/solana";
 import { IdentityService } from "@/services/identity";
 import type { TokenMintHealth, TokenState, OwnerState } from "@/types";
 import TokenIdl from "@/lib/solana/idl/fracks_token.json";
-import FidIdl from "@/lib/solana/idl/fracks_fid.json";
 import ComplianceIdl from "@/lib/solana/idl/fracks_compliance.json";
 import ModDailyLimitIdl from "@/idl/mod_daily_limit.json";
 
 type TokenProgram = Program<Idl>;
 type RemainingAccount = { pubkey: PublicKey; isSigner: boolean; isWritable: boolean };
+type SuiteProgramIds = {
+  token: PublicKey;
+  fid: PublicKey;
+  irs: PublicKey;
+  tir: PublicKey;
+  ctr: PublicKey;
+  compliance: PublicKey;
+};
 
 const CLAIM_ACCOUNT_DISCRIMINATOR = Buffer.from([113, 109, 47, 96, 242, 219, 61, 165]);
+const MINT_DISCRIMINATOR = Buffer.from([
+  51, 57, 225, 47, 182, 146, 137, 166,
+]);
 const MODULE_PROGRAM_IDS = new Set([
   MOD_MAX_INVESTORS.toBase58(),
   MOD_COUNTRY_RESTRICT.toBase58(),
@@ -49,40 +62,141 @@ const MODULE_PROGRAM_IDS = new Set([
   MOD_COUNTRY_CAP.toBase58(),
 ]);
 
+function encodeU64(value: bigint): Buffer {
+  const bytes = new Uint8Array(8);
+  new DataView(bytes.buffer).setBigUint64(0, value, true);
+  return Buffer.from(bytes);
+}
+
+function encodeMintArgs(
+  recipient: PublicKey,
+  amount: bigint,
+  toBalanceAfter: bigint,
+): Buffer {
+  return Buffer.concat([
+    MINT_DISCRIMINATOR,
+    recipient.toBuffer(),
+    encodeU64(amount),
+    encodeU64(toBalanceAfter),
+  ]);
+}
+
+function parseClaimAccount(data: Buffer): {
+  fid: PublicKey;
+  claimId: number;
+  topic: bigint;
+  issuerFid: PublicKey;
+  signerKey: PublicKey;
+  revoked: boolean;
+  expiresAt: bigint;
+} | null {
+  const minimumSize = 8 + 32 + 4 + 8 + 32 + 32 + 32 + 64 + 8 + 8 + 1 + 1;
+  if (data.length < minimumSize) return null;
+
+  let offset = 8;
+  const fid = new PublicKey(data.subarray(offset, offset + 32));
+  offset += 32;
+  const claimId = data.readUInt32LE(offset);
+  offset += 4;
+  const topic = data.readBigUInt64LE(offset);
+  offset += 8;
+  const issuerFid = new PublicKey(data.subarray(offset, offset + 32));
+  offset += 32;
+  offset += 32; // data_hash
+  const signerKey = new PublicKey(data.subarray(offset, offset + 32));
+  offset += 32;
+  offset += 64; // signature
+  offset += 8; // issued_at
+  const expiresAt = data.readBigInt64LE(offset);
+  offset += 8;
+  const revoked = data.readUInt8(offset) === 1;
+
+  return { fid, claimId, topic, issuerFid, signerKey, revoked, expiresAt };
+}
+
+const DEPLOYED_PROGRAM_IDS = {
+  token: new PublicKey("92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s"),
+  fid: new PublicKey("EoENMXgL9GZBEVfjhn5KU4SkfjZeyoTEdd8NHAcMQsEB"),
+  irs: new PublicKey("GSLErK4bEfF6ZozTWfjYikWfnBitMYrdbbgfXubJBgVJ"),
+  tir: new PublicKey("8KDYYPx74w6ZLKZgcvVWrj1mCv1gcULdTh2jbxcJwGMJ"),
+  ctr: new PublicKey("12rCF9fuSth8T3o6sfpfWdGyaDEQ1jNsxe1ZvKH7q2tS"),
+  compliance: new PublicKey("FhMXw2VmYYksR4VcjQCUNWYrhzba1rmfiU1EDvaTsxHj"),
+} as const;
+
 // ─── TokenService ─────────────────────────────────────────────────────────────
 
 export class TokenService {
   private program: TokenProgram;
   private provider: AnchorProvider;
+  private factoryStatePromise: Promise<FactoryStateAccount | null> | null = null;
 
   constructor(provider: AnchorProvider) {
     this.provider = provider;
     this.program = new Program(TokenIdl as unknown as Idl, provider);
   }
 
+  private async getFactoryState(): Promise<FactoryStateAccount | null> {
+    if (!this.factoryStatePromise) {
+      this.factoryStatePromise = fetchFactoryStateAccount().catch(() => null);
+    }
+    return this.factoryStatePromise;
+  }
+
+  private async getProgramIds(): Promise<SuiteProgramIds> {
+    const state = await this.getFactoryState();
+    return {
+      token: state?.tokenProgramId ?? DEPLOYED_PROGRAM_IDS.token,
+      fid: state?.fidProgramId ?? DEPLOYED_PROGRAM_IDS.fid,
+      irs: state?.irsProgramId ?? DEPLOYED_PROGRAM_IDS.irs,
+      tir: state?.tirProgramId ?? DEPLOYED_PROGRAM_IDS.tir,
+      ctr: state?.ctrProgramId ?? DEPLOYED_PROGRAM_IDS.ctr,
+      compliance: state?.complianceProgramId ?? DEPLOYED_PROGRAM_IDS.compliance,
+    };
+  }
+
+  private getTokenProgram(programId: PublicKey): TokenProgram {
+    return new Program(
+      {
+        ...(TokenIdl as unknown as Record<string, unknown>),
+        address: programId.toBase58(),
+      } as Idl,
+      this.provider,
+    );
+  }
+
   // ── PDA Derivation ───────────────────────────────────────────────────────────
 
   /** Seeds: ["token_state", mint] */
-  findTokenStatePda(mint: PublicKey): [PublicKey, number] {
+  findTokenStatePda(
+    mint: PublicKey,
+    programId: PublicKey = TOKEN_PROGRAM_ID,
+  ): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [SEED_TOKEN_STATE, mint.toBuffer()],
-      TOKEN_PROGRAM_ID
+      programId
     );
   }
 
   /** Seeds: ["owner", mint] */
-  findOwnerStatePda(mint: PublicKey): [PublicKey, number] {
+  findOwnerStatePda(
+    mint: PublicKey,
+    programId: PublicKey = TOKEN_PROGRAM_ID,
+  ): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [SEED_OWNER, mint.toBuffer()],
-      TOKEN_PROGRAM_ID
+      programId
     );
   }
 
   /** Seeds: ["agent", mint, agent] */
-  findAgentRolePda(mint: PublicKey, agent: PublicKey): [PublicKey, number] {
+  findAgentRolePda(
+    mint: PublicKey,
+    agent: PublicKey,
+    programId: PublicKey = TOKEN_PROGRAM_ID,
+  ): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [SEED_AGENT, mint.toBuffer(), agent.toBuffer()],
-      TOKEN_PROGRAM_ID
+      programId
     );
   }
 
@@ -91,18 +205,24 @@ export class TokenService {
    * Note: The on-chain IDL seed is "frozen" (6 bytes), matching the bytes
    * [102, 114, 111, 122, 101, 110] in fracks_token.json.
    */
-  findFrozenWalletPda(mint: PublicKey, wallet: PublicKey): [PublicKey, number] {
+  findFrozenWalletPda(
+    mint: PublicKey,
+    wallet: PublicKey,
+    programId: PublicKey = TOKEN_PROGRAM_ID,
+  ): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [Buffer.from("frozen"), mint.toBuffer(), wallet.toBuffer()],
-      TOKEN_PROGRAM_ID
+      programId
     );
   }
 
   // ── Read Methods ─────────────────────────────────────────────────────────────
 
   async fetchTokenState(mint: PublicKey): Promise<TokenState> {
-    const [tokenStatePda] = this.findTokenStatePda(mint);
-    const raw = await (this.program.account as any).tokenState.fetch(tokenStatePda);
+    const ids = await this.getProgramIds();
+    const tokenProgram = this.getTokenProgram(ids.token);
+    const [tokenStatePda] = this.findTokenStatePda(mint, ids.token);
+    const raw = await (tokenProgram.account as any).tokenState.fetch(tokenStatePda);
     return {
       tokenMint: raw.tokenMint.toBase58(),
       identityRegistry: raw.identityRegistry.toBase58(),
@@ -117,8 +237,10 @@ export class TokenService {
   }
 
   async fetchOwnerState(mint: PublicKey): Promise<OwnerState> {
-    const [ownerStatePda] = this.findOwnerStatePda(mint);
-    const raw = await (this.program.account as any).ownerState.fetch(ownerStatePda);
+    const ids = await this.getProgramIds();
+    const tokenProgram = this.getTokenProgram(ids.token);
+    const [ownerStatePda] = this.findOwnerStatePda(mint, ids.token);
+    const raw = await (tokenProgram.account as any).ownerState.fetch(ownerStatePda);
     return {
       owner: raw.owner.toBase58(),
       tokenMint: raw.tokenMint.toBase58(),
@@ -293,10 +415,11 @@ export class TokenService {
     recipient: PublicKey,
     amount: bigint
   ): Promise<string> {
+    const ids = await this.getProgramIds();
     const authority = this.provider.wallet.publicKey;
-    const [tokenState] = this.findTokenStatePda(mintPubkey);
-    const [ownerState] = this.findOwnerStatePda(mintPubkey);
-    const [agentRole] = this.findAgentRolePda(mintPubkey, authority);
+    const [tokenState] = this.findTokenStatePda(mintPubkey, ids.token);
+    const [ownerState] = this.findOwnerStatePda(mintPubkey, ids.token);
+    const [agentRole] = this.findAgentRolePda(mintPubkey, authority, ids.token);
 
     // Fetch token state to resolve linked accounts
     const ts = await this.fetchTokenState(mintPubkey);
@@ -371,7 +494,11 @@ export class TokenService {
     }
 
     // Derive frozen wallet PDA for recipient (may not exist — passes as placeholder)
-    const [toFrozen] = this.findFrozenWalletPda(mintPubkey, recipient);
+    const [toFrozen] = this.findFrozenWalletPda(
+      mintPubkey,
+      recipient,
+      ids.token,
+    );
 
     // Fetch current balance for to_balance_after calculation
     const toBalanceBefore = destinationAccount.amount;
@@ -382,17 +509,17 @@ export class TokenService {
     const [irsState] = await this._deriveIrsStateFromIrp(irpStatePubkey);
     const [tirState] = PublicKey.findProgramAddressSync(
       [Buffer.from("tir_state"), mintPubkey.toBuffer()],
-      TIR_PROGRAM_ID
+      ids.tir
     );
     const [ctrState] = PublicKey.findProgramAddressSync(
       [Buffer.from("ctr_state"), mintPubkey.toBuffer()],
-      CTR_PROGRAM_ID
+      ids.ctr
     );
 
     // Derive wallet_identity PDA for recipient
     const [walletIdentity] = PublicKey.findProgramAddressSync(
       [SEED_WALLET_IDENTITY, irsState.toBuffer(), recipient.toBuffer()],
-      IRS_PROGRAM_ID
+      ids.irs
     );
     const identityService = new IdentityService(this.provider);
     let recipientIdentity = await identityService.fetchWalletIdentity(
@@ -402,50 +529,93 @@ export class TokenService {
     if (!recipientIdentity) {
       const recipientFid = await identityService.fetchFid(recipient);
       if (!recipientFid) {
-        throw new Error("Investor must register FID before tokens can be minted.");
+        throw new Error(
+          "Investor must register a non-issuer FID with the active FID program before tokens can be minted.",
+        );
       }
-      const [recipientFidPda] = identityService.findFidPda(recipient);
-      await identityService.registerIdentity(
-        mintPubkey,
-        recipient,
-        recipientFidPda,
-        recipientFid.country,
+      const [recipientFidPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("fid"), recipient.toBuffer()],
+        ids.fid,
       );
+      const recipientFidInfo = await this.provider.connection.getAccountInfo(
+        recipientFidPda,
+        "confirmed",
+      );
+      if (!recipientFidInfo) {
+        throw new Error(
+          `Investor FID account ${recipientFidPda.toBase58()} is missing on-chain. Ask the investor to register FID again from the investor dashboard.`,
+        );
+      }
+      try {
+        await identityService.registerIdentity(
+          mintPubkey,
+          recipient,
+          recipientFidPda,
+          recipientFid.country,
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.includes("WalletAlreadyRegistered")) {
+          throw error;
+        }
+      }
       recipientIdentity = await identityService.fetchWalletIdentity(
         mintPubkey,
         recipient,
       );
+      if (!recipientIdentity) {
+        throw new Error(
+          "Investor wallet identity exists on-chain but could not be decoded by the frontend. Refresh the app and try again.",
+        );
+      }
     }
     if (!recipientIdentity?.isActive) {
       await identityService.setIdentityActivation(mintPubkey, recipient, true);
     }
 
     const verificationAndComplianceAccounts =
-      await this.getMintRemainingAccounts(recipient, mintPubkey, tirState, walletIdentity);
-    await this.prepareDailyLimitUsageAccounts(mintPubkey, recipient);
+      await this.getMintRemainingAccounts(
+        recipient,
+        mintPubkey,
+        tirState,
+        walletIdentity,
+        ids,
+      );
+    await this.prepareDailyLimitUsageAccounts(mintPubkey, recipient, ids);
 
     try {
-      const sig = await this.program.methods
-        .mint(recipient, new BN(amount.toString()), new BN(toBalanceAfter.toString()))
-        .accounts({
-          authority,
-          tokenState,
-          ownerState,
-          agentRole,
-          irpState: irpStatePubkey,
-          irsState,
-          tirState,
-          ctrState,
-          complianceState: new PublicKey(ts.compliance),
-          complianceProgram: COMPLIANCE_PROGRAM_ID,
-          walletIdentity,
-          toFrozen,
-          tokenMintAccount: mintPubkey,
-          destinationTokenAccount,
-          tokenProgram: new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"),
-        })
-        .remainingAccounts(verificationAndComplianceAccounts)
-        .rpc({ commitment: "confirmed" });
+      const mintIx = new TransactionInstruction({
+        programId: ids.token,
+        keys: [
+          { pubkey: authority, isSigner: true, isWritable: true },
+          { pubkey: tokenState, isSigner: false, isWritable: false },
+          { pubkey: ownerState, isSigner: false, isWritable: false },
+          { pubkey: agentRole, isSigner: false, isWritable: false },
+          { pubkey: irpStatePubkey, isSigner: false, isWritable: false },
+          { pubkey: irsState, isSigner: false, isWritable: false },
+          { pubkey: tirState, isSigner: false, isWritable: false },
+          { pubkey: ctrState, isSigner: false, isWritable: false },
+          { pubkey: new PublicKey(ts.compliance), isSigner: false, isWritable: false },
+          { pubkey: ids.compliance, isSigner: false, isWritable: false },
+          { pubkey: walletIdentity, isSigner: false, isWritable: false },
+          { pubkey: toFrozen, isSigner: false, isWritable: false },
+          { pubkey: mintPubkey, isSigner: false, isWritable: true },
+          { pubkey: destinationTokenAccount, isSigner: false, isWritable: true },
+          {
+            pubkey: new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"),
+            isSigner: false,
+            isWritable: false,
+          },
+          ...verificationAndComplianceAccounts,
+        ],
+        data: encodeMintArgs(recipient, amount, toBalanceAfter),
+      });
+
+      const sig = await this.provider.sendAndConfirm(
+        new Transaction().add(mintIx),
+        [],
+        { commitment: "confirmed" },
+      );
       return sig;
     } catch (err) {
       throw new Error(formatTransactionError(err));
@@ -456,7 +626,8 @@ export class TokenService {
     recipient: PublicKey,
     mintPubkey: PublicKey,
     tirState: PublicKey,
-    walletIdentity: PublicKey
+    walletIdentity: PublicKey,
+    ids: SuiteProgramIds,
   ): Promise<RemainingAccount[]> {
     const accounts: RemainingAccount[] = [];
     const seen = new Set<string>();
@@ -467,13 +638,12 @@ export class TokenService {
       accounts.push({ pubkey, isSigner: false, isWritable });
     };
 
-    const fidProgram = new Program(FidIdl as unknown as Idl, this.provider);
     const [targetFid] = PublicKey.findProgramAddressSync(
       [Buffer.from("fid"), recipient.toBuffer()],
-      FID_PROGRAM_ID
+      ids.fid
     );
 
-    const claimAccounts = await this.provider.connection.getProgramAccounts(FID_PROGRAM_ID, {
+    const claimAccounts = await this.provider.connection.getProgramAccounts(ids.fid, {
       commitment: "confirmed",
       filters: [
         {
@@ -489,11 +659,12 @@ export class TokenService {
 
     for (const { pubkey, account } of claimAccounts) {
       try {
-        const claim = fidProgram.coder.accounts.decode("claimAccount", account.data);
-        const issuerFid = claim.issuerFid as PublicKey;
+        const claim = parseClaimAccount(account.data);
+        if (!claim || claim.revoked) continue;
+        const issuerFid = claim.issuerFid;
         const [issuerEntry] = PublicKey.findProgramAddressSync(
           [Buffer.from("issuer_entry"), tirState.toBuffer(), issuerFid.toBuffer()],
-          TIR_PROGRAM_ID
+          ids.tir
         );
         push(pubkey);
         push(issuerEntry);
@@ -506,9 +677,15 @@ export class TokenService {
     try {
       const [complianceStatePda] = PublicKey.findProgramAddressSync(
         [Buffer.from("compliance_state"), mintPubkey.toBuffer()],
-        COMPLIANCE_PROGRAM_ID
+        ids.compliance
       );
-      const complianceProgram = new Program(ComplianceIdl as unknown as Idl, this.provider);
+      const complianceProgram = new Program(
+        {
+          ...(ComplianceIdl as unknown as Record<string, unknown>),
+          address: ids.compliance.toBase58(),
+        } as Idl,
+        this.provider,
+      );
       const compliance = await (complianceProgram.account as any).complianceState.fetch(
         complianceStatePda
       );
@@ -566,13 +743,20 @@ export class TokenService {
 
   private async prepareDailyLimitUsageAccounts(
     mintPubkey: PublicKey,
-    wallet: PublicKey
+    wallet: PublicKey,
+    ids: SuiteProgramIds,
   ): Promise<void> {
     const [complianceStatePda] = PublicKey.findProgramAddressSync(
       [Buffer.from("compliance_state"), mintPubkey.toBuffer()],
-      COMPLIANCE_PROGRAM_ID
+      ids.compliance
     );
-    const complianceProgram = new Program(ComplianceIdl as unknown as Idl, this.provider);
+    const complianceProgram = new Program(
+      {
+        ...(ComplianceIdl as unknown as Record<string, unknown>),
+        address: ids.compliance.toBase58(),
+      } as Idl,
+      this.provider,
+    );
     const dailyProgram = new Program(ModDailyLimitIdl as unknown as Idl, this.provider);
     const compliance = await (complianceProgram.account as any).complianceState.fetch(
       complianceStatePda

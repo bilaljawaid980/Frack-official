@@ -180,6 +180,14 @@ async function fetchOnChainProviders(
       const fidInfo = await connection.getAccountInfo(parsed.issuerFid, "confirmed");
       const walletAddress = fidInfo ? parseFidOwner(fidInfo.data) : null;
       if (!walletAddress) return null;
+      const canonicalIssuerFid = deriveFidPda(
+        new PublicKey(walletAddress),
+        deps.fidProgramId,
+      );
+
+      // The token program verifies issuer FIDs against the canonical active FID
+      // PDA. Older stale entries may deserialize but are ignored on-chain.
+      if (!canonicalIssuerFid.equals(parsed.issuerFid)) return null;
 
       return {
         walletAddress,

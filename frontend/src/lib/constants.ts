@@ -44,31 +44,31 @@ export const TOKEN_2022_PROGRAM_ID = new PublicKey(
   "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
 );
 export const FACTORY_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_FACTORY_PROGRAM_ID ?? "3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M"
+  process.env.NEXT_PUBLIC_FACTORY_PROGRAM_ID ?? "6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe"
 );
 export const TOKEN_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_TOKEN_PROGRAM_ID ?? "Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn"
+  process.env.NEXT_PUBLIC_TOKEN_PROGRAM_ID ?? "92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s"
 );
 export const TOKEN_HOOK_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_TOKEN_HOOK_PROGRAM_ID ?? "CQwdsA97gSiPMUzNXjS22AUu6HmvzMK2XZVqhswYEHLi"
+  process.env.NEXT_PUBLIC_TOKEN_HOOK_PROGRAM_ID ?? "4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m"
 );
 export const COMPLIANCE_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_COMPLIANCE_PROGRAM_ID ?? "9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d"
+  process.env.NEXT_PUBLIC_COMPLIANCE_PROGRAM_ID ?? "FhMXw2VmYYksR4VcjQCUNWYrhzba1rmfiU1EDvaTsxHj"
 );
 export const IRP_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_IRP_PROGRAM_ID ?? "6dDKwtRbGkHJhU9LztpDkBC3fUdM46WeKJdrASFikce6"
+  process.env.NEXT_PUBLIC_IRP_PROGRAM_ID ?? "C8jtErJYtuu7pSZczfSm1JvDmv254Nmmw1KLX6rBdY8o"
 );
 export const IRS_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_IRS_PROGRAM_ID ?? "CsrdR7QK3ma6hxU46Cp4DZHAdbGPWPiwmGjhKsR9VzdS"
+  process.env.NEXT_PUBLIC_IRS_PROGRAM_ID ?? "GSLErK4bEfF6ZozTWfjYikWfnBitMYrdbbgfXubJBgVJ"
 );
 export const FID_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_FID_PROGRAM_ID ?? "7Y6WJtDmRMcRYgENfKATsGnQTQJ2wAQfF3LhoBt3KbBH"
+  process.env.NEXT_PUBLIC_FID_PROGRAM_ID ?? "EoENMXgL9GZBEVfjhn5KU4SkfjZeyoTEdd8NHAcMQsEB"
 );
 export const TIR_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_TIR_PROGRAM_ID ?? "Am5W7oEe8NCU4jdLP8qyUT3gjUPCDsvTSxGhdCQp1ETS"
+  process.env.NEXT_PUBLIC_TIR_PROGRAM_ID ?? "8KDYYPx74w6ZLKZgcvVWrj1mCv1gcULdTh2jbxcJwGMJ"
 );
 export const CTR_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_CTR_PROGRAM_ID ?? "B15EFQKwnfbNHXHhPVvVcw18PaBeTDsRLNRno3QS8Yna"
+  process.env.NEXT_PUBLIC_CTR_PROGRAM_ID ?? "12rCF9fuSth8T3o6sfpfWdGyaDEQ1jNsxe1ZvKH7q2tS"
 );
 
 // ─── Governance / Deployment PDAs ────────────────────────────────────────────
