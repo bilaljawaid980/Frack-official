@@ -423,8 +423,12 @@ function parseOwnerState(account: AccountInfo<Buffer>) {
 }
 
 function deriveOwnerStatePDA(tokenMint: PublicKey): [PublicKey, number] {
+  const tokenProgram = new PublicKey(
+    process.env.FRACKS_TOKEN_PROGRAM || "92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s",
+  );
+
   return PublicKey.findProgramAddressSync(
     [Buffer.from("owner"), tokenMint.toBuffer()],
-    new PublicKey("Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn"),
+    tokenProgram,
   );
 }

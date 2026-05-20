@@ -1,6 +1,6 @@
 # Contract Issues To Fix / Confirm
 
-This document records only contract-level issues found while integrating the Solana RWA contracts.
+This document records contract-level issues found while integrating the Solana RWA contracts with the frontend. The frontend/backend can work around some of these, but the clean solution requires contract changes or a confirmed deployed IDL.
 
 ## 1. Factory Uses One `issuer` Argument For Too Many Ownership Roles
 
@@ -84,11 +84,33 @@ pub compliance_owner: Pubkey,
 
 This gives the platform explicit governance control.
 
+**Frontend workaround if contract is not changed**
+
+Deploy with:
+
+```ts
+args.issuer = platformAdmin
+```
+
+Then immediately call only:
+
+```rust
+fracks_token::transfer_ownership(issuerWallet)
+```
+
+Tradeoff: `TokenDeployment.issuer` will equal the platform admin, not the business issuer. The backend `Asset.issuerWallet` must be treated as the source of truth for business issuer.
+
 ## 2. Token Creation Does Not Accept Mint Cap / Total Token Count / Change Mint Cap
 
 **Current behavior**
 
-The factory deployment args do not include mint cap or total token count:
+The frontend issuance form asks for:
+
+- `totalSupply`
+- token economics
+- initial price
+
+But the local factory args do not include mint cap or total token count:
 
 ```rust
 pub struct DeployTokenSuiteArgs {
@@ -153,9 +175,16 @@ Rules should be explicit:
 - If `can_change_mint_cap == false`, updates must fail.
 - New cap must not be lower than already minted supply.
 
-## 3. Deployed Factory Source / IDL Mismatch
+## 3. Deployed Factory IDL / Local IDL Mismatch
 
-The deployed factory behavior appears to include fields/accounts that are not represented in the local factory source shown here:
+We previously hit:
+
+```text
+InstructionDidNotDeserialize (102)
+Instruction arguments are invalid or the IDL is mismatched with the on-chain program.
+```
+
+The deployed factory at the time required fields/accounts that were not represented by the frontend/local IDL:
 
 - `offering_terms` PDA account
 - `price_per_token`
@@ -164,25 +193,47 @@ The deployed factory behavior appears to include fields/accounts that are not re
 
 The local `DeployTokenSuiteArgs` shown above does not contain these fields.
 
-**Required contract solution**
+**Required contract/devops solution**
 
-The repository contract source and generated IDL must match the deployed program exactly.
+Confirm the source code and IDL that exactly match the deployed factory program ID.
 
-If offering terms are intended, add them to the contract source:
+The frontend must not guess ABI variants. The contracts team should provide:
 
-```rust
-pub struct DeployTokenSuiteArgs {
-    ...
-    pub price_per_token: u64,
-    pub price_decimals: u8,
-    pub payment_mint: Option<Pubkey>,
-    pub salt: [u8; 32],
-}
+- Deployed program IDs
+- Matching IDL JSON files
+- Factory state layout
+- Required account order
+- Required deploy args order
+
+If offering terms are intended, add them to the local contract source and keep the IDL in sync.
+
+## 4. Factory Dependency Program IDs Must Come From On-Chain Factory State
+
+We saw failures like:
+
+```text
+An account is owned by an unexpected program.
 ```
 
-And include the required `offering_terms` account in the factory account context.
+Root cause: the frontend was deriving token/IRP/IRS/TIR/CTR/compliance PDAs using stale `.env` program IDs, while the selected factory state pointed to different dependency program IDs.
 
-## 4. Trusted KYC/AML Providers Are Token-Scoped, Not Global
+**Required contract/devops solution**
+
+The factory should remain the source of truth for dependency program IDs. The frontend should derive deployment accounts from:
+
+```rust
+factory_state.token_program_id
+factory_state.fid_program_id
+factory_state.irp_program_id
+factory_state.irs_program_id
+factory_state.tir_program_id
+factory_state.ctr_program_id
+factory_state.compliance_program_id
+```
+
+If dependency IDs can be changed, the contract should emit an event when they are updated.
+
+## 5. Trusted KYC/AML Providers Are Token-Scoped, Not Global
 
 `fracks-tir` has:
 
@@ -210,16 +261,11 @@ So trust is scoped to a token's TIR, not global.
 - Provider must have FID with `is_issuer = true`
 - Provider must be trusted in that token's TIR for the required topic
 
-**Potential contract enhancement**
+**Potential platform enhancement**
 
-If global trusted providers are required on-chain, add a separate global provider registry contract or extend TIR/IRP verification to support both:
+If the platform wants global providers, this should be an off-chain directory or a new global provider registry contract. Even with a global directory, each token still needs a token-scoped TIR entry unless the TIR/IRP verification logic is changed.
 
-- global trusted providers
-- token-specific trusted providers
-
-Until then, every token needs its own TIR issuer entry.
-
-## 5. Duplicate Claim Topic Issuer Behavior Needs An Update Path
+## 6. Duplicate Claim Topic Issuer Error Is Expected But Needs Better Flow Support
 
 We hit:
 
@@ -234,34 +280,54 @@ This is expected from `fracks-fid`: it prevents duplicate active claims for the 
 issuer FID + topic + investor FID
 ```
 
-**Potential contract enhancement**
+**Required behavior**
 
-Consider adding an explicit claim replacement/update instruction if the same issuer needs to refresh claim data or expiry:
+Before a provider issues KYC/AML claim:
 
-```rust
-pub fn replace_claim(
-    ctx: Context<ReplaceClaim>,
-    topic: u64,
-    data_hash: [u8; 32],
-    signature: [u8; 64],
-    expires_at: i64,
-) -> Result<()>
+- Check if the investor already has an active claim from that same provider FID for the same topic.
+- If yes, do not call `add_claim`; forward the purchase request to the next workflow step.
+- If no, call `add_claim`.
+
+This is frontend/backend workflow, but the contract behavior is correct.
+
+## 7. Investor Must Have FID And Wallet Identity Before Claims/Minting
+
+We hit mint/claim errors that were initially misleading in the frontend, including:
+
+```text
+The token account is not a valid Token-2022 account.
 ```
 
-Alternative: add an `update_claim` instruction that mutates the active claim for the same issuer/topic/investor tuple.
+The real issue in one flow was that the investor did not have the required identity/wallet identity for the token's IRS.
 
-## 6. Missing Contract-Level Error Clarity For Identity/Wallet Verification
+**Required behavior**
 
-Some failed mint/transfer flows surface generic or misleading errors when the investor does not have the required FID or active wallet identity in the token's IRS.
+Investor purchase flow should block or pause before provider review if:
 
-**Required contract improvement**
+- investor has no FID
+- investor wallet is not registered/active in the token's IRS
 
-Return explicit errors for these cases:
+Recommended status:
 
-- Missing investor FID
-- Investor FID is issuer-type when investor-type is required
-- Missing wallet identity account in IRS
-- Wallet identity exists but is inactive
-- Required trusted claim topic is missing
+```text
+ACTION_REQUIRED_INVESTOR_IDENTITY
+```
 
-This makes integration safer and avoids interpreting unrelated downstream errors.
+Then resume KYC/AML review after identity registration.
+
+## 8. RPC Rate Limiting Broke Indexer
+
+We hit:
+
+```text
+429 Too Many Requests
+```
+
+This is not a contract bug, but it affects contract indexing.
+
+**Required backend/indexer behavior**
+
+- Support multiple RPC URLs.
+- Rotate/fallback on 429.
+- Backoff instead of crashing the indexer.
+- Avoid fetching the same accounts repeatedly in tight loops.
