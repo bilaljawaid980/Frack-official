@@ -46,7 +46,8 @@ import type {
   TokenDeployment,
   DeployTokenSuiteArgs,
 } from "@/types";
-import FactoryIdl from "@/lib/solana/idl/fracks_factory.json";
+import FactoryIdl from "@/idl/fracks_factory.json";
+import TokenIdl from "@/idl/fracks_token.json";
 
 // IDL type alias
 type FactoryProgram = Program<Idl>;
@@ -90,18 +91,7 @@ type FactoryProgramMethods = {
   setHookAuthority(...args: unknown[]): InstructionBuilder;
 };
 
-function getDeployAccountAddress(accountName: string, fallback: PublicKey): PublicKey {
-  const instruction = (FactoryIdl as {
-    instructions?: Array<{
-      name: string;
-      accounts?: Array<{ name: string; address?: string }>;
-    }>;
-  }).instructions?.find((item) => item.name === "deploy_token_suite");
-  const address = instruction?.accounts?.find(
-    (account) => account.name === accountName,
-  )?.address;
-  return new PublicKey(address || fallback.toBase58());
-}
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -416,7 +406,12 @@ export class FactoryService {
         "Shared IRS deployment is disabled in the direct admin-to-issuer flow",
       );
     }
-    const issuer = new PublicKey(args.issuer);
+    const targetIssuer = new PublicKey(args.issuer);
+    // The deployed factory transfers registry ownership based on args.issuer.
+    // fracks-irp verification requires IRP owner == IRS owner, so the factory
+    // deployment issuer must remain the platform admin. Token operational
+    // ownership is transferred to the business issuer after the suite is valid.
+    const suiteOwner = admin;
     const tokenMint = new PublicKey(args.tokenMint);
 
     // ── Derive PDAs ────────────────────────────────────────────────────────────
@@ -429,10 +424,7 @@ export class FactoryService {
     const tirProgramId = new PublicKey(factory.tirProgramId);
     const ctrProgramId = new PublicKey(factory.ctrProgramId);
     const complianceProgramId = new PublicKey(factory.complianceProgramId);
-    const hookProgramId = getDeployAccountAddress(
-      "hook_program",
-      TOKEN_HOOK_PROGRAM_ID,
-    );
+    const hookProgramId = TOKEN_HOOK_PROGRAM_ID;
     const isEnvAdmin =
       !!ROLE_WALLETS.platformOwner &&
       admin.toBase58().toLowerCase() ===
@@ -444,11 +436,7 @@ export class FactoryService {
       );
     }
 
-    const [deploymentPda] = this.getDeploymentPda(issuer, args.salt);
-    const [offeringTerms] = PublicKey.findProgramAddressSync(
-      [Buffer.from("offering_terms"), tokenMint.toBuffer()],
-      FACTORY_PROGRAM_ID,
-    );
+    const [deploymentPda] = this.getDeploymentPda(suiteOwner, args.salt);
 
     const [tokenState] = PublicKey.findProgramAddressSync(
       [Buffer.from("token_state"), tokenMint.toBuffer()],
@@ -524,7 +512,7 @@ export class FactoryService {
     }));
 
     const ixArgs = {
-      issuer,
+      issuer: suiteOwner,
       tokenMint,
       tokenName: args.tokenName,
       tokenSymbol: args.tokenSymbol,
@@ -534,9 +522,6 @@ export class FactoryService {
       trustedIssuers,
       complianceModules: moduleStatePdas, // deployed factory expects state PDAs, not program IDs
       sharedIrs: args.sharedIrs ? new PublicKey(args.sharedIrs) : null,
-      pricePerToken: new BN((args.pricePerToken ?? 0n).toString()),
-      priceDecimals: args.priceDecimals ?? args.decimals,
-      paymentMint: args.paymentMint ? new PublicKey(args.paymentMint) : null,
       salt: Array.from(args.salt),
     };
 
@@ -557,7 +542,6 @@ export class FactoryService {
           FACTORY_PROGRAM_ID.toBase58(),
           factoryState.toBase58(),
           deploymentPda.toBase58(),
-          offeringTerms.toBase58(),
           tokenProgramId.toBase58(),
           irpProgramId.toBase58(),
           irsProgramId.toBase58(),
@@ -568,7 +552,8 @@ export class FactoryService {
           SPL_TOKEN_2022.toBase58(),
           SystemProgram.programId.toBase58(),
           admin.toBase58(),
-          issuer.toBase58(),
+          suiteOwner.toBase58(),
+          targetIssuer.toBase58(),
           tokenMint.toBase58(),
           tokenState.toBase58(),
           ownerState.toBase58(),
@@ -662,6 +647,17 @@ export class FactoryService {
       }
 
       // ── Step 3: Build deploy instruction ──────────────────────────────────────
+      console.info("[FRACKS Deploy] --- PDA and Seed Diagnostics ---");
+      console.info("[FRACKS Deploy] Factory Program ID:", FACTORY_PROGRAM_ID.toBase58());
+      console.info("[FRACKS Deploy] Registry Suite Owner:", suiteOwner.toBase58());
+      console.info("[FRACKS Deploy] Target Token Owner:", targetIssuer.toBase58());
+      console.info("[FRACKS Deploy] Salt (bytes):", Array.from(args.salt));
+      console.info("[FRACKS Deploy] Salt (hex):", Buffer.from(args.salt).toString("hex"));
+      console.info("[FRACKS Deploy] Derived Deployment PDA:", deploymentPda.toBase58());
+      console.info("[FRACKS Deploy] Expected deployment seeds: [\"deployment\", registrySuiteOwner, salt]");
+      console.info("[FRACKS Deploy] Token Mint Account:", tokenMint.toBase58());
+      console.info("[FRACKS Deploy] Extra Account Metas:", extraAccountMetas.toBase58());
+      console.info("[FRACKS Deploy] Factory State:", factoryState.toBase58());
       const deployIx = await (
         this.program.methods as unknown as FactoryProgramMethods
       )
@@ -669,9 +665,9 @@ export class FactoryService {
         .accounts({
           admin,
           factoryState,
-          issuer,
+          issuer: suiteOwner,
           deployment: deploymentPda,
-          offeringTerms,
+
           tokenState,
           ownerState,
           irsState,
@@ -763,10 +759,92 @@ export class FactoryService {
         );
       }
 
+      const invariant = await this.assertRegistryOwnerInvariant({
+        irpState,
+        irsState,
+        tokenMint,
+      });
+      console.info("[FRACKS Deploy] Registry owner invariant:", {
+        tokenMint: tokenMint.toBase58(),
+        irpState: irpState.toBase58(),
+        irpOwner: invariant.irpOwner.toBase58(),
+        irsState: irsState.toBase58(),
+        irsOwner: invariant.irsOwner.toBase58(),
+        aligned: invariant.irpOwner.equals(invariant.irsOwner),
+      });
+
+      if (!targetIssuer.equals(suiteOwner)) {
+        const transferSig = await this.transferTokenOwnershipToIssuer(
+          tokenProgramId,
+          tokenMint,
+          tokenState,
+          ownerState,
+          targetIssuer,
+        );
+        console.info("[FRACKS Deploy] Token ownership transferred to issuer:", {
+          tokenMint: tokenMint.toBase58(),
+          targetIssuer: targetIssuer.toBase58(),
+          signature: transferSig,
+        });
+      }
+
       return sig;
     } catch (err) {
       throw new Error(formatTransactionError(err));
     }
+  }
+
+  private async assertRegistryOwnerInvariant(input: {
+    irpState: PublicKey;
+    irsState: PublicKey;
+    tokenMint: PublicKey;
+  }): Promise<{ irpOwner: PublicKey; irsOwner: PublicKey }> {
+    const [irpInfo, irsInfo] = await this.provider.connection.getMultipleAccountsInfo(
+      [input.irpState, input.irsState],
+      "confirmed",
+    );
+    if (!irpInfo || irpInfo.data.length < 72) {
+      throw new Error(
+        `Deployment invariant failed: IRP state ${input.irpState.toBase58()} is missing or malformed for token ${input.tokenMint.toBase58()}.`,
+      );
+    }
+    if (!irsInfo || irsInfo.data.length < 40) {
+      throw new Error(
+        `Deployment invariant failed: IRS state ${input.irsState.toBase58()} is missing or malformed for token ${input.tokenMint.toBase58()}.`,
+      );
+    }
+    const irpOwner = new PublicKey(irpInfo.data.subarray(40, 72));
+    const irsOwner = new PublicKey(irsInfo.data.subarray(8, 40));
+    if (!irpOwner.equals(irsOwner)) {
+      throw new Error(
+        `Deployment invariant failed: IRP owner ${irpOwner.toBase58()} does not match IRS owner ${irsOwner.toBase58()} for token ${input.tokenMint.toBase58()}. Do not use this token suite; redeploy after fixing registry ownership.`,
+      );
+    }
+    return { irpOwner, irsOwner };
+  }
+
+  private async transferTokenOwnershipToIssuer(
+    tokenProgramId: PublicKey,
+    tokenMint: PublicKey,
+    tokenState: PublicKey,
+    ownerState: PublicKey,
+    targetIssuer: PublicKey,
+  ): Promise<string> {
+    const tokenProgram = new Program(
+      {
+        ...(TokenIdl as unknown as Record<string, unknown>),
+        address: tokenProgramId.toBase58(),
+      } as Idl,
+      this.provider,
+    );
+    return (tokenProgram.methods as any)
+      .transferOwnership(targetIssuer)
+      .accounts({
+        owner: this.provider.wallet.publicKey,
+        tokenState,
+        ownerState,
+      })
+      .rpc({ commitment: "confirmed" });
   }
 
   // ── Private Helpers ───────────────────────────────────────────────────────────

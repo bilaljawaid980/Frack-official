@@ -20,7 +20,10 @@ function TokenDetailsContent() {
   const asset = useMemo(() => {
     if (!requestedAssetId && !requestedSymbol) return null;
     return assets.find(
-      (a) => a.id === requestedAssetId || a.symbol === requestedSymbol,
+      (a) =>
+        a.id === requestedAssetId ||
+        String(a.factoryAssetId ?? "") === requestedAssetId ||
+        a.symbol === requestedSymbol,
     );
   }, [assets, requestedAssetId, requestedSymbol]);
 

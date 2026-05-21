@@ -25,26 +25,6 @@
           "signer": true
         },
         {
-          "name": "issuer_fid",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  102,
-                  105,
-                  100
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "issuer_fid.owner",
-                "account": "FidAccount"
-              }
-            ]
-          }
-        },
-        {
           "name": "target_fid",
           "writable": true
         },
@@ -129,6 +109,10 @@
         {
           "name": "topic",
           "type": "u64"
+        },
+        {
+          "name": "issuer_fid",
+          "type": "pubkey"
         },
         {
           "name": "data_hash",

@@ -69,7 +69,11 @@ function RequestFormContent() {
 
   const asset = useMemo(() => {
     if (!requestedAssetId) return null;
-    return assets.find((a) => a.id === requestedAssetId);
+    return assets.find(
+      (a) =>
+        a.id === requestedAssetId ||
+        String(a.factoryAssetId ?? "") === requestedAssetId,
+    );
   }, [assets, requestedAssetId]);
 
   const [submitting, setSubmitting] = useState(false);

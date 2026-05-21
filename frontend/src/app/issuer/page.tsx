@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useWallet } from "@/hooks/use-wallet";
+import { useConnection, useWallet as useSolanaWallet } from "@solana/wallet-adapter-react";
+import { createAnchorProvider } from "@/lib/anchor";
+import { IdentityService } from "@/services/identity";
 import { useMintTokens } from "@/hooks/useTokenActions";
 import {
   Card,
@@ -56,6 +59,8 @@ type AssetRequest = {
 export default function IssuerPage() {
   const { address: walletAddress } = useWallet();
   const mintTokens = useMintTokens();
+  const { publicKey, signTransaction, signAllTransactions } = useSolanaWallet();
+  const { connection } = useConnection();
   const [assets, setAssets] = useState<IndexedAsset[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +70,29 @@ export default function IssuerPage() {
   const [assetRequests, setAssetRequests] = useState<AssetRequest[]>([]);
   const [purchaseRequests, setPurchaseRequests] = useState<TokenPurchaseRequest[]>([]);
   const [loadingBalances, setLoadingBalances] = useState(false);
+  const [walletIdentityMap, setWalletIdentityMap] = useState<Record<string, {
+    exists: boolean;
+    isActive: boolean;
+    loading: boolean;
+    canRegister: boolean;
+    canActivate: boolean;
+    irsOwner?: string | null;
+    agents?: string[];
+  }>>({});
+
+  const identityService = useMemo(() => {
+    if (!publicKey || !signTransaction || !signAllTransactions) return null;
+    try {
+      const provider = createAnchorProvider(connection, {
+        publicKey,
+        signTransaction,
+        signAllTransactions,
+      });
+      return new IdentityService(provider);
+    } catch {
+      return null;
+    }
+  }, [connection, publicKey, signTransaction, signAllTransactions]);
 
   const filteredAssets = useMemo(() => {
     if (!walletAddress) return [];
@@ -179,6 +207,61 @@ export default function IssuerPage() {
     };
   }, [filteredAssets]);
 
+  const issuerPurchaseQueue = useMemo(
+    () =>
+      purchaseRequests.filter((request) =>
+        ["PENDING_ISSUER_REVIEW", "APPROVED_FOR_MINT"].includes(request.status),
+      ),
+    [purchaseRequests],
+  );
+
+  // Load wallet identity status for queued purchase requests
+  useEffect(() => {
+    let cancelled = false;
+    if (!identityService) return;
+    const load = async () => {
+      const next: Record<string, any> = {};
+      await Promise.all(
+        issuerPurchaseQueue.map(async (request) => {
+          const key = `${request.tokenContract}:${request.investorWallet}`;
+          next[key] = { loading: true, exists: false, isActive: false, canRegister: false, canActivate: false };
+          try {
+            const mint = new PublicKey(request.tokenContract);
+            const wallet = new PublicKey(request.investorWallet);
+            const identity = await identityService.fetchWalletIdentity(mint, wallet);
+            const irpState = await identityService.fetchIrpState(mint);
+            const irsOwner = await identityService.fetchIrsOwner(mint);
+            const providerKey = identityService['provider'].wallet.publicKey.toBase58();
+            // Normalize to lower-case base58 strings for reliable comparison
+            const providerKeyLc = providerKey.toLowerCase();
+            const agentsLc = (irpState.agents || []).map((a: string) => a.toLowerCase());
+            const irsOwnerLc = irsOwner ? irsOwner.toLowerCase() : null;
+            const isAgent = agentsLc.includes(providerKeyLc);
+            const isIrsOwner = irsOwnerLc ? irsOwnerLc === providerKeyLc : false;
+            console.info('[ISSUER UI DEBUG] irpState.agents', agentsLc, 'irsOwner', irsOwnerLc, 'provider', providerKeyLc);
+            next[key] = {
+              loading: false,
+              exists: Boolean(identity),
+              isActive: Boolean(identity?.isActive),
+              canRegister: Boolean(isAgent || isIrsOwner),
+              canActivate: Boolean(isIrsOwner),
+              irsOwner: irsOwnerLc,
+              agents: agentsLc,
+            };
+          } catch (e) {
+            next[key] = { loading: false, exists: false, isActive: false, canRegister: false, canActivate: false };
+          }
+        }),
+      );
+      if (!cancelled) setWalletIdentityMap((cur) => ({ ...cur, ...next }));
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [issuerPurchaseQueue, identityService]);
+
   const hasNonZeroBalance = (balance: string) => {
     try {
       return BigInt(balance) > 0n;
@@ -194,14 +277,6 @@ export default function IssuerPage() {
         request.issuerWallet.toLowerCase() === walletAddress.toLowerCase(),
     );
   }, [assetRequests, walletAddress]);
-
-  const issuerPurchaseQueue = useMemo(
-    () =>
-      purchaseRequests.filter((request) =>
-        ["PENDING_ISSUER_REVIEW", "APPROVED_FOR_MINT"].includes(request.status),
-      ),
-    [purchaseRequests],
-  );
 
   const assetsByToken = useMemo(() => {
     const map = new Map<string, IndexedAsset>();
@@ -234,6 +309,16 @@ export default function IssuerPage() {
 
   const handleMintPurchaseRequest = async (request: TokenPurchaseRequest) => {
     try {
+      const key = `${request.tokenContract}:${request.investorWallet}`;
+      const ident = walletIdentityMap[key];
+      if (!ident || !ident.exists) {
+        toast.error("Investor wallet is not whitelisted for this token's IRS. Register before minting.");
+        return;
+      }
+      if (!ident.isActive) {
+        toast.error("Investor identity is pending activation. Activate before minting.");
+        return;
+      }
       const baseAmount = BigInt(Math.round(Number(request.amount) * 1_000_000));
       const sig = await mintTokens.mutateAsync({
         mint: new PublicKey(request.tokenContract),
@@ -347,6 +432,20 @@ export default function IssuerPage() {
                             {request.tokenContract.slice(-6)}
                           </span>
                         </div>
+                        {/* Debug info: shows IRS owner/agents and identity state for this request */}
+                        {(() => {
+                          const key = `${request.tokenContract}:${request.investorWallet}`;
+                          const info = walletIdentityMap[key];
+                          if (!info) return null;
+                          return (
+                            <div className="mt-2 text-xs text-slate-400">
+                              <div>IRS Owner: {info.irsOwner ?? "(unknown)"}</div>
+                              <div>IRP Agents: {info.agents && info.agents.length ? info.agents.join(", ") : "(none)"}</div>
+                              <div>Whitelisted: {info.exists ? "yes" : "no"} — Active: {info.isActive ? "yes" : "no"}</div>
+                              <div>Can Register: {info.canRegister ? "yes" : "no"} — Can Activate: {info.canActivate ? "yes" : "no"}</div>
+                            </div>
+                          );
+                        })()}
                         <div className="mt-1 text-xs text-slate-500">
                           Status: {request.status.replaceAll("_", " ")}
                         </div>
@@ -365,15 +464,100 @@ export default function IssuerPage() {
                             Mark Settlement Approved
                           </Button>
                         )}
-                        <Button
-                          disabled={
-                            request.status !== "APPROVED_FOR_MINT" ||
-                            mintTokens.isPending
+
+                        {/* Identity state/key for this request */}
+                        {(() => {
+                          const key = `${request.tokenContract}:${request.investorWallet}`;
+                          const info = walletIdentityMap[key];
+
+                          if (!info) {
+                            return (
+                              <Button disabled>
+                                Checking identity...
+                              </Button>
+                            );
                           }
-                          onClick={() => handleMintPurchaseRequest(request)}
-                        >
-                          Mint to Investor
-                        </Button>
+
+                          if (!info.exists) {
+                            // Not registered yet
+                            if (info.canRegister) {
+                              return (
+                                <Button
+                                  onClick={async () => {
+                                    try {
+                                      if (!identityService) throw new Error("Connect wallet to register identity");
+                                      const mint = new PublicKey(request.tokenContract);
+                                      const wallet = new PublicKey(request.investorWallet);
+                                      // Use a best-effort default: fetch investor FID if available, otherwise prompt
+                                      const investorFid = identityService.findFidPda(wallet)[0];
+                                      await identityService.registerIdentity(mint, wallet, investorFid, 0);
+                                      setWalletIdentityMap((cur) => ({
+                                        ...cur,
+                                        [key]: { ...cur[key], exists: true, isActive: false },
+                                      }));
+                                      toast.success("Investor whitelisted (pending activation)");
+                                    } catch (err: any) {
+                                      toast.error(err?.message ?? "Failed to register identity");
+                                    }
+                                  }}
+                                >
+                                  Whitelist / Register Investor
+                                </Button>
+                              );
+                            }
+
+                            return (
+                              <Button disabled>
+                                Connect IRS owner or identity agent to whitelist
+                              </Button>
+                            );
+                          }
+
+                          // Exists but not active
+                          if (!info.isActive) {
+                            return (
+                              <>
+                                <div className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                                  Pending Activation
+                                </div>
+                                {info.canActivate ? (
+                                  <Button
+                                    onClick={async () => {
+                                      try {
+                                        if (!identityService) throw new Error("Connect IRS owner to activate identity");
+                                        const mint = new PublicKey(request.tokenContract);
+                                        const wallet = new PublicKey(request.investorWallet);
+                                        await identityService.setIdentityActivation(mint, wallet, true);
+                                        setWalletIdentityMap((cur) => ({
+                                          ...cur,
+                                          [key]: { ...cur[key], isActive: true },
+                                        }));
+                                        toast.success("Identity activated");
+                                      } catch (err: any) {
+                                        toast.error(err?.message ?? "Failed to activate identity");
+                                      }
+                                    }}
+                                  >
+                                    Activate Identity
+                                  </Button>
+                                ) : null}
+                              </>
+                            );
+                          }
+
+                          // Exists and active: show mint button
+                          return (
+                            <Button
+                              disabled={
+                                request.status !== "APPROVED_FOR_MINT" ||
+                                mintTokens.isPending
+                              }
+                              onClick={() => handleMintPurchaseRequest(request)}
+                            >
+                              Mint to Investor
+                            </Button>
+                          );
+                        })()}
                       </div>
                     </div>
                   );

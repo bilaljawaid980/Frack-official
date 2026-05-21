@@ -9,7 +9,6 @@ import {
   PublicKey,
   SystemProgram,
   Transaction,
-  TransactionInstruction,
 } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
@@ -30,10 +29,9 @@ import {
 } from "@/lib/constants";
 import { formatTransactionError } from "@/lib/errors";
 import { fetchFactoryStateAccount, type FactoryStateAccount } from "@/lib/solana";
-import { IdentityService } from "@/services/identity";
 import type { TokenMintHealth, TokenState, OwnerState } from "@/types";
-import TokenIdl from "@/lib/solana/idl/fracks_token.json";
-import ComplianceIdl from "@/lib/solana/idl/fracks_compliance.json";
+import TokenIdl from "@/idl/fracks_token.json";
+import ComplianceIdl from "@/idl/fracks_compliance.json";
 import ModDailyLimitIdl from "@/idl/mod_daily_limit.json";
 
 type TokenProgram = Program<Idl>;
@@ -46,11 +44,80 @@ type SuiteProgramIds = {
   ctr: PublicKey;
   compliance: PublicKey;
 };
+type WalletIdentityAccount = {
+  wallet: PublicKey;
+  fid: PublicKey;
+  country: number;
+  irs: PublicKey;
+  isActive: boolean;
+};
+type MintRegistryContext = {
+  ids: SuiteProgramIds;
+  tokenStateData: TokenState;
+  irpState: PublicKey;
+  irpOwner: PublicKey;
+  irsState: PublicKey;
+  irsOwner: PublicKey;
+  tirState: PublicKey;
+  ctrState: PublicKey;
+  complianceState: PublicKey;
+  walletIdentity: PublicKey;
+  walletIdentityData: WalletIdentityAccount | null;
+  requiredTopics: bigint[];
+};
+type ClaimValidationDetail = {
+  claim: PublicKey;
+  topic: bigint;
+  issuerFid: PublicKey;
+  issuerEntry: PublicKey;
+  expectedClaim: PublicKey;
+  claimPdaValid: boolean;
+  revoked: boolean;
+  expired: boolean;
+  trusted: boolean;
+  signerValid: boolean;
+  accountOrder: string[];
+  accountChecks: {
+    role: string;
+    pubkey: PublicKey;
+    exists: boolean;
+    ownerProgram: PublicKey | null;
+    accountType: string;
+    isSigner: boolean;
+    isWritable: boolean;
+  }[];
+};
+type ClaimValidationResult =
+  | {
+      ok: true;
+      requiredTopics: bigint[];
+      checkedClaims: ClaimValidationDetail[];
+      remainingAccounts: RemainingAccount[];
+    }
+  | {
+      ok: false;
+      reason: string;
+      requiredTopics: bigint[];
+      checkedClaims: ClaimValidationDetail[];
+      remainingAccounts: RemainingAccount[];
+    };
 
-const CLAIM_ACCOUNT_DISCRIMINATOR = Buffer.from([113, 109, 47, 96, 242, 219, 61, 165]);
-const MINT_DISCRIMINATOR = Buffer.from([
-  51, 57, 225, 47, 182, 146, 137, 166,
-]);
+type TokenScopedClaimCheckResult = {
+  ok: boolean;
+  reason?: string;
+  tokenMint: PublicKey;
+  ctrState: PublicKey;
+  tirState: PublicKey;
+  requiredTopics: string[];
+  topicRequired: boolean;
+  investorHasActiveClaim: boolean;
+  claimRevoked?: boolean;
+  claimExpired?: boolean;
+  providerTrustedForToken: boolean;
+  checkedClaimPubkey?: PublicKey | null;
+};
+
+const CLAIM_ACCOUNT_SIZE = 230;
 const MODULE_PROGRAM_IDS = new Set([
   MOD_MAX_INVESTORS.toBase58(),
   MOD_COUNTRY_RESTRICT.toBase58(),
@@ -61,25 +128,6 @@ const MODULE_PROGRAM_IDS = new Set([
   MOD_SUPPLY_CAP.toBase58(),
   MOD_COUNTRY_CAP.toBase58(),
 ]);
-
-function encodeU64(value: bigint): Buffer {
-  const bytes = new Uint8Array(8);
-  new DataView(bytes.buffer).setBigUint64(0, value, true);
-  return Buffer.from(bytes);
-}
-
-function encodeMintArgs(
-  recipient: PublicKey,
-  amount: bigint,
-  toBalanceAfter: bigint,
-): Buffer {
-  return Buffer.concat([
-    MINT_DISCRIMINATOR,
-    recipient.toBuffer(),
-    encodeU64(amount),
-    encodeU64(toBalanceAfter),
-  ]);
-}
 
 function parseClaimAccount(data: Buffer): {
   fid: PublicKey;
@@ -112,6 +160,90 @@ function parseClaimAccount(data: Buffer): {
   const revoked = data.readUInt8(offset) === 1;
 
   return { fid, claimId, topic, issuerFid, signerKey, revoked, expiresAt };
+}
+
+function parseCtrTopics(data: Buffer): bigint[] {
+  if (data.length < 8 + 32 + 32 + 4) {
+    return [];
+  }
+
+  let offset = 8 + 32 + 32;
+  const topicCount = data.readUInt32LE(offset);
+  offset += 4;
+
+  const topics: bigint[] = [];
+  for (let index = 0; index < topicCount; index += 1) {
+    if (data.length < offset + 8) break;
+    topics.push(data.readBigUInt64LE(offset));
+    offset += 8;
+  }
+  return topics;
+}
+
+function parseIssuerEntryForTopic(data: Buffer, topic: bigint): boolean {
+  let offset = 8 + 32 + 32;
+  if (data.length < offset + 4) return false;
+  const topicCount = data.readUInt32LE(offset);
+  offset += 4;
+
+  let hasTopic = false;
+  for (let index = 0; index < topicCount; index += 1) {
+    if (data.length < offset + 8) return false;
+    if (data.readBigUInt64LE(offset) === topic) {
+      hasTopic = true;
+    }
+    offset += 8;
+  }
+
+  if (data.length < offset + 1) return false;
+  return data.readUInt8(offset) === 1 && hasTopic;
+}
+
+function parseFidIsIssuerAndSigner(data: Buffer, expectedSigner: PublicKey): boolean {
+  if (data.length < 8 + 32 + 32 + 32 + 4 + 1) return false;
+  const signerKey = new PublicKey(data.subarray(8 + 32 + 32, 8 + 32 + 32 + 32));
+  const isIssuer = data.readUInt8(8 + 32 + 32 + 32 + 4) === 1;
+  return isIssuer && signerKey.equals(expectedSigner);
+}
+
+function parseWalletIdentityAccount(data: Buffer): WalletIdentityAccount | null {
+  const minimumSize = 8 + 32 + 32 + 2 + 32 + 1;
+  if (data.length < minimumSize) return null;
+
+  let offset = 8;
+  const wallet = new PublicKey(data.subarray(offset, offset + 32));
+  offset += 32;
+  const fid = new PublicKey(data.subarray(offset, offset + 32));
+  offset += 32;
+  const country = data.readUInt16LE(offset);
+  offset += 2;
+  const irs = new PublicKey(data.subarray(offset, offset + 32));
+  offset += 32;
+  const isActive = data.readUInt8(offset) === 1;
+
+  return { wallet, fid, country, irs, isActive };
+}
+
+function claimIdLeBytes(claimId: number): Buffer {
+  const bytes = Buffer.alloc(4);
+  bytes.writeUInt32LE(claimId, 0);
+  return bytes;
+}
+
+function accountTypeFromRole(role: string): string {
+  if (role === "claim") return "ClaimAccount";
+  if (role === "claimTopicIndex") return "ClaimTopicIndex";
+  if (role === "trustedIssuerEntry") return "IssuerEntry";
+  if (role === "issuerFid") return "FidAccount";
+  return "Unknown";
+}
+
+function detailRole(index: number): string {
+  if (index === 0) return "claim";
+  if (index === 1) return "claimTopicIndex";
+  if (index === 2) return "trustedIssuerEntry";
+  if (index === 3) return "issuerFid";
+  return "unknown";
 }
 
 const DEPLOYED_PROGRAM_IDS = {
@@ -504,111 +636,88 @@ export class TokenService {
     const toBalanceBefore = destinationAccount.amount;
     const toBalanceAfter = toBalanceBefore + amount;
 
-    // Derive IRP/IRS/TIR/CTR state addresses from the identity registry
-    const irpStatePubkey = new PublicKey(ts.identityRegistry);
-    const [irsState] = await this._deriveIrsStateFromIrp(irpStatePubkey);
-    const [tirState] = PublicKey.findProgramAddressSync(
-      [Buffer.from("tir_state"), mintPubkey.toBuffer()],
-      ids.tir
-    );
-    const [ctrState] = PublicKey.findProgramAddressSync(
-      [Buffer.from("ctr_state"), mintPubkey.toBuffer()],
-      ids.ctr
-    );
-
-    // Derive wallet_identity PDA for recipient
-    const [walletIdentity] = PublicKey.findProgramAddressSync(
-      [SEED_WALLET_IDENTITY, irsState.toBuffer(), recipient.toBuffer()],
-      ids.irs
-    );
-    const identityService = new IdentityService(this.provider);
-    let recipientIdentity = await identityService.fetchWalletIdentity(
+    const { registry, claimValidation } = await this.verifyRecipientMintPreflight(
       mintPubkey,
       recipient,
+      destinationTokenAccount,
+      ids,
+      ts,
     );
-    if (!recipientIdentity) {
-      const recipientFid = await identityService.fetchFid(recipient);
-      if (!recipientFid) {
-        throw new Error(
-          "Investor must register a non-issuer FID with the active FID program before tokens can be minted.",
-        );
-      }
-      const [recipientFidPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("fid"), recipient.toBuffer()],
-        ids.fid,
-      );
-      const recipientFidInfo = await this.provider.connection.getAccountInfo(
-        recipientFidPda,
-        "confirmed",
-      );
-      if (!recipientFidInfo) {
-        throw new Error(
-          `Investor FID account ${recipientFidPda.toBase58()} is missing on-chain. Ask the investor to register FID again from the investor dashboard.`,
-        );
-      }
-      try {
-        await identityService.registerIdentity(
-          mintPubkey,
-          recipient,
-          recipientFidPda,
-          recipientFid.country,
-        );
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (!message.includes("WalletAlreadyRegistered")) {
-          throw error;
-        }
-      }
-      recipientIdentity = await identityService.fetchWalletIdentity(
-        mintPubkey,
-        recipient,
-      );
-      if (!recipientIdentity) {
-        throw new Error(
-          "Investor wallet identity exists on-chain but could not be decoded by the frontend. Refresh the app and try again.",
-        );
-      }
-    }
-    if (!recipientIdentity?.isActive) {
-      await identityService.setIdentityActivation(mintPubkey, recipient, true);
-    }
+    const {
+      irpState: irpStatePubkey,
+      irsState,
+      tirState,
+      ctrState,
+      complianceState,
+      walletIdentity,
+      walletIdentityData,
+    } = registry;
 
     const verificationAndComplianceAccounts =
       await this.getMintRemainingAccounts(
-        recipient,
-        mintPubkey,
-        tirState,
         walletIdentity,
+        complianceState,
         ids,
+        claimValidation.remainingAccounts,
       );
     await this.prepareDailyLimitUsageAccounts(mintPubkey, recipient, ids);
 
     try {
-      const mintIx = new TransactionInstruction({
-        programId: ids.token,
-        keys: [
-          { pubkey: authority, isSigner: true, isWritable: true },
-          { pubkey: tokenState, isSigner: false, isWritable: false },
-          { pubkey: ownerState, isSigner: false, isWritable: false },
-          { pubkey: agentRole, isSigner: false, isWritable: false },
-          { pubkey: irpStatePubkey, isSigner: false, isWritable: false },
-          { pubkey: irsState, isSigner: false, isWritable: false },
-          { pubkey: tirState, isSigner: false, isWritable: false },
-          { pubkey: ctrState, isSigner: false, isWritable: false },
-          { pubkey: new PublicKey(ts.compliance), isSigner: false, isWritable: false },
-          { pubkey: ids.compliance, isSigner: false, isWritable: false },
-          { pubkey: walletIdentity, isSigner: false, isWritable: false },
-          { pubkey: toFrozen, isSigner: false, isWritable: false },
-          { pubkey: mintPubkey, isSigner: false, isWritable: true },
-          { pubkey: destinationTokenAccount, isSigner: false, isWritable: true },
-          {
-            pubkey: new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"),
-            isSigner: false,
-            isWritable: false,
-          },
-          ...verificationAndComplianceAccounts,
-        ],
-        data: encodeMintArgs(recipient, amount, toBalanceAfter),
+      const mintAccounts = [
+        { pubkey: authority, isSigner: true, isWritable: true },
+        { pubkey: tokenState, isSigner: false, isWritable: false },
+        { pubkey: ownerState, isSigner: false, isWritable: false },
+        { pubkey: agentRole, isSigner: false, isWritable: false },
+        { pubkey: irpStatePubkey, isSigner: false, isWritable: false },
+        { pubkey: irsState, isSigner: false, isWritable: false },
+        { pubkey: tirState, isSigner: false, isWritable: false },
+        { pubkey: ctrState, isSigner: false, isWritable: false },
+        { pubkey: complianceState, isSigner: false, isWritable: false },
+        { pubkey: ids.compliance, isSigner: false, isWritable: false },
+        { pubkey: walletIdentity, isSigner: false, isWritable: false },
+        { pubkey: toFrozen, isSigner: false, isWritable: false },
+        { pubkey: mintPubkey, isSigner: false, isWritable: true },
+        { pubkey: destinationTokenAccount, isSigner: false, isWritable: true },
+        {
+          pubkey: new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"),
+          isSigner: false,
+          isWritable: false,
+        },
+        ...verificationAndComplianceAccounts,
+      ];
+      const tokenProgram = this.getTokenProgram(ids.token);
+      const mintIx = await (tokenProgram.methods as any)
+        .mint(
+          recipient,
+          new BN(amount.toString()),
+          new BN(toBalanceAfter.toString()),
+        )
+        .accounts({
+          authority,
+          tokenState,
+          ownerState,
+          agentRole,
+          irpState: irpStatePubkey,
+          irsState,
+          tirState,
+          ctrState,
+          complianceState,
+          complianceProgram: ids.compliance,
+          walletIdentity,
+          toFrozen,
+          tokenMintAccount: mintPubkey,
+          destinationTokenAccount,
+          tokenProgram: new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"),
+        })
+        .remainingAccounts(verificationAndComplianceAccounts)
+        .instruction();
+      this.logMintVerificationDebug({
+        authority,
+        recipient,
+        destinationTokenAccount,
+        registry,
+        claimValidation,
+        finalAccounts: mintIx.keys,
       });
 
       const sig = await this.provider.sendAndConfirm(
@@ -618,19 +727,275 @@ export class TokenService {
       );
       return sig;
     } catch (err) {
-      throw new Error(formatTransactionError(err));
+      const formatted = formatTransactionError(err);
+      if (formatted.includes("Wallet is not verified") || formatted.includes("WalletNotVerified")) {
+        throw new Error(
+          `${formatted}\n\nMint preflight passed, but the token program still rejected recipient verification. Check the [MINT VERIFICATION DEBUG] console block for the exact wallet_identity.fid, canonical claim PDA, issuer entry, and issuer FID accounts passed to the instruction. If this message appears without a fresh debug block, restart the frontend dev server to clear stale compiled code.`,
+        );
+      }
+      throw new Error(formatted);
     }
   }
 
-  private async getMintRemainingAccounts(
-    recipient: PublicKey,
+  /**
+   * Shared mint preflight used by both the UI mint flow and the simulation
+   * script. Keep this aligned with fracks-token `mint`: it verifies the
+   * recipient wallet owner, not the recipient ATA or issuer identity.
+   */
+  async verifyRecipientMintPreflight(
     mintPubkey: PublicKey,
-    tirState: PublicKey,
-    walletIdentity: PublicKey,
+    recipient: PublicKey,
+    destinationTokenAccount?: PublicKey,
+    resolvedIds?: SuiteProgramIds,
+    resolvedTokenState?: TokenState,
+  ): Promise<{
+    registry: MintRegistryContext & { walletIdentityData: WalletIdentityAccount };
+    claimValidation: ClaimValidationResult;
+  }> {
+    const ids = resolvedIds ?? (await this.getProgramIds());
+    const tokenStateData = resolvedTokenState ?? (await this.fetchTokenState(mintPubkey));
+    const registry = await this.resolveMintRegistryContext(
+      mintPubkey,
+      recipient,
+      ids,
+      tokenStateData,
+    );
+    const { walletIdentityData } = registry;
+
+    if (!walletIdentityData) {
+      throw new Error(
+        "Investor identity is not registered in this token's Identity Registry Storage (IRS). The investor must register their FID identity before minting.",
+      );
+    }
+    if (!walletIdentityData.wallet.equals(recipient)) {
+      throw new Error(
+        `Wrong wallet identity subject. Expected investor wallet ${recipient.toBase58()}, got ${walletIdentityData.wallet.toBase58()}.`,
+      );
+    }
+    if (destinationTokenAccount && walletIdentityData.wallet.equals(destinationTokenAccount)) {
+      throw new Error(
+        "Wrong wallet identity subject. The recipient ATA was used where the investor wallet owner is required.",
+      );
+    }
+    if (!walletIdentityData.irs.equals(registry.irsState)) {
+      throw new Error(
+        `Investor identity belongs to IRS ${walletIdentityData.irs.toBase58()}, but this token uses IRS ${registry.irsState.toBase58()}.`,
+      );
+    }
+    if (!walletIdentityData.isActive) {
+      const irpOwner = registry.irpOwner.toBase58();
+      throw new Error(
+        `Investor identity is registered but inactive in this token's Identity Registry Storage (IRS). Please ask the central platform administrator / IRS State Owner (${irpOwner}) to activate this identity.`,
+      );
+    }
+
+    const strictRegistry = {
+      ...registry,
+      walletIdentityData,
+    };
+    const claimValidation = await this.validateRecipientClaimsForMint(
+      recipient,
+      strictRegistry,
+    );
+    if (!claimValidation.ok) {
+      throw new Error(claimValidation.reason);
+    }
+
+    return { registry: strictRegistry, claimValidation };
+  }
+
+  private async resolveMintRegistryContext(
+    mintPubkey: PublicKey,
+    recipient: PublicKey,
     ids: SuiteProgramIds,
+    tokenStateData: TokenState,
+  ): Promise<MintRegistryContext> {
+    const irpState = new PublicKey(tokenStateData.identityRegistry);
+    const irpInfo = await this.provider.connection.getAccountInfo(irpState, "confirmed");
+    if (!irpInfo || irpInfo.data.length < 168) {
+      throw new Error(
+        `Identity registry protocol account ${irpState.toBase58()} is missing or malformed for token ${mintPubkey.toBase58()}.`,
+      );
+    }
+
+    const irpTokenMint = new PublicKey(irpInfo.data.subarray(8, 40));
+    const irpOwner = new PublicKey(irpInfo.data.subarray(40, 72));
+    const irsState = new PublicKey(irpInfo.data.subarray(72, 104));
+    const tirState = new PublicKey(irpInfo.data.subarray(104, 136));
+    const ctrState = new PublicKey(irpInfo.data.subarray(136, 168));
+    const complianceState = new PublicKey(tokenStateData.compliance);
+
+    if (!irpTokenMint.equals(mintPubkey)) {
+      throw new Error(
+        `Token registry mismatch. IRP ${irpState.toBase58()} is bound to mint ${irpTokenMint.toBase58()}, not ${mintPubkey.toBase58()}.`,
+      );
+    }
+
+    const [walletIdentity] = PublicKey.findProgramAddressSync(
+      [SEED_WALLET_IDENTITY, irsState.toBuffer(), recipient.toBuffer()],
+      ids.irs,
+    );
+
+    const [irsInfo, tirInfo, ctrInfo, complianceInfo, walletIdentityInfo] =
+      await this.provider.connection.getMultipleAccountsInfo(
+        [irsState, tirState, ctrState, complianceState, walletIdentity],
+        "confirmed",
+      );
+
+    if (!irsInfo) {
+      throw new Error(`Identity Registry Storage account ${irsState.toBase58()} is missing.`);
+    }
+    if (irsInfo.data.length < 40) {
+      throw new Error(`Identity Registry Storage account ${irsState.toBase58()} is malformed.`);
+    }
+    const irsOwner = new PublicKey(irsInfo.data.subarray(8, 40));
+    if (!irsOwner.equals(irpOwner)) {
+      throw new Error(
+        `Token registry ownership is misconfigured. IRP owner ${irpOwner.toBase58()} does not match IRS owner ${irsOwner.toBase58()}. This token suite cannot verify investor identities until the registry owners are repaired or the token is redeployed with aligned IRP/IRS ownership.`,
+      );
+    }
+    if (!tirInfo) {
+      throw new Error(`Trusted Issuers Registry account ${tirState.toBase58()} is missing.`);
+    }
+    if (!ctrInfo) {
+      throw new Error(`Claim Topics Registry account ${ctrState.toBase58()} is missing.`);
+    }
+    if (!complianceInfo) {
+      throw new Error(`Compliance state account ${complianceState.toBase58()} is missing.`);
+    }
+    if (!complianceInfo.owner.equals(ids.compliance)) {
+      throw new Error(
+        `Compliance state ${complianceState.toBase58()} is owned by ${complianceInfo.owner.toBase58()}, expected ${ids.compliance.toBase58()}.`,
+      );
+    }
+
+    const walletIdentityData = walletIdentityInfo
+      ? parseWalletIdentityAccount(walletIdentityInfo.data)
+      : null;
+
+    return {
+      ids,
+      tokenStateData,
+      irpState,
+      irpOwner,
+      irsState,
+      irsOwner,
+      tirState,
+      ctrState,
+      complianceState,
+      walletIdentity,
+      walletIdentityData,
+      requiredTopics: parseCtrTopics(ctrInfo.data),
+    };
+  }
+
+  private logMintVerificationDebug(input: {
+    authority: PublicKey;
+    recipient: PublicKey;
+    destinationTokenAccount: PublicKey;
+    registry: MintRegistryContext;
+    claimValidation: ClaimValidationResult;
+    finalAccounts: RemainingAccount[];
+  }): void {
+    const { authority, recipient, destinationTokenAccount, registry, claimValidation, finalAccounts } =
+      input;
+
+    const debug = {
+      rpcEndpoint: this.provider.connection.rpcEndpoint,
+      tokenProgramId: registry.ids.token.toBase58(),
+      fidProgramId: registry.ids.fid.toBase58(),
+      irsProgramId: registry.ids.irs.toBase58(),
+      tirProgramId: registry.ids.tir.toBase58(),
+      ctrProgramId: registry.ids.ctr.toBase58(),
+      complianceProgramId: registry.ids.compliance.toBase58(),
+      tokenMint: registry.tokenStateData.tokenMint,
+      tokenState: this.findTokenStatePda(
+        new PublicKey(registry.tokenStateData.tokenMint),
+        registry.ids.token,
+      )[0].toBase58(),
+      issuerWallet: authority.toBase58(),
+      investorWalletOwner: recipient.toBase58(),
+      recipientAta: destinationTokenAccount.toBase58(),
+      irpState: registry.irpState.toBase58(),
+      irpOwner: registry.irpOwner.toBase58(),
+      irsState: registry.irsState.toBase58(),
+      irsOwner: registry.irsOwner.toBase58(),
+      tirState: registry.tirState.toBase58(),
+      ctrState: registry.ctrState.toBase58(),
+      complianceState: registry.complianceState.toBase58(),
+      walletIdentityPda: registry.walletIdentity.toBase58(),
+      recipientIdentityActive: registry.walletIdentityData?.isActive ?? false,
+      recipientIdentityWallet: registry.walletIdentityData?.wallet.toBase58() ?? null,
+      recipientIdentityFid: registry.walletIdentityData?.fid.toBase58() ?? null,
+      requiredClaimTopics: registry.requiredTopics.map(String),
+      matchingInvestorClaims: claimValidation.checkedClaims.map((claim) => ({
+        claim: claim.claim.toBase58(),
+        topic: claim.topic.toString(),
+        issuerFid: claim.issuerFid.toBase58(),
+        issuerEntry: claim.issuerEntry.toBase58(),
+        expectedClaim: claim.expectedClaim.toBase58(),
+        claimPdaValid: claim.claimPdaValid,
+        revoked: claim.revoked,
+        expired: claim.expired,
+        trusted: claim.trusted,
+        signerValid: claim.signerValid,
+        exactOrderSent: claim.accountOrder,
+        accountChecks: claim.accountChecks.map((check) => ({
+          role: check.role,
+          pubkey: check.pubkey.toBase58(),
+          exists: check.exists,
+          ownerProgram: check.ownerProgram?.toBase58() ?? null,
+          accountType: check.accountType,
+          isSigner: check.isSigner,
+          isWritable: check.isWritable,
+        })),
+      })),
+      finalInstructionAccounts: finalAccounts.map((account, index) => ({
+        index,
+        pubkey: account.pubkey.toBase58(),
+        isSigner: account.isSigner,
+        isWritable: account.isWritable,
+      })),
+    };
+
+    console.info("[MINT VERIFICATION DEBUG]", debug);
+    console.info("[MINT VERIFICATION DEBUG JSON]", JSON.stringify(debug, null, 2));
+    console.info(
+      "[MINT REMAINING ACCOUNTS DEBUG]",
+      JSON.stringify(
+        claimValidation.checkedClaims.map((claim) => ({
+          topic: claim.topic.toString(),
+          claimPda: claim.claim.toBase58(),
+          issuerFidPda: claim.issuerFid.toBase58(),
+          trustedIssuerEntryPda: claim.issuerEntry.toBase58(),
+          exactOrderSent: claim.accountOrder,
+          accounts: claim.accountChecks.map((check) => ({
+            role: check.role,
+            pubkey: check.pubkey.toBase58(),
+            exists: check.exists,
+            ownerProgram: check.ownerProgram?.toBase58() ?? null,
+            accountType: check.accountType,
+            isSigner: check.isSigner,
+            isWritable: check.isWritable,
+          })),
+        })),
+        null,
+        2,
+      ),
+    );
+  }
+
+  private async getMintRemainingAccounts(
+    walletIdentity: PublicKey,
+    complianceState: PublicKey,
+    ids: SuiteProgramIds,
+    claimRemainingAccounts: RemainingAccount[],
   ): Promise<RemainingAccount[]> {
-    const accounts: RemainingAccount[] = [];
+    const accounts: RemainingAccount[] = [...claimRemainingAccounts];
     const seen = new Set<string>();
+    for (const account of claimRemainingAccounts) {
+      seen.add(account.pubkey.toBase58());
+    }
     const push = (pubkey: PublicKey, isWritable = false) => {
       const key = pubkey.toBase58();
       if (seen.has(key)) return;
@@ -638,47 +1003,7 @@ export class TokenService {
       accounts.push({ pubkey, isSigner: false, isWritable });
     };
 
-    const [targetFid] = PublicKey.findProgramAddressSync(
-      [Buffer.from("fid"), recipient.toBuffer()],
-      ids.fid
-    );
-
-    const claimAccounts = await this.provider.connection.getProgramAccounts(ids.fid, {
-      commitment: "confirmed",
-      filters: [
-        {
-          memcmp: {
-            offset: 0,
-            bytes: CLAIM_ACCOUNT_DISCRIMINATOR.toString("base64"),
-            encoding: "base64",
-          },
-        },
-        { memcmp: { offset: 8, bytes: targetFid.toBase58() } },
-      ],
-    });
-
-    for (const { pubkey, account } of claimAccounts) {
-      try {
-        const claim = parseClaimAccount(account.data);
-        if (!claim || claim.revoked) continue;
-        const issuerFid = claim.issuerFid;
-        const [issuerEntry] = PublicKey.findProgramAddressSync(
-          [Buffer.from("issuer_entry"), tirState.toBuffer(), issuerFid.toBuffer()],
-          ids.tir
-        );
-        push(pubkey);
-        push(issuerEntry);
-        push(issuerFid);
-      } catch {
-        // Ignore malformed/unexpected accounts.
-      }
-    }
-
     try {
-      const [complianceStatePda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("compliance_state"), mintPubkey.toBuffer()],
-        ids.compliance
-      );
       const complianceProgram = new Program(
         {
           ...(ComplianceIdl as unknown as Record<string, unknown>),
@@ -687,7 +1012,7 @@ export class TokenService {
         this.provider,
       );
       const compliance = await (complianceProgram.account as any).complianceState.fetch(
-        complianceStatePda
+        complianceState
       );
       const moduleAccounts = compliance.modules as PublicKey[];
       const moduleInfos = await this.provider.connection.getMultipleAccountsInfo(
@@ -721,6 +1046,200 @@ export class TokenService {
     }
 
     return accounts;
+  }
+
+  private async validateRecipientClaimsForMint(
+    recipient: PublicKey,
+    registry: MintRegistryContext,
+  ): Promise<ClaimValidationResult> {
+    const { ids, tirState, requiredTopics } = registry;
+    const checkedClaims: ClaimValidationDetail[] = [];
+    const remainingAccounts: RemainingAccount[] = [];
+
+    if (requiredTopics.length === 0) {
+      return { ok: true, requiredTopics, checkedClaims, remainingAccounts };
+    }
+
+    const holderFid = registry.walletIdentityData?.fid;
+    if (!holderFid) {
+      return {
+        ok: false,
+        reason: "Investor identity is not registered in this token's Identity Registry Storage (IRS). The investor must register their FID identity before minting.",
+        requiredTopics,
+        checkedClaims,
+        remainingAccounts,
+      };
+    }
+
+    const fidInfo = await this.provider.connection.getAccountInfo(holderFid, "confirmed");
+    if (!fidInfo) {
+      return {
+        ok: false,
+        reason: `Investor wallet identity points to missing FID account ${holderFid.toBase58()}. Ask the investor to register FID before minting.`,
+        requiredTopics,
+        checkedClaims,
+        remainingAccounts,
+      };
+    }
+
+    const claimAccounts = await this.provider.connection.getProgramAccounts(ids.fid, {
+      commitment: "confirmed",
+      filters: [
+        { dataSize: CLAIM_ACCOUNT_SIZE },
+        { memcmp: { offset: 8, bytes: holderFid.toBase58() } },
+      ],
+    });
+
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    const claims = claimAccounts
+      .map(({ pubkey, account }) => {
+        const claim = parseClaimAccount(account.data);
+        return claim ? { ...claim, pubkey } : null;
+      })
+      .filter(
+        (
+          c,
+        ): c is NonNullable<ReturnType<typeof parseClaimAccount>> & {
+          pubkey: PublicKey;
+        } => c !== null,
+      );
+
+    // Fetch the TIR State Owner to use in the error messages
+    const tirInfo = await this.provider.connection.getAccountInfo(tirState, "confirmed");
+    const tirOwner = tirInfo ? new PublicKey(tirInfo.data.subarray(8, 40)).toBase58() : "unknown";
+
+    for (const topic of requiredTopics) {
+      const topicClaims = claims.filter((c) => c.topic === topic);
+      if (topicClaims.length === 0) {
+        return {
+          ok: false,
+          reason: `Investor is missing claim for required topic ${topic}.`,
+          requiredTopics,
+          checkedClaims,
+          remainingAccounts,
+        };
+      }
+
+      // Check if at least one claim is fully valid
+      let hasFullyValidClaim = false;
+      let failureReason = "";
+
+      for (const claim of topicClaims) {
+        const expired = claim.expiresAt !== 0n && claim.expiresAt < now;
+        const [expectedClaim] = PublicKey.findProgramAddressSync(
+          [Buffer.from("claim"), holderFid.toBuffer(), claimIdLeBytes(claim.claimId)],
+          ids.fid,
+        );
+        const [issuerEntry] = PublicKey.findProgramAddressSync(
+          [Buffer.from("issuer_entry"), tirState.toBuffer(), claim.issuerFid.toBuffer()],
+          ids.tir,
+        );
+        const topicBytes = this.u64LeBytes(topic);
+        const [claimTopicIndex] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("claim_topic_index"),
+            holderFid.toBuffer(),
+            claim.issuerFid.toBuffer(),
+            topicBytes,
+          ],
+          ids.fid,
+        );
+        const claimPdaValid = claim.pubkey.equals(expectedClaim);
+        const accountMetas: RemainingAccount[] = [
+          { pubkey: claim.pubkey, isSigner: false, isWritable: false },
+          { pubkey: claimTopicIndex, isSigner: false, isWritable: false },
+          { pubkey: issuerEntry, isSigner: false, isWritable: false },
+          { pubkey: claim.issuerFid, isSigner: false, isWritable: false },
+        ];
+        const accountInfos = await this.provider.connection.getMultipleAccountsInfo(
+          accountMetas.map((account) => account.pubkey),
+          "confirmed",
+        );
+        const detail: ClaimValidationDetail = {
+          claim: claim.pubkey,
+          topic,
+          issuerFid: claim.issuerFid,
+          issuerEntry,
+          expectedClaim,
+          claimPdaValid,
+          revoked: claim.revoked,
+          expired,
+          trusted: false,
+          signerValid: false,
+          accountOrder: ["claim", "claimTopicIndex", "trustedIssuerEntry", "issuerFid"],
+          accountChecks: accountMetas.map((account, index) => ({
+            role: detailRole(index),
+            pubkey: account.pubkey,
+            exists: Boolean(accountInfos[index]),
+            ownerProgram: accountInfos[index]?.owner ?? null,
+            accountType: accountTypeFromRole(detailRole(index)),
+            isSigner: account.isSigner,
+            isWritable: account.isWritable,
+          })),
+        };
+        checkedClaims.push(detail);
+
+        if (!claimPdaValid) {
+          if (!failureReason) {
+            failureReason = `Claim for required topic ${topic} is not at the canonical claim PDA expected by the token program.`;
+          }
+          continue;
+        }
+        if (claim.revoked) {
+          if (!failureReason) failureReason = `Claim for required topic ${topic} is revoked.`;
+          continue;
+        }
+        if (expired) {
+          if (!failureReason) failureReason = `Claim for required topic ${topic} has expired.`;
+          continue;
+        }
+
+        // Validate issuer entry and trust
+        const [issuerEntryInfo, issuerFidInfo] =
+          await this.provider.connection.getMultipleAccountsInfo(
+            [issuerEntry, claim.issuerFid],
+            "confirmed",
+          );
+
+        if (!issuerEntryInfo || !issuerFidInfo) {
+          failureReason = `Claim exists for topic ${topic}, but claim issuer FID ${claim.issuerFid.toBase58()} is not trusted in this token's TIR. Ask TIR owner ${tirOwner} to add it.`;
+          continue;
+        }
+
+        detail.trusted = parseIssuerEntryForTopic(issuerEntryInfo.data, claim.topic);
+        if (!detail.trusted) {
+          failureReason = `Claim exists for topic ${topic}, but claim issuer FID ${claim.issuerFid.toBase58()} is not trusted in this token's TIR. Ask TIR owner ${tirOwner} to add it.`;
+          continue;
+        }
+
+        detail.signerValid = parseFidIsIssuerAndSigner(issuerFidInfo.data, claim.signerKey);
+        if (!detail.signerValid) {
+          failureReason = `Claim for required topic ${topic} has an invalid issuer FID profile or signer key mismatch.`;
+          continue;
+        }
+
+        // If we reach here, we found a fully valid claim for this required topic!
+        for (const account of accountMetas) {
+          if (!remainingAccounts.some((entry) => entry.pubkey.equals(account.pubkey))) {
+            remainingAccounts.push(account);
+          }
+        }
+        hasFullyValidClaim = true;
+        break;
+      }
+
+      if (!hasFullyValidClaim) {
+        return {
+          ok: false,
+          reason: failureReason || `Investor has no valid claim for required topic ${topic}.`,
+          requiredTopics,
+          checkedClaims,
+          remainingAccounts,
+        };
+      }
+    }
+
+    return { ok: true, requiredTopics, checkedClaims, remainingAccounts };
   }
 
   private pushModuleProgramAccount(
@@ -813,6 +1332,176 @@ export class TokenService {
     const bytes = Buffer.alloc(2);
     bytes.writeUInt16LE(value);
     return bytes;
+  }
+
+  private u64LeBytes(value: bigint): Buffer {
+    const bytes = Buffer.alloc(8);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    if (typeof view.setBigUint64 === "function") {
+      view.setBigUint64(0, value, true);
+    } else {
+      // Fallback for environments without setBigUint64
+      const lo = Number(value & 0xffffffffn);
+      const hi = Number((value >> 32n) & 0xffffffffn);
+      bytes.writeUInt32LE(lo, 0);
+      bytes.writeUInt32LE(hi, 4);
+    }
+    return bytes;
+  }
+
+  /**
+   * Checks whether a specific claim topic for a given investor + provider is
+   * valid in the context of a particular token suite (CTR/TIR + token state).
+   * Returns a detailed result used by KYC flows to decide whether to forward
+   * requests to the issuer.
+   */
+  async checkTokenScopedClaimForRequest(opts: {
+    requestId?: string;
+    mint: PublicKey;
+    investorWallet: PublicKey;
+    providerWallet: PublicKey;
+    topic: bigint;
+  }): Promise<TokenScopedClaimCheckResult> {
+    const { requestId, mint, investorWallet, providerWallet, topic } = opts;
+    const ids = await this.getProgramIds();
+    const tokenStateData = await this.fetchTokenState(mint);
+    const registry = await this.resolveMintRegistryContext(mint, investorWallet, ids, tokenStateData);
+    const ctrState = registry.ctrState;
+    const tirState = registry.tirState;
+    const requiredTopics = registry.requiredTopics.map(String);
+    const topicStr = topic.toString();
+
+    const debugBase = {
+      requestId: requestId ?? null,
+      tokenMint: mint.toBase58(),
+      investorWallet: investorWallet.toBase58(),
+      providerWallet: providerWallet.toBase58(),
+      ctrState: ctrState.toBase58(),
+      tirState: tirState.toBase58(),
+      requiredTopics,
+      selectedTopic: topicStr,
+    } as Record<string, unknown>;
+
+    const topicRequired = requiredTopics.includes(topicStr);
+    console.info("[KYC TOKEN-SCOPED CLAIM DEBUG] base", debugBase);
+
+    if (!topicRequired) {
+      console.info("[KYC TOKEN-SCOPED CLAIM DEBUG] decision: topic not required", { ...debugBase, topicRequired });
+      return {
+        ok: false,
+        reason: `This token does not require claim topic ${topicStr}.`,
+        tokenMint: mint,
+        ctrState,
+        tirState,
+        requiredTopics,
+        topicRequired,
+        investorHasActiveClaim: false,
+        providerTrustedForToken: false,
+      };
+    }
+
+    // Derive target and issuer FID PDAs (claim owner accounts)
+    const [targetFid] = PublicKey.findProgramAddressSync([Buffer.from("fid"), investorWallet.toBuffer()], ids.fid);
+    const [issuerFid] = PublicKey.findProgramAddressSync([Buffer.from("fid"), providerWallet.toBuffer()], ids.fid);
+
+    // Derive claim_topic_index PDA for this target/issuer/topic
+    const topicBytes = this.u64LeBytes(topic);
+    const [claimTopicIndex] = PublicKey.findProgramAddressSync(
+      [Buffer.from("claim_topic_index"), targetFid.toBuffer(), issuerFid.toBuffer(), topicBytes],
+      ids.fid,
+    );
+
+    let investorHasActiveClaim = false;
+    let claimRevoked = undefined;
+    let claimExpired = undefined;
+    let checkedClaimPubkey: PublicKey | null = null;
+
+    try {
+      const idxInfo = await this.provider.connection.getAccountInfo(claimTopicIndex, "confirmed");
+      if (idxInfo && idxInfo.data.length > 116 && idxInfo.data.readUInt8(116) === 1) {
+        investorHasActiveClaim = true;
+        // extract active_claim pubkey and id
+        const activeClaimPubkey = new PublicKey(idxInfo.data.subarray(80, 112));
+        const activeClaimId = idxInfo.data.readUInt32LE(112);
+        checkedClaimPubkey = activeClaimPubkey;
+
+        // fetch claim account and parse
+        const claimInfo = await this.provider.connection.getAccountInfo(activeClaimPubkey, "confirmed");
+        if (claimInfo) {
+          const parsed = parseClaimAccount(claimInfo.data);
+          if (parsed) {
+            claimRevoked = parsed.revoked;
+            const now = BigInt(Math.floor(Date.now() / 1000));
+            claimExpired = parsed.expiresAt !== 0n && parsed.expiresAt < now;
+          }
+        }
+      }
+    } catch (err) {
+      // swallow — we'll treat as missing claim
+    }
+
+    // Check provider trust in token's TIR
+    const [issuerEntry] = PublicKey.findProgramAddressSync(
+      [Buffer.from("issuer_entry"), tirState.toBuffer(), issuerFid.toBuffer()],
+      ids.tir,
+    );
+    let providerTrustedForToken = false;
+    try {
+      const entryInfo = await this.provider.connection.getAccountInfo(issuerEntry, "confirmed");
+      if (entryInfo) {
+        providerTrustedForToken = parseIssuerEntryForTopic(entryInfo.data, topic);
+      }
+    } catch {
+      providerTrustedForToken = false;
+    }
+
+    const finalDecision = investorHasActiveClaim && !claimRevoked && !claimExpired && providerTrustedForToken;
+
+    console.info("[KYC TOKEN-SCOPED CLAIM DEBUG] result", {
+      ...debugBase,
+      topicRequired,
+      claimFound: investorHasActiveClaim,
+      claimRevoked,
+      claimExpired,
+      providerTrustedForToken,
+      finalDecision,
+      checkedClaimPubkey: checkedClaimPubkey?.toBase58() ?? null,
+    });
+
+    if (!finalDecision) {
+      let reason = `Request cannot be forwarded until token-specific KYC requirements are satisfied.`;
+      if (!investorHasActiveClaim) reason = `Investor is missing required claim topic ${topicStr} for this token.`;
+      else if (claimRevoked) reason = `Investor claim topic ${topicStr} is revoked.`;
+      else if (claimExpired) reason = `Investor claim topic ${topicStr} is expired.`;
+      else if (!providerTrustedForToken) reason = `This KYC provider is not trusted in this token's TIR for topic ${topicStr}.`;
+
+      return {
+        ok: false,
+        reason,
+        tokenMint: mint,
+        ctrState,
+        tirState,
+        requiredTopics,
+        topicRequired,
+        investorHasActiveClaim,
+        claimRevoked,
+        claimExpired,
+        providerTrustedForToken,
+        checkedClaimPubkey,
+      };
+    }
+
+    return {
+      ok: true,
+      tokenMint: mint,
+      ctrState,
+      tirState,
+      requiredTopics,
+      topicRequired,
+      investorHasActiveClaim,
+      providerTrustedForToken,
+      checkedClaimPubkey,
+    };
   }
 
   /**

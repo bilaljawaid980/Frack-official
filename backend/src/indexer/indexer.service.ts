@@ -13,6 +13,7 @@ import {
   getMint,
   TOKEN_2022_PROGRAM_ID,
 } from "@solana/spl-token";
+import { Prisma } from "@prisma/client";
 import type { FactoryTokenInfo } from "./types";
 
 @Injectable()
@@ -108,6 +109,7 @@ export class IndexerService {
       const tokenState = tokenStateInfo
         ? parseTokenState(tokenStateInfo)
         : null;
+      const metadata = await this.buildIndexedMetadata(deployment.tokenMint);
 
       tokens.push({
         asset_id: Number(deployment.deploymentId),
@@ -117,7 +119,7 @@ export class IndexerService {
         reference_id: tokenState?.isin || deployment.tokenMint.toBase58(),
         description: "",
         legal_owner: deployment.issuer.toBase58(),
-        metadata: undefined,
+        metadata: metadata ? JSON.stringify(metadata) : undefined,
         deployed_at: Number(deployment.deployedAt),
       });
       await this.sleep(this.rpcDelayMs);
@@ -128,9 +130,17 @@ export class IndexerService {
 
   private async upsertAssets(tokens: FactoryTokenInfo[]) {
     for (const token of tokens) {
-      const metadata = token.metadata
+      const indexedMetadata = token.metadata
         ? this.safeParseJson(token.metadata)
         : null;
+      const existing = await this.prisma.asset.findUnique({
+        where: { tokenContract: token.contract_address },
+        select: { metadata: true },
+      });
+      const metadata = this.mergeMetadata(existing?.metadata, indexedMetadata);
+      const metadataUpdate =
+        metadata === undefined ? {} : { metadata: metadata as Prisma.InputJsonValue };
+
       await this.prisma.asset.upsert({
         where: { tokenContract: token.contract_address },
         update: {
@@ -141,7 +151,7 @@ export class IndexerService {
           description: token.description,
           issuerWallet: token.legal_owner,
           legalOwner: token.legal_owner,
-          metadata,
+          ...metadataUpdate,
           deployedAt: new Date(token.deployed_at * 1000),
         },
         create: {
@@ -153,7 +163,10 @@ export class IndexerService {
           description: token.description,
           issuerWallet: token.legal_owner,
           legalOwner: token.legal_owner,
-          metadata,
+          metadata:
+            metadata === undefined
+              ? Prisma.JsonNull
+              : (metadata as Prisma.InputJsonValue),
           deployedAt: new Date(token.deployed_at * 1000),
         },
       });
@@ -341,6 +354,103 @@ export class IndexerService {
     }
   }
 
+  private mergeMetadata(existing: unknown, indexed: unknown) {
+    const existingObject = isRecord(existing) ? existing : null;
+    const indexedObject = isRecord(indexed) ? indexed : null;
+
+    if (!existingObject && !indexedObject) return undefined;
+    if (!existingObject) return indexedObject;
+    if (!indexedObject) return existingObject;
+
+    return {
+      ...existingObject,
+      ...indexedObject,
+      trustedIssuers:
+        Array.isArray(indexedObject.trustedIssuers) &&
+        indexedObject.trustedIssuers.length > 0
+          ? indexedObject.trustedIssuers
+          : existingObject.trustedIssuers,
+      claimTopics:
+        Array.isArray(indexedObject.claimTopics) &&
+        indexedObject.claimTopics.length > 0
+          ? indexedObject.claimTopics
+          : existingObject.claimTopics,
+    };
+  }
+
+  private async buildIndexedMetadata(tokenMint: PublicKey) {
+    const [ctrState] = PublicKey.findProgramAddressSync(
+      [Buffer.from("ctr_state"), tokenMint.toBuffer()],
+      getCtrProgramId(),
+    );
+    const [tirState] = PublicKey.findProgramAddressSync(
+      [Buffer.from("tir_state"), tokenMint.toBuffer()],
+      getTirProgramId(),
+    );
+
+    const claimTopics = await this.readClaimTopics(ctrState);
+    const trustedIssuers = await this.readTrustedIssuers(tirState);
+
+    if (claimTopics.length === 0 && trustedIssuers.length === 0) {
+      return null;
+    }
+
+    return {
+      claimTopics,
+      trustedIssuers,
+    };
+  }
+
+  private async readClaimTopics(ctrState: PublicKey): Promise<string[]> {
+    const account = await this.withRpcRetries(
+      `getAccountInfo(ctrState:${ctrState.toBase58()})`,
+      () => this.connection.getAccountInfo(ctrState, "confirmed"),
+    );
+    if (!account) return [];
+    return parseClaimTopicsState(account);
+  }
+
+  private async readTrustedIssuers(tirState: PublicKey) {
+    const accounts = await this.withRpcRetries("getProgramAccounts(tir issuers)", () =>
+      this.connection.getProgramAccounts(getTirProgramId(), {
+        commitment: "confirmed",
+        filters: [
+          { dataSize: ISSUER_ENTRY_SIZE },
+          { memcmp: { offset: 8 + 32, bytes: tirState.toBase58() } },
+        ],
+      }),
+    );
+
+    if (!accounts) return [];
+
+    const issuers = [];
+    for (const account of accounts) {
+      const issuer = parseIssuerEntry(account.account);
+      if (!issuer) continue;
+
+      const walletAddress = await this.readFidOwner(issuer.issuerFid);
+      issuers.push({
+        label: issuer.label,
+        issuerFid: issuer.issuerFid.toBase58(),
+        walletAddress: walletAddress || "",
+        topics: issuer.topics,
+        active: issuer.active,
+      });
+      await this.sleep(this.rpcDelayMs);
+    }
+
+    return issuers;
+  }
+
+  private async readFidOwner(fid: PublicKey) {
+    const account = await this.withRpcRetries(
+      `getAccountInfo(fid:${fid.toBase58()})`,
+      () => this.connection.getAccountInfo(fid, "confirmed"),
+    );
+    if (!account || account.data.length < 40) return "";
+    return new PublicKey(account.data.subarray(8, 40)).toBase58();
+  }
+
   private async discoverWalletsFromTxs(
     tokenContract: string
   ): Promise<string[]> {
@@ -350,9 +460,14 @@ export class IndexerService {
 }
 
 const TOKEN_DEPLOYMENT_SIZE = 345;
+const ISSUER_ENTRY_SIZE = 8 + 32 + 32 + 4 + 8 * 20 + 1 + 4 + 64 + 1;
 
 function readPubkey(data: Buffer, offset: number) {
   return new PublicKey(data.subarray(offset, offset + 32));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function parseTokenDeployment(account: AccountInfo<Buffer>) {
@@ -420,6 +535,65 @@ function parseOwnerState(account: AccountInfo<Buffer>) {
   const data = account.data;
   if (data.length < 8 + 32) return null;
   return new PublicKey(data.subarray(8, 40));
+}
+
+function parseClaimTopicsState(account: AccountInfo<Buffer>) {
+  const data = account.data;
+  let offset = 8 + 32 + 32;
+  if (data.length < offset + 4) return [];
+  const topicCount = data.readUInt32LE(offset);
+  offset += 4;
+
+  const topics: string[] = [];
+  for (let index = 0; index < topicCount; index += 1) {
+    if (data.length < offset + 8) break;
+    topics.push(data.readBigUInt64LE(offset).toString());
+    offset += 8;
+  }
+  return topics;
+}
+
+function parseIssuerEntry(account: AccountInfo<Buffer>) {
+  const data = account.data;
+  let offset = 8;
+  if (data.length < ISSUER_ENTRY_SIZE) return null;
+
+  const issuerFid = readPubkey(data, offset);
+  offset += 32;
+  offset += 32; // tir
+
+  const topicCount = data.readUInt32LE(offset);
+  offset += 4;
+
+  const topics: string[] = [];
+  for (let index = 0; index < topicCount; index += 1) {
+    if (data.length < offset + 8) return null;
+    topics.push(data.readBigUInt64LE(offset).toString());
+    offset += 8;
+  }
+
+  if (data.length < offset + 1 + 4) return null;
+  const active = data.readUInt8(offset) === 1;
+  offset += 1;
+
+  const labelLength = data.readUInt32LE(offset);
+  offset += 4;
+  if (data.length < offset + labelLength) return null;
+  const label = data.subarray(offset, offset + labelLength).toString("utf8");
+
+  return { issuerFid, topics, active, label };
+}
+
+function getCtrProgramId() {
+  return new PublicKey(
+    process.env.FRACKS_CTR || "12rCF9fuSth8T3o6sfpfWdGyaDEQ1jNsxe1ZvKH7q2tS",
+  );
+}
+
+function getTirProgramId() {
+  return new PublicKey(
+    process.env.FRACKS_TIR || "8KDYYPx74w6ZLKZgcvVWrj1mCv1gcULdTh2jbxcJwGMJ",
+  );
 }
 
 function deriveOwnerStatePDA(tokenMint: PublicKey): [PublicKey, number] {

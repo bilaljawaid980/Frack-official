@@ -97,8 +97,9 @@ function mapIndexedAsset(asset: {
     "art",
     "intellectual-property",
   ];
-  const assetType = validAssetTypes.includes(rawMetadata.type)
-    ? rawMetadata.type
+  const metadataAssetType = rawMetadata.assetType || rawMetadata.type;
+  const assetType = validAssetTypes.includes(metadataAssetType)
+    ? metadataAssetType
     : "real-estate";
   const issuedAt = asset.deployedAt
     ? new Date(asset.deployedAt)
@@ -107,7 +108,8 @@ function mapIndexedAsset(asset: {
       : new Date();
 
   return {
-    id: asset.factoryAssetId ? asset.factoryAssetId.toString() : asset.id,
+    id: asset.id,
+    factoryAssetId: asset.factoryAssetId ?? null,
     name: rawMetadata.name || asset.name,
     symbol: asset.symbol,
     description: asset.description || rawMetadata.description || "",
@@ -118,9 +120,9 @@ function mapIndexedAsset(asset: {
       | "debt"
       | "art"
       | "intellectual-property",
-    totalSupply: 0,
+    totalSupply: Number(rawMetadata.totalSupply || 0),
     tokenizedAmount: 0,
-    tokenPrice: 1.0,
+    tokenPrice: Number(rawMetadata.initialPrice || 1.0),
     tokenDenom: "lamports",
     underlyingValue: rawMetadata.underlyingValue || 0,
     currency: rawMetadata.currency || "USD",
@@ -138,6 +140,7 @@ function mapIndexedAsset(asset: {
     tokenContractAddress: asset.tokenContract,
     chainId: process.env.NEXT_PUBLIC_SOLANA_CLUSTER || "mainnet-beta",
     lifecycleState: asset.lifecycleState || "ISSUED",
+    asset_id: asset.factoryAssetId ?? undefined,
     metadata: rawMetadata,
   };
 }

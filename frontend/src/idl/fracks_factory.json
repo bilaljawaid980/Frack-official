@@ -131,37 +131,6 @@
           }
         },
         {
-          "name": "offering_terms",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  111,
-                  102,
-                  102,
-                  101,
-                  114,
-                  105,
-                  110,
-                  103,
-                  95,
-                  116,
-                  101,
-                  114,
-                  109,
-                  115
-                ]
-              },
-              {
-                "kind": "arg",
-                "path": "args.token_mint"
-              }
-            ]
-          }
-        },
-        {
           "name": "token_state",
           "writable": true
         },
@@ -445,19 +414,6 @@
       ]
     },
     {
-      "name": "OfferingTerms",
-      "discriminator": [
-        44,
-        29,
-        22,
-        211,
-        63,
-        217,
-        231,
-        196
-      ]
-    },
-    {
       "name": "TokenDeployment",
       "discriminator": [
         253,
@@ -581,16 +537,6 @@
       "code": 12076,
       "name": "IrsAlreadyInitialized",
       "msg": "IRS state is already initialized for this token suite."
-    },
-    {
-      "code": 12077,
-      "name": "InvalidOfferingPrice",
-      "msg": "Offering price is invalid."
-    },
-    {
-      "code": 12078,
-      "name": "InvalidPaymentMint",
-      "msg": "Payment mint is invalid."
     }
   ],
   "types": [
@@ -652,20 +598,6 @@
             }
           },
           {
-            "name": "price_per_token",
-            "type": "u64"
-          },
-          {
-            "name": "price_decimals",
-            "type": "u8"
-          },
-          {
-            "name": "payment_mint",
-            "type": {
-              "option": "pubkey"
-            }
-          },
-          {
             "name": "salt",
             "type": {
               "array": [
@@ -717,48 +649,6 @@
           {
             "name": "deployment_count",
             "type": "u64"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
-          }
-        ]
-      }
-    },
-    {
-      "name": "OfferingTerms",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "issuer",
-            "type": "pubkey"
-          },
-          {
-            "name": "token_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "price_per_token",
-            "type": "u64"
-          },
-          {
-            "name": "price_decimals",
-            "type": "u8"
-          },
-          {
-            "name": "payment_mint",
-            "type": {
-              "option": "pubkey"
-            }
-          },
-          {
-            "name": "active",
-            "type": "bool"
-          },
-          {
-            "name": "created_at",
-            "type": "i64"
           },
           {
             "name": "bump",
@@ -908,24 +798,6 @@
           {
             "name": "compliance_state",
             "type": "pubkey"
-          },
-          {
-            "name": "offering_terms",
-            "type": "pubkey"
-          },
-          {
-            "name": "price_per_token",
-            "type": "u64"
-          },
-          {
-            "name": "price_decimals",
-            "type": "u8"
-          },
-          {
-            "name": "payment_mint",
-            "type": {
-              "option": "pubkey"
-            }
           },
           {
             "name": "deployed_at",

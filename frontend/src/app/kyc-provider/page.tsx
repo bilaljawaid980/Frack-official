@@ -44,6 +44,7 @@ import { useAnchorProvider } from "@/hooks/useAnchorProvider";
 import { useWallet } from "@/hooks/use-wallet";
 import { apiFetch } from "@/lib/backend";
 import { IdentityService } from "@/services/identity";
+import { TokenService } from "@/services/token";
 import type { TokenPurchaseRequest } from "@/types/token-purchase-request";
 
 type ReviewType = "KYC" | "AML";
@@ -142,16 +143,20 @@ export default function KycProviderPage() {
     const timeout = window.setTimeout(async () => {
       setCheckingClaims(true);
       try {
-        const service = new IdentityService(anchorProvider);
+        const ident = new IdentityService(anchorProvider);
+        const tokenSvc = new TokenService(anchorProvider);
         const entries = await Promise.all(
           requests.map(async (request) => {
             try {
-              const exists = await service.hasActiveClaimForTopic(
-                new PublicKey(request.investorWallet),
-                new PublicKey(address),
-                BigInt(getReviewTopic(request)),
-              );
-              return [request.id, exists] as const;
+              const mint = new PublicKey(request.tokenContract);
+              const check = await tokenSvc.checkTokenScopedClaimForRequest({
+                requestId: request.id,
+                mint,
+                investorWallet: new PublicKey(request.investorWallet),
+                providerWallet: new PublicKey(address),
+                topic: BigInt(getReviewTopic(request)),
+              });
+              return [request.id, Boolean(check.investorHasActiveClaim)] as const;
             } catch {
               return [request.id, false] as const;
             }
@@ -201,22 +206,14 @@ export default function KycProviderPage() {
 
     setProcessingId(request.id);
     try {
-      const service = new IdentityService(anchorProvider);
+      const identityService = new IdentityService(anchorProvider);
+      const tokenService = new TokenService(anchorProvider);
       const mint = new PublicKey(request.tokenContract);
       const providerWallet = new PublicKey(address);
       const investorWallet = new PublicKey(request.investorWallet);
 
-      const trustedTopics = await service.fetchTrustedIssuerTopics(
-        mint,
-        providerWallet,
-      );
-      if (!trustedTopics.map(String).includes(topic)) {
-        throw new Error(
-          `This wallet is not trusted for ${reviewType} claim topic ${topic}.`,
-        );
-      }
-
-      const investorFid = await service.fetchFid(investorWallet);
+      // Ensure investor has a FID; if not, prompt investor identity action and stop.
+      const investorFid = await identityService.fetchFid(investorWallet);
       if (!investorFid) {
         await updateRequestStatus(request, "ACTION_REQUIRED_INVESTOR_IDENTITY");
         toast.error("Investor must register FID before claim issuance.", {
@@ -225,31 +222,46 @@ export default function KycProviderPage() {
         return;
       }
 
-      const existingClaim = await service.hasActiveClaimForTopic(
+      // Token-scoped validation: required topics, claim existence, revoked/expired, provider trust in TIR
+      const check = await tokenService.checkTokenScopedClaimForRequest({
+        requestId: request.id,
+        mint,
         investorWallet,
         providerWallet,
-        BigInt(topic),
-      );
-      if (existingClaim) {
-        await updateRequestStatus(request, nextStatus);
-        toast.success(
-          `${reviewType} claim already exists. Request forwarded.`,
-          { id: loadingToast },
+        topic: BigInt(topic),
+      });
+
+      if (!check.ok) {
+        // If provider is not trusted for this token/topic, surface explicit error.
+        if (!check.providerTrustedForToken) {
+          throw new Error(`This wallet is not trusted for ${reviewType} claim topic ${topic}.`);
+        }
+
+        // Provider is trusted for this token/topic but token-scoped check failed
+        // because the investor has no valid claim. In this case the provider
+        // should issue the claim for the investor and advance the request.
+        const signature = await identityService.issueClaim(
+          investorWallet,
+          BigInt(topic),
+          signMessage,
         );
+        await updateRequestStatus(request, nextStatus, {
+          claimTxHash: signature,
+        });
+        toast.success(`${reviewType} claim issued. Request advanced.`, {
+          id: loadingToast,
+        });
         return;
       }
 
-      const signature = await service.issueClaim(
-        investorWallet,
-        BigInt(topic),
-        signMessage,
-      );
-      await updateRequestStatus(request, nextStatus, {
-        claimTxHash: signature,
-      });
-      toast.success(`${reviewType} claim issued. Request advanced.`, {
-        id: loadingToast,
-      });
+      // If ok=true, a valid claim already exists for this token's context — forward request.
+      if (check.investorHasActiveClaim) {
+        await updateRequestStatus(request, nextStatus);
+        toast.success(`${reviewType} claim already exists. Request forwarded.`, {
+          id: loadingToast,
+        });
+        return;
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Approval failed";
       if (

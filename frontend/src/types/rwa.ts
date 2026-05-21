@@ -1,5 +1,6 @@
 export interface RWAAsset {
   id: string;
+  factoryAssetId?: number | null;
   name: string;
   symbol: string;
   description: string;

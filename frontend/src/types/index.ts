@@ -198,12 +198,6 @@ export interface DeployTokenSuiteArgs {
   complianceModules: string[];
   /** Optional existing IRS account to share (base-58), or null. */
   sharedIrs: string | null;
-  /** Offering price, normalized by priceDecimals. */
-  pricePerToken?: bigint;
-  /** Decimals used by pricePerToken. */
-  priceDecimals?: number;
-  /** Optional SPL mint accepted for payment. Null means off-chain/fiat settlement. */
-  paymentMint?: string | null;
   /** 32-byte deployment salt. */
   salt: Uint8Array;
 }

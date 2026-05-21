@@ -282,9 +282,6 @@ export function IssuanceForm({
         trustedIssuers,
         complianceModules: data.complianceRequirements.selectedModules,
         sharedIrs: null,
-        pricePerToken,
-        priceDecimals: data.tokenDetails.decimals,
-        paymentMint: null,
         salt,
       },
       {

@@ -376,7 +376,15 @@ export class ComplianceService {
 
   private _encodeBN(value: bigint): Uint8Array {
     const buf = Buffer.alloc(8);
-    buf.writeBigUInt64LE(value);
+    const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    if (typeof view.setBigUint64 === "function") {
+      view.setBigUint64(0, value, true);
+    } else {
+      const lo = Number(value & 0xffffffffn);
+      const hi = Number((value >> 32n) & 0xffffffffn);
+      buf.writeUInt32LE(lo, 0);
+      buf.writeUInt32LE(hi, 4);
+    }
     return buf;
   }
 }

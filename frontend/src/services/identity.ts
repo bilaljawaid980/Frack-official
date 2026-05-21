@@ -4,7 +4,7 @@
 // identity registry state, wallet identities, and FID accounts.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { AnchorProvider, Idl, Program } from "@coral-xyz/anchor";
+import { AnchorProvider, Idl, Program, BN } from "@coral-xyz/anchor";
 import {
   Ed25519Program,
   Keypair,
@@ -24,10 +24,10 @@ import {
   SEED_WALLET_IDENTITY,
 } from "@/lib/constants";
 import type { FidAccount, IrpState, WalletIdentity } from "@/types";
-import IrpIdl from "@/lib/solana/idl/fracks_irp.json";
-import IrsIdl from "@/lib/solana/idl/fracks_irs.json";
-import FidIdl from "@/lib/solana/idl/fracks_fid.json";
-import TirIdl from "@/lib/solana/idl/fracks_tir.json";
+import IrpIdl from "@/idl/fracks_irp.json";
+import IrsIdl from "@/idl/fracks_irs.json";
+import FidIdl from "@/idl/fracks_fid.json";
+import TirIdl from "@/idl/fracks_tir.json";
 import { fetchFactoryStateAccount, type FactoryStateAccount } from "@/lib/solana";
 
 type IrpProgram = Program<Idl>;
@@ -652,6 +652,26 @@ export class IdentityService {
   }
 
   /**
+   * Fetches the IRS state owner for a given mint's IRS.
+   * Returns the owner's public key as a base58 string or null on error.
+   */
+  async fetchIrsOwner(mint: PublicKey): Promise<string | null> {
+    try {
+      const ids = await this.getProgramIds();
+      const irpState = await this.fetchIrpState(mint);
+      const irsStatePubkey = new PublicKey(irpState.irsAccount);
+      const irsProgram = this.getIrsProgram(ids.irs);
+      // Account name in IDL: IdentityRegistryStorageState -> identityRegistryStorageState
+      const raw = await (irsProgram.account as any).identityRegistryStorageState.fetch(
+        irsStatePubkey,
+      );
+      return (raw.owner as PublicKey).toBase58();
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Investor submits an onboarding application for the token's IRS.
    * metadataHash should be a 32-byte digest of off-chain KYC application data.
    */
@@ -842,24 +862,84 @@ export class IdentityService {
       signature,
     });
 
-    const addClaimIx = new TransactionInstruction({
-      programId: ids.fid,
-      keys: [
-        { pubkey: issuerOwner, isSigner: true, isWritable: true },
-        { pubkey: issuerFid, isSigner: false, isWritable: false },
-        { pubkey: targetFid, isSigner: false, isWritable: true },
-        { pubkey: claim, isSigner: false, isWritable: true },
-        { pubkey: claimTopicIndex, isSigner: false, isWritable: true },
-        { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isSigner: false, isWritable: false },
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      ],
-      data: encodeAddClaimArgs(topic, dataHash, signature, expiresAt),
-    });
+    // Debug logging describing the AddClaim call and args
+    try {
+      console.info("[ADD CLAIM DEBUG] pre", {
+        fidProgramId: ids.fid.toBase58(),
+        instruction: "add_claim",
+        subjectWallet: targetWallet.toBase58(),
+        targetFid: targetFid.toBase58(),
+        providerWallet: issuerOwner.toBase58(),
+        issuerFid: issuerFid.toBase58(),
+        claimPda: claim.toBase58(),
+        claimTopicIndex: claimTopicIndex.toBase58(),
+        topic: topic.toString(),
+        expiresAt: expiresAt.toString(),
+        dataHashLen: dataHash.length,
+        signatureLen: signature.length,
+        argsObject: {
+          topic: topic.toString(),
+          data_hash_len: dataHash.length,
+          signature_len: signature.length,
+          expires_at: expiresAt.toString(),
+        },
+        idlArgs: (FidIdl as any).instructions?.find((i: any) => i.name === "add_claim")?.args ?? null,
+      });
+    } catch (e) {
+      // ignore logging failures
+    }
 
-    const tx = new Transaction().add(ed25519Ix, addClaimIx);
-    return await this.provider.sendAndConfirm(tx, [], {
-      commitment: "confirmed",
-    });
+    // Debug: show core PDAs and keys used for the AddClaim instruction
+    try {
+      console.info("[ADD CLAIM DEBUG] issuerOwner", issuerOwner.toBase58());
+      console.info("[ADD CLAIM DEBUG] issuerFid", issuerFid.toBase58());
+      console.info("[ADD CLAIM DEBUG] targetFid", targetFid.toBase58());
+      console.info("[ADD CLAIM DEBUG] claimPda", claim.toBase58());
+      console.info("[ADD CLAIM DEBUG] claimTopicIndex", claimTopicIndex.toBase58());
+    } catch (e) {}
+
+    const addClaimIx = await (fidProgram.methods as any)
+      .addClaim(new BN(topic.toString()), issuerFid, Buffer.from(dataHash), Buffer.from(signature), new BN(expiresAt.toString()))
+      .accounts({
+        issuerOwner: issuerOwner,
+        targetFid: targetFid,
+        claim: claim,
+        claimTopicIndex: claimTopicIndex,
+        instructionsSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
+        systemProgram: SystemProgram.programId,
+      })
+      .instruction();
+
+    try {
+      console.info("[ADD CLAIM DEBUG] instructionDataLength", addClaimIx.data?.length ?? null);
+      console.info("[ADD CLAIM DEBUG] instructionExpectedLength", 152);
+    } catch {
+      // noop
+    }
+
+    try {
+      try {
+        console.info("[ADD CLAIM DEBUG] instructionDataHex", Buffer.from(addClaimIx.data ?? []).toString("hex"));
+      } catch {}
+
+      const tx = new Transaction().add(ed25519Ix, addClaimIx);
+      return await this.provider.sendAndConfirm(tx, [], {
+        commitment: "confirmed",
+      });
+    } catch (err: any) {
+      try {
+        // If the error exposes getLogs (SendTransactionError), fetch and print full logs
+        if (typeof err.getLogs === "function") {
+          const logs = await err.getLogs();
+          console.error("[ADD CLAIM DEBUG] sendAndConfirm logs:", logs);
+        } else if (err.logs) {
+          console.error("[ADD CLAIM DEBUG] sendAndConfirm logs:", err.logs);
+        }
+      } catch (fetchErr) {
+        console.error("[ADD CLAIM DEBUG] failed to fetch logs", fetchErr);
+      }
+      throw err;
+    }
   }
 
   private async claimMessage(

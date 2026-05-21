@@ -65,6 +65,7 @@
     "eslint": "^9.38.0",
     "eslint-config-next": "^16.0.10",
     "tailwindcss": "^4",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "^5"
   }
 }

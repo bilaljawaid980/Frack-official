@@ -10,14 +10,14 @@ import {
 } from '@solana/web3.js';
 import { AnchorProvider, Program, setProvider, type Idl } from '@coral-xyz/anchor';
 import type { AnchorWallet } from '@solana/wallet-adapter-react';
-import factoryIdl from '@/lib/solana/idl/fracks_factory.json';
-import tokenIdl from '@/lib/solana/idl/fracks_token.json';
-import irpIdl from '@/lib/solana/idl/fracks_irp.json';
-import irsIdl from '@/lib/solana/idl/fracks_irs.json';
-import tirIdl from '@/lib/solana/idl/fracks_tir.json';
-import ctrIdl from '@/lib/solana/idl/fracks_ctr.json';
-import complianceIdl from '@/lib/solana/idl/fracks_compliance.json';
-import fidIdl from '@/lib/solana/idl/fracks_fid.json';
+import factoryIdl from '@/idl/fracks_factory.json';
+import tokenIdl from '@/idl/fracks_token.json';
+import irpIdl from '@/idl/fracks_irp.json';
+import irsIdl from '@/idl/fracks_irs.json';
+import tirIdl from '@/idl/fracks_tir.json';
+import ctrIdl from '@/idl/fracks_ctr.json';
+import complianceIdl from '@/idl/fracks_compliance.json';
+import fidIdl from '@/idl/fracks_fid.json';
 import { RPC_URL } from '@/lib/constants';
 
 // 1) Program constants (verified from ERC-3436/programs/*/src/lib.rs declare_id! macros)

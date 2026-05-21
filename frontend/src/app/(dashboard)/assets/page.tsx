@@ -42,6 +42,10 @@ import { useWallet } from "@/hooks/use-wallet";
 import { formatCurrency, formatPercentage } from "@/lib/utils";
 import { RWAAsset } from "@/types/rwa";
 
+function assetRenderKey(asset: RWAAsset) {
+  return `${asset.id}-${asset.contractAddress}`;
+}
+
 export default function AssetsPage() {
   const { address, connectWallet, isConnecting } = useWallet();
   const { assets, loading, selectedAsset, setSelectedAsset } =
@@ -425,7 +429,7 @@ export default function AssetsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
               {filteredAssets.map((asset, index) => (
                 <motion.div
-                  key={asset.id}
+                  key={assetRenderKey(asset)}
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: index * 0.1 }}
@@ -440,7 +444,7 @@ export default function AssetsPage() {
                 <div className="space-y-4">
                   {filteredAssets.map((asset, index) => (
                     <motion.div
-                      key={asset.id}
+                      key={assetRenderKey(asset)}
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.1 }}
@@ -560,7 +564,7 @@ export default function AssetsPage() {
                     .slice(0, 6)
                     .map((asset, index) => (
                       <motion.div
-                        key={asset.id}
+                        key={assetRenderKey(asset)}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.1 }}
@@ -592,7 +596,7 @@ export default function AssetsPage() {
                     .filter((asset) => asset.complianceStatus === "compliant")
                     .map((asset, index) => (
                       <motion.div
-                        key={asset.id}
+                        key={assetRenderKey(asset)}
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: index * 0.1 }}
@@ -669,7 +673,7 @@ export default function AssetsPage() {
                     .slice(0, 6)
                     .map((asset, index) => (
                       <motion.div
-                        key={asset.id}
+                        key={assetRenderKey(asset)}
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ delay: index * 0.1 }}
