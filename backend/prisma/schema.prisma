@@ -340,3 +340,34 @@ model TokenPurchaseRequest {
   @@index([issuerWallet])
 }
 
+model TokenTransferRequest {
+  id                  String    @id
+  assetId             String?   @map("asset_id")
+  tokenContract       String
+  fromWallet          String
+  toWallet            String
+  amount              Float?
+  status              String    @default("DRAFT")
+  requiredClaimTopics String[]  @default([]) @map("required_claim_topics")
+  kycProvider         String?
+  amlProvider         String?
+  issuerWallet        String?
+  preflightFailure    String?
+  simulationError     String?
+  transferTxHash      String?
+  transferredAt       DateTime?
+  rejectionReason     String?
+  rejectedAt          DateTime?
+  rejectedBy          String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([tokenContract])
+  @@index([fromWallet])
+  @@index([toWallet])
+  @@index([kycProvider])
+  @@index([amlProvider])
+  @@index([issuerWallet])
+  @@index([status])
+}
+

@@ -470,11 +470,11 @@ export default function AssetDetailPage({
         <Button
           size="lg"
           onClick={() =>
-            router.push(`/transfer?asset=${asset.id}&symbol=${asset.symbol}`)
+            router.push(`/investor/request-form?asset=${asset.id}`)
           }
           className="bg-gradient-to-tr from-[#172E7F] to-[#2A5FA6]"
         >
-          Trade Tokens
+          Request Tokens
         </Button>
         {/* <Button
           size="lg"

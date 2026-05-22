@@ -51,6 +51,12 @@ const DEPLOYED_TIR_PROGRAM_ID = new PublicKey(
 const ADD_CLAIM_DISCRIMINATOR = Buffer.from([
   70, 114, 85, 106, 66, 244, 46, 99,
 ]);
+const REVOKE_CLAIM_DISCRIMINATOR = Buffer.from([
+  182, 1, 142, 33, 207, 153, 37, 132,
+]);
+const CLAIM_ACCOUNT_DISCRIMINATOR = Buffer.from([
+  113, 109, 47, 96, 242, 219, 61, 165,
+]);
 const REGISTER_IDENTITY_DISCRIMINATOR = Buffer.from([
   164, 118, 227, 177, 47, 176, 187, 248,
 ]);
@@ -110,6 +116,19 @@ function encodeSetIdentityActivationArgs(active: boolean): Buffer {
     SET_IDENTITY_ACTIVATION_DISCRIMINATOR,
     Buffer.from([active ? 1 : 0]),
   ]);
+}
+
+function hasDiscriminator(data: Buffer, discriminator: Buffer): boolean {
+  return data.length >= discriminator.length && data.subarray(0, discriminator.length).equals(discriminator);
+}
+
+function isClaimDiscriminatorMismatch(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return (
+    message.includes("AccountDiscriminatorMismatch") ||
+    message.includes("Account discriminator did not match") ||
+    message.includes("Error Number: 3002")
+  );
 }
 
 function getLocalClaimSigner(owner: PublicKey): Keypair {
@@ -393,6 +412,20 @@ export class IdentityService {
     };
   }
 
+  async transferIrpOwnership(mint: PublicKey, newOwner: PublicKey): Promise<string> {
+    const ids = await this.getProgramIds();
+    const irpProgram = this.getIrpProgram(ids.irp);
+    const [registryState] = this.findIrpStatePda(mint, ids.irp);
+
+    return await (irpProgram.methods as any)
+      .transferRegistryOwnership(newOwner)
+      .accounts({
+        owner: this.provider.wallet.publicKey,
+        registryState,
+      })
+      .rpc({ commitment: "confirmed" });
+  }
+
   /**
    * Fetches the WalletIdentity account for a wallet in a specific token's IRS.
    * Returns null if the identity does not exist.
@@ -518,6 +551,101 @@ export class IdentityService {
     } catch {
       return false;
     }
+  }
+
+  async revokeActiveClaimForTopic(
+    targetWallet: PublicKey,
+    topic: bigint,
+  ): Promise<string> {
+    const ids = await this.getProgramIds();
+    const fidProgram = this.getFidProgram(ids.fid);
+    const issuerOwner = this.provider.wallet.publicKey;
+    const [issuerFid] = this.findFidPda(issuerOwner, ids.fid);
+    const [targetFid] = this.findFidPda(targetWallet, ids.fid);
+    const [claimTopicIndex] = this.findClaimTopicIndexPda(
+      targetFid,
+      issuerFid,
+      topic,
+      ids.fid,
+    );
+
+    const indexInfo = await this.provider.connection.getAccountInfo(
+      claimTopicIndex,
+      "confirmed",
+    );
+    if (!indexInfo || indexInfo.data.length <= 116 || indexInfo.data.readUInt8(116) !== 1) {
+      throw new Error("No active claim exists to revoke for this investor/topic/provider.");
+    }
+
+    const claim = new PublicKey(indexInfo.data.subarray(80, 112));
+    const claimInfo = await this.provider.connection.getAccountInfo(
+      claim,
+      "confirmed",
+    );
+    if (!claimInfo || !hasDiscriminator(claimInfo.data, CLAIM_ACCOUNT_DISCRIMINATOR)) {
+      throw new Error(
+        `The active claim index points to ${claim.toBase58()}, but that account is not a valid ClaimAccount. This stale claim cannot be revoked by the frontend; the FID contract needs a repair/reset instruction or the request must use a different trusted issuer/topic.`,
+      );
+    }
+
+    try {
+      const revokeIx = new TransactionInstruction({
+        programId: ids.fid,
+        keys: [
+          { pubkey: issuerOwner, isSigner: true, isWritable: true },
+          { pubkey: issuerFid, isSigner: false, isWritable: false },
+          { pubkey: claim, isSigner: false, isWritable: true },
+          { pubkey: claimTopicIndex, isSigner: false, isWritable: true },
+        ],
+        data: REVOKE_CLAIM_DISCRIMINATOR,
+      });
+
+      return await this.provider.sendAndConfirm(new Transaction().add(revokeIx), [], {
+        commitment: "confirmed",
+      });
+    } catch (err) {
+      if (isClaimDiscriminatorMismatch(err)) {
+        const [freshIndexInfo, freshClaimInfo] =
+          await this.provider.connection.getMultipleAccountsInfo(
+            [claimTopicIndex, claim],
+            "confirmed",
+          );
+        throw new Error(
+          [
+            "FID claim revoke failed because the active claim account does not match the ClaimAccount type.",
+            `targetWallet=${targetWallet.toBase58()}`,
+            `targetFid=${targetFid.toBase58()}`,
+            `issuerOwner=${issuerOwner.toBase58()}`,
+            `issuerFid=${issuerFid.toBase58()}`,
+            `topic=${topic.toString()}`,
+            `claimTopicIndex=${claimTopicIndex.toBase58()}`,
+            `claimTopicIndexExists=${Boolean(freshIndexInfo)}`,
+            `claimTopicIndexActive=${freshIndexInfo && freshIndexInfo.data.length > 116 ? freshIndexInfo.data.readUInt8(116) === 1 : "unknown"}`,
+            `activeClaim=${claim.toBase58()}`,
+            `activeClaimExists=${Boolean(freshClaimInfo)}`,
+            `activeClaimOwner=${freshClaimInfo?.owner.toBase58() ?? "none"}`,
+            `activeClaimDiscriminator=${freshClaimInfo ? Buffer.from(freshClaimInfo.data.subarray(0, 8)).toString("hex") : "none"}`,
+            "This stale claim index cannot be repaired by retrying. The FID contract needs a repair/remove path for this claim index, or the request must use a different trusted issuer/topic or a fresh investor FID.",
+          ].join("\n"),
+        );
+      }
+      throw err;
+    }
+  }
+
+  async setOwnFidSignerKey(newSignerKey: PublicKey): Promise<string> {
+    const ids = await this.getProgramIds();
+    const fidProgram = this.getFidProgram(ids.fid);
+    const owner = this.provider.wallet.publicKey;
+    const [fid] = this.findFidPda(owner, ids.fid);
+
+    return await (fidProgram.methods as any)
+      .setSignerKey(newSignerKey)
+      .accounts({
+        authority: owner,
+        fid,
+      })
+      .rpc({ commitment: "confirmed" });
   }
 
   async ensureOwnFid(country = 0, isIssuer = false): Promise<string | null> {
@@ -819,6 +947,21 @@ export class IdentityService {
     const targetFidAccount = await (fidProgram.account as any).fidAccount.fetch(targetFid);
     const claimCount = Number(targetFidAccount.claimCount);
     const [claim] = this.findClaimPda(targetFid, claimCount, ids.fid);
+    const existingClaimInfo = await this.provider.connection.getAccountInfo(
+      claim,
+      "confirmed",
+    );
+    if (existingClaimInfo) {
+      if (hasDiscriminator(existingClaimInfo.data, CLAIM_ACCOUNT_DISCRIMINATOR)) {
+        throw new Error(
+          `Next claim PDA ${claim.toBase58()} already contains a ClaimAccount for claim id ${claimCount}. The investor FID claim_count is stale; this requires a FID contract repair or a new investor FID.`,
+        );
+      }
+      throw new Error(
+        `Next claim PDA ${claim.toBase58()} already exists but is not a ClaimAccount. The FID claim counter points at an unusable account; this requires a FID contract repair or a new investor FID.`,
+      );
+    }
+
     const [claimTopicIndex] = this.findClaimTopicIndexPda(
       targetFid,
       issuerFid,
@@ -937,6 +1080,38 @@ export class IdentityService {
         }
       } catch (fetchErr) {
         console.error("[ADD CLAIM DEBUG] failed to fetch logs", fetchErr);
+      }
+      if (isClaimDiscriminatorMismatch(err)) {
+        const [freshTargetFid] = this.findFidPda(targetWallet, ids.fid);
+        const freshTargetFidAccount = await (fidProgram.account as any).fidAccount.fetch(freshTargetFid);
+        const freshClaimCount = Number(freshTargetFidAccount.claimCount);
+        const [freshClaim] = this.findClaimPda(freshTargetFid, freshClaimCount, ids.fid);
+        const [freshClaimTopicIndex] = this.findClaimTopicIndexPda(
+          freshTargetFid,
+          issuerFid,
+          topic,
+          ids.fid,
+        );
+        const [freshClaimInfo, freshIndexInfo] =
+          await this.provider.connection.getMultipleAccountsInfo(
+            [freshClaim, freshClaimTopicIndex],
+            "confirmed",
+          );
+        throw new Error(
+          [
+            "FID claim issuance failed because the on-chain claim account did not match the ClaimAccount type.",
+            `targetFid=${freshTargetFid.toBase58()}`,
+            `targetFid.claimCount=${freshClaimCount}`,
+            `claimPda=${freshClaim.toBase58()}`,
+            `claimPdaExists=${Boolean(freshClaimInfo)}`,
+            `claimPdaOwner=${freshClaimInfo?.owner.toBase58() ?? "none"}`,
+            `claimPdaDiscriminator=${freshClaimInfo ? Buffer.from(freshClaimInfo.data.subarray(0, 8)).toString("hex") : "none"}`,
+            `claimTopicIndex=${freshClaimTopicIndex.toBase58()}`,
+            `claimTopicIndexExists=${Boolean(freshIndexInfo)}`,
+            `claimTopicIndexActive=${freshIndexInfo && freshIndexInfo.data.length > 116 ? freshIndexInfo.data.readUInt8(116) === 1 : "unknown"}`,
+            "This account state cannot be fixed by retrying the same transaction. Revoke/remove the stale claim index with the correct issuer wallet if possible, or use a fresh investor FID / different trusted issuer topic. The contracts need an admin repair/reset path for corrupted claim indexes.",
+          ].join("\n"),
+        );
       }
       throw err;
     }

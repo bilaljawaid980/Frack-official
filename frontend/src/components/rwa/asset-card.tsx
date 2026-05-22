@@ -138,19 +138,19 @@ export function AssetCard({ asset, className }: AssetCardProps) {
               <span>View</span>
             </motion.button>
 
-            {/* Trade Button - Blue Gradient */}
+            {/* Request purchase/mint flow for marketplace assets. Secondary holder transfers use /transfer. */}
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => {
-                const url = `/transfer?asset=${encodeURIComponent(
+                const url = `/investor/request-form?asset=${encodeURIComponent(
                   asset.id
-                )}&symbol=${encodeURIComponent(asset.symbol)}`;
+                )}`;
                 router.push(url);
               }}
               className="flex-1 group/btn flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-br from-[#172E7F] to-[#2A5FA6] text-white text-sm font-bold hover:from-[#1a3490] hover:to-[#2f67b8] transition-all duration-200 shadow-[0_4px_16px_rgba(23,46,127,0.25)] hover:shadow-[0_6px_24px_rgba(23,46,127,0.35)]"
             >
-              <span>Trade</span>
+              <span>Request</span>
               <ArrowRight className="h-4 w-4 group-hover/btn:translate-x-0.5 transition-transform" />
             </motion.button>
           </div>

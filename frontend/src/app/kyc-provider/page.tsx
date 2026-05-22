@@ -48,6 +48,19 @@ import { TokenService } from "@/services/token";
 import type { TokenPurchaseRequest } from "@/types/token-purchase-request";
 
 type ReviewType = "KYC" | "AML";
+type TokenTransferRequest = {
+  id: string;
+  tokenContract: string;
+  fromWallet: string;
+  toWallet: string;
+  amount?: number;
+  status: string;
+  requiredClaimTopics: string[];
+  createdAt: string;
+};
+
+const RECOVERY_TOOLS_ENABLED =
+  process.env.NEXT_PUBLIC_ENABLE_RECOVERY_TOOLS === "true";
 
 function shortAddress(address: string) {
   return `${address.slice(0, 8)}...${address.slice(-6)}`;
@@ -67,6 +80,7 @@ export default function KycProviderPage() {
   const anchorProvider = useAnchorProvider();
 
   const [requests, setRequests] = useState<TokenPurchaseRequest[]>([]);
+  const [transferRequests, setTransferRequests] = useState<TokenTransferRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] =
@@ -78,14 +92,15 @@ export default function KycProviderPage() {
   const [checkingClaims, setCheckingClaims] = useState(false);
 
   const stats = useMemo(() => {
-    const kyc = requests.filter((request) => request.status === "PENDING_KYC");
-    const aml = requests.filter((request) => request.status === "PENDING_AML");
+    const allRequests = [...requests, ...transferRequests];
+    const kyc = allRequests.filter((request) => request.status === "PENDING_KYC");
+    const aml = allRequests.filter((request) => request.status === "PENDING_AML");
     return {
-      total: requests.length,
+      total: allRequests.length,
       kyc: kyc.length,
       aml: aml.length,
     };
-  }, [requests]);
+  }, [requests, transferRequests]);
 
   const loadRequests = useCallback(async () => {
     if (!address) {
@@ -109,12 +124,31 @@ export default function KycProviderPage() {
           }).toString()}`,
         ),
       ]);
+      const [transferKycRequests, transferAmlRequests] = await Promise.all([
+        apiFetch<TokenTransferRequest[]>(
+          `/token-transfer-requests?${new URLSearchParams({
+            kycProvider: address,
+            status: "PENDING_KYC",
+          }).toString()}`,
+        ),
+        apiFetch<TokenTransferRequest[]>(
+          `/token-transfer-requests?${new URLSearchParams({
+            amlProvider: address,
+            status: "PENDING_AML",
+          }).toString()}`,
+        ),
+      ]);
 
       const merged = new Map<string, TokenPurchaseRequest>();
       [...kycRequests, ...amlRequests].forEach((request) => {
         merged.set(request.id, request);
       });
       setRequests([...merged.values()]);
+      const transferMerged = new Map<string, TokenTransferRequest>();
+      [...transferKycRequests, ...transferAmlRequests].forEach((request) => {
+        transferMerged.set(request.id, request);
+      });
+      setTransferRequests([...transferMerged.values()]);
     } catch (error) {
       toast.error(
         error instanceof Error
@@ -156,7 +190,7 @@ export default function KycProviderPage() {
                 providerWallet: new PublicKey(address),
                 topic: BigInt(getReviewTopic(request)),
               });
-              return [request.id, Boolean(check.investorHasActiveClaim)] as const;
+              return [request.id, Boolean(check.ok && check.investorHasActiveClaim)] as const;
             } catch {
               return [request.id, false] as const;
             }
@@ -188,6 +222,79 @@ export default function KycProviderPage() {
       }),
     });
     await loadRequests();
+  };
+
+  const approveTransferRequest = async (request: TokenTransferRequest) => {
+    if (!anchorProvider || !address) {
+      toast.error("Connect the provider wallet first.");
+      return;
+    }
+
+    const topic = request.status === "PENDING_AML" ? "2" : "1";
+    const nextStatus =
+      topic === "1" && request.requiredClaimTopics.includes("2")
+        ? "PENDING_AML"
+        : "PENDING_ISSUER_WHITELIST";
+    const loadingToast = toast.loading(`Reviewing transfer eligibility topic ${topic}...`);
+    setProcessingId(request.id);
+    try {
+      const identityService = new IdentityService(anchorProvider);
+      const tokenService = new TokenService(anchorProvider);
+      const mint = new PublicKey(request.tokenContract);
+      const providerWallet = new PublicKey(address);
+      const investorWallet = new PublicKey(request.toWallet);
+      const investorFid = await identityService.fetchFid(investorWallet);
+      if (!investorFid) {
+        await apiFetch(`/token-transfer-requests/${request.id}/status`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            status: "ACTION_REQUIRED_RECIPIENT_FID",
+            reviewerWallet: address,
+            preflightFailure: "Recipient must register FID before claim issuance.",
+          }),
+        });
+        toast.error("Recipient must register FID before claim issuance.", { id: loadingToast });
+        await loadRequests();
+        return;
+      }
+
+      const check = await tokenService.checkTokenScopedClaimForRequest({
+        requestId: request.id,
+        mint,
+        investorWallet,
+        providerWallet,
+        topic: BigInt(topic),
+      });
+
+      if (!check.ok) {
+        if (!check.providerTrustedForToken) {
+          throw new Error(`This wallet is not trusted for transfer claim topic ${topic}.`);
+        }
+        const signature = await identityService.issueClaim(
+          investorWallet,
+          BigInt(topic),
+          signMessage,
+        );
+        await apiFetch(`/token-transfer-requests/${request.id}/status`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: nextStatus, reviewerWallet: address, transferTxHash: signature }),
+        });
+        toast.success("Transfer recipient claim issued.", { id: loadingToast });
+        await loadRequests();
+        return;
+      }
+
+      await apiFetch(`/token-transfer-requests/${request.id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: nextStatus, reviewerWallet: address }),
+      });
+      toast.success("Existing recipient claim accepted. Request forwarded.", { id: loadingToast });
+      await loadRequests();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Transfer eligibility approval failed.", { id: loadingToast });
+    } finally {
+      setProcessingId(null);
+    }
   };
 
   const approveRequest = async (request: TokenPurchaseRequest) => {
@@ -240,6 +347,26 @@ export default function KycProviderPage() {
         // Provider is trusted for this token/topic but token-scoped check failed
         // because the investor has no valid claim. In this case the provider
         // should issue the claim for the investor and advance the request.
+        if (check.investorHasActiveClaim && check.providerSignerValid === false) {
+          if (!RECOVERY_TOOLS_ENABLED) {
+            throw new Error(
+              "Existing claim was signed by an old provider FID signer key. This is a legacy recovery case; enable recovery tools to restore the provider signer or use a fresh trusted provider claim.",
+            );
+          }
+          if (!check.claimSignerKey) {
+            throw new Error(
+              "Existing claim has a signer mismatch, but its signer key could not be decoded.",
+            );
+          }
+          await identityService.setOwnFidSignerKey(check.claimSignerKey);
+          await updateRequestStatus(request, nextStatus);
+          toast.success(
+            `${reviewType} claim signer restored. Request forwarded.`,
+            { id: loadingToast },
+          );
+          return;
+        }
+
         const signature = await identityService.issueClaim(
           investorWallet,
           BigInt(topic),
@@ -515,6 +642,65 @@ export default function KycProviderPage() {
                               Reject
                             </Button>
                           </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl bg-white">
+        <CardHeader>
+          <CardTitle>Transfer Eligibility Requests</CardTitle>
+          <CardDescription>
+            Secondary transfer recipients routed to this wallet for token-scoped KYC or AML review.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {transferRequests.length === 0 ? (
+            <div className="py-10 text-center text-sm text-slate-500">
+              No pending transfer eligibility reviews.
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-xl border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Sender</TableHead>
+                    <TableHead>Recipient</TableHead>
+                    <TableHead>Token</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Review</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {transferRequests.map((request) => {
+                    const isProcessing = processingId === request.id;
+                    const topic = request.status === "PENDING_AML" ? "2" : "1";
+                    return (
+                      <TableRow key={request.id}>
+                        <TableCell className="font-mono text-xs">{shortAddress(request.fromWallet)}</TableCell>
+                        <TableCell className="font-mono text-xs">{shortAddress(request.toWallet)}</TableCell>
+                        <TableCell className="font-mono text-xs">{shortAddress(request.tokenContract)}</TableCell>
+                        <TableCell>{request.amount ?? "-"}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">Transfer topic {topic}</Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            disabled={isProcessing}
+                            size="sm"
+                            onClick={() => void approveTransferRequest(request)}
+                            className="bg-[#172E7F] hover:bg-[#24469E]"
+                          >
+                            {isProcessing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-1 h-4 w-4" />}
+                            Review / Issue Claim
+                          </Button>
                         </TableCell>
                       </TableRow>
                     );

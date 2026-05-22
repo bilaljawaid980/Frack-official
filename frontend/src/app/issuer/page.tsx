@@ -56,6 +56,33 @@ type AssetRequest = {
   createdAt: string;
 };
 
+type TokenTransferRequest = {
+  id: string;
+  assetId?: string | null;
+  tokenContract: string;
+  fromWallet: string;
+  toWallet: string;
+  amount?: number;
+  status: string;
+  issuerWallet?: string | null;
+  requiredClaimTopics: string[];
+};
+
+type WalletIdentityQueueState = {
+  exists: boolean;
+  isActive: boolean;
+  loading: boolean;
+  canRegister: boolean;
+  canActivate: boolean;
+  canRepairRegistry: boolean;
+  irsOwner?: string | null;
+  irpOwner?: string | null;
+  agents?: string[];
+};
+
+const RECOVERY_TOOLS_ENABLED =
+  process.env.NEXT_PUBLIC_ENABLE_RECOVERY_TOOLS === "true";
+
 export default function IssuerPage() {
   const { address: walletAddress } = useWallet();
   const mintTokens = useMintTokens();
@@ -69,16 +96,11 @@ export default function IssuerPage() {
   );
   const [assetRequests, setAssetRequests] = useState<AssetRequest[]>([]);
   const [purchaseRequests, setPurchaseRequests] = useState<TokenPurchaseRequest[]>([]);
+  const [transferRequests, setTransferRequests] = useState<TokenTransferRequest[]>([]);
   const [loadingBalances, setLoadingBalances] = useState(false);
-  const [walletIdentityMap, setWalletIdentityMap] = useState<Record<string, {
-    exists: boolean;
-    isActive: boolean;
-    loading: boolean;
-    canRegister: boolean;
-    canActivate: boolean;
-    irsOwner?: string | null;
-    agents?: string[];
-  }>>({});
+  const [walletIdentityMap, setWalletIdentityMap] = useState<
+    Record<string, WalletIdentityQueueState>
+  >({});
 
   const identityService = useMemo(() => {
     if (!publicKey || !signTransaction || !signAllTransactions) return null;
@@ -137,13 +159,56 @@ export default function IssuerPage() {
     let cancelled = false;
     const timeout = window.setTimeout(async () => {
       try {
-        const params = new URLSearchParams({ issuerWallet: walletAddress });
+        const configuredPlatformOwner =
+          process.env.NEXT_PUBLIC_PLATFORM_OWNER?.toLowerCase();
+        const isPlatformOwner =
+          RECOVERY_TOOLS_ENABLED &&
+          configuredPlatformOwner &&
+          walletAddress.toLowerCase() === configuredPlatformOwner;
+        const params = new URLSearchParams(
+          isPlatformOwner ? {} : { issuerWallet: walletAddress },
+        );
         const requests = await apiFetch<TokenPurchaseRequest[]>(
-          `/token-purchase-requests?${params.toString()}`,
+          `/token-purchase-requests${params.size ? `?${params.toString()}` : ""}`,
         );
         if (!cancelled) setPurchaseRequests(requests);
       } catch {
         if (!cancelled) setPurchaseRequests([]);
+      }
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [walletAddress]);
+
+  useEffect(() => {
+    if (!walletAddress) {
+      const timeout = window.setTimeout(() => setTransferRequests([]), 0);
+      return () => window.clearTimeout(timeout);
+    }
+
+    let cancelled = false;
+    const timeout = window.setTimeout(async () => {
+      try {
+        const [whitelist, activation] = await Promise.all([
+          apiFetch<TokenTransferRequest[]>(
+            `/token-transfer-requests?${new URLSearchParams({
+              issuerWallet: walletAddress,
+              status: "PENDING_ISSUER_WHITELIST",
+            }).toString()}`,
+          ),
+          apiFetch<TokenTransferRequest[]>(
+            `/token-transfer-requests?${new URLSearchParams({
+              issuerWallet: walletAddress,
+              status: "PENDING_ISSUER_ACTIVATION",
+            }).toString()}`,
+          ),
+        ]);
+        if (!cancelled) setTransferRequests([...whitelist, ...activation]);
+      } catch {
+        if (!cancelled) setTransferRequests([]);
       }
     }, 0);
 
@@ -220,36 +285,59 @@ export default function IssuerPage() {
     let cancelled = false;
     if (!identityService) return;
     const load = async () => {
-      const next: Record<string, any> = {};
+      const next: Record<string, WalletIdentityQueueState> = {};
       await Promise.all(
         issuerPurchaseQueue.map(async (request) => {
           const key = `${request.tokenContract}:${request.investorWallet}`;
-          next[key] = { loading: true, exists: false, isActive: false, canRegister: false, canActivate: false };
+          next[key] = {
+            loading: true,
+            exists: false,
+            isActive: false,
+            canRegister: false,
+            canActivate: false,
+            canRepairRegistry: false,
+          };
           try {
             const mint = new PublicKey(request.tokenContract);
             const wallet = new PublicKey(request.investorWallet);
             const identity = await identityService.fetchWalletIdentity(mint, wallet);
             const irpState = await identityService.fetchIrpState(mint);
             const irsOwner = await identityService.fetchIrsOwner(mint);
+            const targetIssuerLc = request.issuerWallet?.toLowerCase() ?? null;
             const providerKey = identityService['provider'].wallet.publicKey.toBase58();
             // Normalize to lower-case base58 strings for reliable comparison
             const providerKeyLc = providerKey.toLowerCase();
             const agentsLc = (irpState.agents || []).map((a: string) => a.toLowerCase());
+            const irpOwnerLc = irpState.owner.toLowerCase();
             const irsOwnerLc = irsOwner ? irsOwner.toLowerCase() : null;
             const isAgent = agentsLc.includes(providerKeyLc);
             const isIrsOwner = irsOwnerLc ? irsOwnerLc === providerKeyLc : false;
-            console.info('[ISSUER UI DEBUG] irpState.agents', agentsLc, 'irsOwner', irsOwnerLc, 'provider', providerKeyLc);
+            const canRepairRegistry =
+              RECOVERY_TOOLS_ENABLED &&
+              providerKeyLc === irpOwnerLc &&
+              Boolean(targetIssuerLc) &&
+              irpOwnerLc !== targetIssuerLc &&
+              irsOwnerLc === targetIssuerLc;
             next[key] = {
               loading: false,
               exists: Boolean(identity),
               isActive: Boolean(identity?.isActive),
               canRegister: Boolean(isAgent || isIrsOwner),
               canActivate: Boolean(isIrsOwner),
+              canRepairRegistry,
               irsOwner: irsOwnerLc,
+              irpOwner: irpOwnerLc,
               agents: agentsLc,
             };
           } catch (e) {
-            next[key] = { loading: false, exists: false, isActive: false, canRegister: false, canActivate: false };
+            next[key] = {
+              loading: false,
+              exists: false,
+              isActive: false,
+              canRegister: false,
+              canActivate: false,
+              canRepairRegistry: false,
+            };
           }
         }),
       );
@@ -328,7 +416,129 @@ export default function IssuerPage() {
       await updatePurchaseRequestStatus(request, "MINTED", { mintTxHash: sig });
       toast.success("Tokens minted to investor wallet");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Mint failed");
+      const message = error instanceof Error ? error.message : "Mint failed";
+      if (
+        message.includes("invalid issuer FID profile or signer key mismatch") ||
+        message.includes("old issuer FID signer key")
+      ) {
+        try {
+          await updatePurchaseRequestStatus(request, "PENDING_KYC");
+          toast.error(
+            "The existing KYC claim was signed with an old provider signer key. Request sent back to KYC so the provider can revoke and reissue the claim.",
+          );
+          return;
+        } catch {
+          toast.error(
+            `${message}\n\nSend this request back to KYC, then have the KYC provider approve it again so the stale claim is revoked and reissued.`,
+          );
+          return;
+        }
+      }
+      toast.error(message);
+    }
+  };
+
+  const handleRepairRegistryOwnership = async (request: TokenPurchaseRequest) => {
+    try {
+      if (!identityService) {
+        toast.error("Connect the current IRP owner wallet to repair registry ownership.");
+        return;
+      }
+
+      const mint = new PublicKey(request.tokenContract);
+      if (!request.issuerWallet) {
+        throw new Error("Cannot repair registry ownership because this request has no issuer wallet.");
+      }
+      const issuerWallet = request.issuerWallet;
+      const issuer = new PublicKey(issuerWallet);
+      const sig = await identityService.transferIrpOwnership(mint, issuer);
+      const key = `${request.tokenContract}:${request.investorWallet}`;
+      setWalletIdentityMap((current) => ({
+        ...current,
+        [key]: {
+          ...current[key],
+          irpOwner: issuerWallet.toLowerCase(),
+          canRepairRegistry: false,
+          canRegister: true,
+          canActivate: true,
+        },
+      }));
+      toast.success(`IRP ownership repaired. Tx: ${sig.slice(0, 10)}...${sig.slice(-8)}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Registry repair failed");
+    }
+  };
+
+  const handleWhitelistTransferRecipient = async (request: TokenTransferRequest) => {
+    try {
+      if (!identityService) throw new Error("Connect issuer wallet first.");
+      const mint = new PublicKey(request.tokenContract);
+      const wallet = new PublicKey(request.toWallet);
+      const existingIdentity = await identityService.fetchWalletIdentity(mint, wallet);
+      if (!existingIdentity) {
+        const investorFid = identityService.findFidPda(wallet)[0];
+        const fidAccount = await identityService.fetchFid(wallet);
+        if (!fidAccount) throw new Error("Recipient must register a FID before whitelisting.");
+        if (fidAccount.isIssuer) throw new Error("Recipient FID is marked as issuer. Use an investor FID wallet.");
+        if (fidAccount.country < 1 || fidAccount.country > 999) {
+          throw new Error(`Recipient FID has invalid country code ${fidAccount.country}.`);
+        }
+        await identityService.registerIdentity(mint, wallet, investorFid, fidAccount.country);
+      }
+      await apiFetch(`/token-transfer-requests/${request.id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: "PENDING_ISSUER_ACTIVATION",
+          reviewerWallet: walletAddress,
+        }),
+      });
+      setTransferRequests((current) =>
+        current.map((item) =>
+          item.id === request.id ? { ...item, status: "PENDING_ISSUER_ACTIVATION" } : item,
+        ),
+      );
+      toast.success("Transfer recipient whitelisted. Activate next.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Recipient whitelist failed.";
+      if (message.includes("WalletAlreadyRegistered") || message.includes("Wallet is already registered")) {
+        await apiFetch(`/token-transfer-requests/${request.id}/status`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            status: "PENDING_ISSUER_ACTIVATION",
+            reviewerWallet: walletAddress,
+          }),
+        });
+        setTransferRequests((current) =>
+          current.map((item) =>
+            item.id === request.id ? { ...item, status: "PENDING_ISSUER_ACTIVATION" } : item,
+          ),
+        );
+        toast.success("Transfer recipient already whitelisted. Activate next.");
+        return;
+      }
+      toast.error(message);
+    }
+  };
+
+  const handleActivateTransferRecipient = async (request: TokenTransferRequest) => {
+    try {
+      if (!identityService) throw new Error("Connect issuer wallet first.");
+      await identityService.setIdentityActivation(
+        new PublicKey(request.tokenContract),
+        new PublicKey(request.toWallet),
+        true,
+      );
+      await apiFetch(`/token-transfer-requests/${request.id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: "READY_TO_TRANSFER",
+          reviewerWallet: walletAddress,
+        }),
+      });
+      setTransferRequests((current) => current.filter((item) => item.id !== request.id));
+      toast.success("Transfer recipient activated. Investor A can now send the transfer.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Recipient activation failed.");
     }
   };
 
@@ -432,17 +642,17 @@ export default function IssuerPage() {
                             {request.tokenContract.slice(-6)}
                           </span>
                         </div>
-                        {/* Debug info: shows IRS owner/agents and identity state for this request */}
-                        {(() => {
+                        {RECOVERY_TOOLS_ENABLED && (() => {
                           const key = `${request.tokenContract}:${request.investorWallet}`;
                           const info = walletIdentityMap[key];
                           if (!info) return null;
                           return (
                             <div className="mt-2 text-xs text-slate-400">
                               <div>IRS Owner: {info.irsOwner ?? "(unknown)"}</div>
+                              <div>IRP Owner: {info.irpOwner ?? "(unknown)"}</div>
                               <div>IRP Agents: {info.agents && info.agents.length ? info.agents.join(", ") : "(none)"}</div>
-                              <div>Whitelisted: {info.exists ? "yes" : "no"} — Active: {info.isActive ? "yes" : "no"}</div>
-                              <div>Can Register: {info.canRegister ? "yes" : "no"} — Can Activate: {info.canActivate ? "yes" : "no"}</div>
+                              <div>Whitelisted: {info.exists ? "yes" : "no"} - Active: {info.isActive ? "yes" : "no"}</div>
+                              <div>Can Register: {info.canRegister ? "yes" : "no"} - Can Activate: {info.canActivate ? "yes" : "no"}</div>
                             </div>
                           );
                         })()}
@@ -478,6 +688,31 @@ export default function IssuerPage() {
                             );
                           }
 
+                          if (
+                            info.irpOwner &&
+                            info.irsOwner &&
+                            info.irpOwner !== info.irsOwner
+                          ) {
+                            return (
+                              <>
+                                <div className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+                                  Legacy registry mismatch
+                                </div>
+                                {RECOVERY_TOOLS_ENABLED && info.canRepairRegistry ? (
+                                  <Button
+                                    onClick={() => handleRepairRegistryOwnership(request)}
+                                  >
+                                    Repair IRP Owner
+                                  </Button>
+                                ) : (
+                                  <Button disabled>
+                                    Admin repair required
+                                  </Button>
+                                )}
+                              </>
+                            );
+                          }
+
                           if (!info.exists) {
                             // Not registered yet
                             if (info.canRegister) {
@@ -488,16 +723,73 @@ export default function IssuerPage() {
                                       if (!identityService) throw new Error("Connect wallet to register identity");
                                       const mint = new PublicKey(request.tokenContract);
                                       const wallet = new PublicKey(request.investorWallet);
-                                      // Use a best-effort default: fetch investor FID if available, otherwise prompt
+                                      const existingIdentity = await identityService.fetchWalletIdentity(mint, wallet);
+                                      if (existingIdentity) {
+                                        setWalletIdentityMap((cur) => ({
+                                          ...cur,
+                                          [key]: {
+                                            ...cur[key],
+                                            exists: true,
+                                            isActive: Boolean(existingIdentity.isActive),
+                                          },
+                                        }));
+                                        toast.success(
+                                          existingIdentity.isActive
+                                            ? "Investor is already whitelisted and active."
+                                            : "Investor is already whitelisted. Activate before minting.",
+                                        );
+                                        return;
+                                      }
                                       const investorFid = identityService.findFidPda(wallet)[0];
-                                      await identityService.registerIdentity(mint, wallet, investorFid, 0);
+                                      const fidAccount = await identityService.fetchFid(wallet);
+                                      if (!fidAccount) {
+                                        throw new Error("Investor must register a FID before they can be whitelisted.");
+                                      }
+                                      if (fidAccount.isIssuer) {
+                                        throw new Error("Investor FID is marked as an issuer FID. Register a non-issuer investor FID for this wallet.");
+                                      }
+                                      if (fidAccount.country < 1 || fidAccount.country > 999) {
+                                        throw new Error(
+                                          `Investor FID has invalid country code ${fidAccount.country}. Ask the investor to update their FID country before whitelisting.`,
+                                        );
+                                      }
+                                      await identityService.registerIdentity(
+                                        mint,
+                                        wallet,
+                                        investorFid,
+                                        fidAccount.country,
+                                      );
                                       setWalletIdentityMap((cur) => ({
                                         ...cur,
                                         [key]: { ...cur[key], exists: true, isActive: false },
                                       }));
                                       toast.success("Investor whitelisted (pending activation)");
                                     } catch (err: any) {
-                                      toast.error(err?.message ?? "Failed to register identity");
+                                      const message = err?.message ?? "Failed to register identity";
+                                      if (message.includes("WalletAlreadyRegistered") || message.includes("Wallet is already registered")) {
+                                        try {
+                                          const mint = new PublicKey(request.tokenContract);
+                                          const wallet = new PublicKey(request.investorWallet);
+                                          const existingIdentity = await identityService?.fetchWalletIdentity(mint, wallet);
+                                          setWalletIdentityMap((cur) => ({
+                                            ...cur,
+                                            [key]: {
+                                              ...cur[key],
+                                              exists: true,
+                                              isActive: Boolean(existingIdentity?.isActive),
+                                            },
+                                          }));
+                                          toast.success(
+                                            existingIdentity?.isActive
+                                              ? "Investor is already whitelisted and active."
+                                              : "Investor is already whitelisted. Activate before minting.",
+                                          );
+                                          return;
+                                        } catch {
+                                          // Fall through to original error if the follow-up read fails.
+                                        }
+                                      }
+                                      toast.error(message);
                                     }
                                   }}
                                 >
@@ -563,6 +855,69 @@ export default function IssuerPage() {
                   );
                 }
               )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="border border-slate-200/70 bg-white/80 shadow-sm">
+        <CardHeader>
+          <CardTitle>Transfer Whitelist Queue</CardTitle>
+          <CardDescription>
+            Secondary transfer recipients that need this issuer to register or activate token-specific IRS identity.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {transferRequests.length === 0 ? (
+            <div className="text-sm text-slate-500">
+              No transfer recipient onboarding requests awaiting issuer action.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {transferRequests.map((request) => {
+                const asset =
+                  assetsByToken.get(request.tokenContract) ||
+                  (request.assetId ? assetsByToken.get(request.assetId) : undefined);
+                return (
+                  <div
+                    key={request.id}
+                    className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 lg:flex-row lg:items-center lg:justify-between"
+                  >
+                    <div>
+                      <div className="font-semibold text-slate-900">
+                        {asset ? `${asset.name} (${asset.symbol})` : "Unknown token"}
+                      </div>
+                      <div className="mt-1 text-sm text-slate-700">
+                        {request.amount ?? "-"} tokens requested for secondary transfer
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        Sender{" "}
+                        <span className="font-mono">
+                          {request.fromWallet.slice(0, 6)}...{request.fromWallet.slice(-4)}
+                        </span>
+                        {" "}to recipient{" "}
+                        <span className="font-mono">
+                          {request.toWallet.slice(0, 6)}...{request.toWallet.slice(-4)}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        Status: {request.status.replaceAll("_", " ")}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {request.status === "PENDING_ISSUER_WHITELIST" ? (
+                        <Button onClick={() => void handleWhitelistTransferRecipient(request)}>
+                          Whitelist Recipient
+                        </Button>
+                      ) : request.status === "PENDING_ISSUER_ACTIVATION" ? (
+                        <Button onClick={() => void handleActivateTransferRecipient(request)}>
+                          Activate Recipient
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>

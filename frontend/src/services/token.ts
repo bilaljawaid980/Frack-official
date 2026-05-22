@@ -113,11 +113,16 @@ type TokenScopedClaimCheckResult = {
   investorHasActiveClaim: boolean;
   claimRevoked?: boolean;
   claimExpired?: boolean;
+  providerSignerValid?: boolean;
+  claimSignerKey?: PublicKey | null;
   providerTrustedForToken: boolean;
   checkedClaimPubkey?: PublicKey | null;
 };
 
 const CLAIM_ACCOUNT_SIZE = 230;
+const CLAIM_ACCOUNT_DISCRIMINATOR = Buffer.from([
+  113, 109, 47, 96, 242, 219, 61, 165,
+]);
 const MODULE_PROGRAM_IDS = new Set([
   MOD_MAX_INVESTORS.toBase58(),
   MOD_COUNTRY_RESTRICT.toBase58(),
@@ -140,6 +145,9 @@ function parseClaimAccount(data: Buffer): {
 } | null {
   const minimumSize = 8 + 32 + 4 + 8 + 32 + 32 + 32 + 64 + 8 + 8 + 1 + 1;
   if (data.length < minimumSize) return null;
+  if (!data.subarray(0, CLAIM_ACCOUNT_DISCRIMINATOR.length).equals(CLAIM_ACCOUNT_DISCRIMINATOR)) {
+    return null;
+  }
 
   let offset = 8;
   const fid = new PublicKey(data.subarray(offset, offset + 32));
@@ -809,6 +817,7 @@ export class TokenService {
     recipient: PublicKey,
     ids: SuiteProgramIds,
     tokenStateData: TokenState,
+    options: { enforceOwnerInvariant?: boolean } = {},
   ): Promise<MintRegistryContext> {
     const irpState = new PublicKey(tokenStateData.identityRegistry);
     const irpInfo = await this.provider.connection.getAccountInfo(irpState, "confirmed");
@@ -849,7 +858,8 @@ export class TokenService {
       throw new Error(`Identity Registry Storage account ${irsState.toBase58()} is malformed.`);
     }
     const irsOwner = new PublicKey(irsInfo.data.subarray(8, 40));
-    if (!irsOwner.equals(irpOwner)) {
+    const enforceOwnerInvariant = options.enforceOwnerInvariant ?? true;
+    if (enforceOwnerInvariant && !irsOwner.equals(irpOwner)) {
       throw new Error(
         `Token registry ownership is misconfigured. IRP owner ${irpOwner.toBase58()} does not match IRS owner ${irsOwner.toBase58()}. This token suite cannot verify investor identities until the registry owners are repaired or the token is redeployed with aligned IRP/IRS ownership.`,
       );
@@ -1365,7 +1375,13 @@ export class TokenService {
     const { requestId, mint, investorWallet, providerWallet, topic } = opts;
     const ids = await this.getProgramIds();
     const tokenStateData = await this.fetchTokenState(mint);
-    const registry = await this.resolveMintRegistryContext(mint, investorWallet, ids, tokenStateData);
+    const registry = await this.resolveMintRegistryContext(
+      mint,
+      investorWallet,
+      ids,
+      tokenStateData,
+      { enforceOwnerInvariant: false },
+    );
     const ctrState = registry.ctrState;
     const tirState = registry.tirState;
     const requiredTopics = registry.requiredTopics.map(String);
@@ -1378,6 +1394,11 @@ export class TokenService {
       providerWallet: providerWallet.toBase58(),
       ctrState: ctrState.toBase58(),
       tirState: tirState.toBase58(),
+      irpState: registry.irpState.toBase58(),
+      irpOwner: registry.irpOwner.toBase58(),
+      irsState: registry.irsState.toBase58(),
+      irsOwner: registry.irsOwner.toBase58(),
+      registryOwnersAligned: registry.irpOwner.equals(registry.irsOwner),
       requiredTopics,
       selectedTopic: topicStr,
     } as Record<string, unknown>;
@@ -1414,6 +1435,8 @@ export class TokenService {
     let investorHasActiveClaim = false;
     let claimRevoked = undefined;
     let claimExpired = undefined;
+    let providerSignerValid = undefined;
+    let claimSignerKey: PublicKey | null = null;
     let checkedClaimPubkey: PublicKey | null = null;
 
     try {
@@ -1430,9 +1453,18 @@ export class TokenService {
         if (claimInfo) {
           const parsed = parseClaimAccount(claimInfo.data);
           if (parsed) {
+            claimSignerKey = parsed.signerKey;
             claimRevoked = parsed.revoked;
             const now = BigInt(Math.floor(Date.now() / 1000));
             claimExpired = parsed.expiresAt !== 0n && parsed.expiresAt < now;
+            const issuerFidInfo = await this.provider.connection.getAccountInfo(
+              issuerFid,
+              "confirmed",
+            );
+            providerSignerValid = issuerFidInfo
+              ? parsed.issuerFid.equals(issuerFid) &&
+                parseFidIsIssuerAndSigner(issuerFidInfo.data, parsed.signerKey)
+              : false;
           }
         }
       }
@@ -1455,7 +1487,12 @@ export class TokenService {
       providerTrustedForToken = false;
     }
 
-    const finalDecision = investorHasActiveClaim && !claimRevoked && !claimExpired && providerTrustedForToken;
+    const finalDecision =
+      investorHasActiveClaim &&
+      !claimRevoked &&
+      !claimExpired &&
+      providerSignerValid !== false &&
+      providerTrustedForToken;
 
     console.info("[KYC TOKEN-SCOPED CLAIM DEBUG] result", {
       ...debugBase,
@@ -1463,6 +1500,8 @@ export class TokenService {
       claimFound: investorHasActiveClaim,
       claimRevoked,
       claimExpired,
+      providerSignerValid,
+      claimSignerKey: claimSignerKey?.toBase58() ?? null,
       providerTrustedForToken,
       finalDecision,
       checkedClaimPubkey: checkedClaimPubkey?.toBase58() ?? null,
@@ -1473,6 +1512,7 @@ export class TokenService {
       if (!investorHasActiveClaim) reason = `Investor is missing required claim topic ${topicStr} for this token.`;
       else if (claimRevoked) reason = `Investor claim topic ${topicStr} is revoked.`;
       else if (claimExpired) reason = `Investor claim topic ${topicStr} is expired.`;
+      else if (providerSignerValid === false) reason = `Existing investor claim topic ${topicStr} was signed by an old issuer FID signer key. Revoke and reissue this claim.`;
       else if (!providerTrustedForToken) reason = `This KYC provider is not trusted in this token's TIR for topic ${topicStr}.`;
 
       return {
@@ -1486,6 +1526,8 @@ export class TokenService {
         investorHasActiveClaim,
         claimRevoked,
         claimExpired,
+        providerSignerValid,
+        claimSignerKey,
         providerTrustedForToken,
         checkedClaimPubkey,
       };
@@ -1499,6 +1541,8 @@ export class TokenService {
       requiredTopics,
       topicRequired,
       investorHasActiveClaim,
+      providerSignerValid,
+      claimSignerKey,
       providerTrustedForToken,
       checkedClaimPubkey,
     };

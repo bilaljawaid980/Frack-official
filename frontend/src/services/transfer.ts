@@ -43,6 +43,7 @@ import {
   SEED_TRANSFER_APPROVAL,
   SEED_WALLET_IDENTITY,
 } from "@/lib/constants";
+import { fetchFactoryStateAccount, type FactoryStateAccount } from "@/lib/solana";
 import { formatTransactionError, decodeTransferHookError } from "@/lib/errors";
 import type { SimulationResult, TransferResult } from "@/types";
 import TokenIdl from "@/idl/fracks_token.json";
@@ -55,6 +56,38 @@ type RemainingAccount = { pubkey: PublicKey; isSigner: boolean; isWritable: bool
 type TransferInstructions = {
   approveIx: TransactionInstruction;
   transferIx: TransactionInstruction;
+};
+type TransferProgramIds = {
+  token: PublicKey;
+  fid: PublicKey;
+  irs: PublicKey;
+  tir: PublicKey;
+  ctr: PublicKey;
+  compliance: PublicKey;
+};
+type WalletTransferEligibility = {
+  wallet: string;
+  walletIdentity: string;
+  identityExists: boolean;
+  identityActive: boolean;
+  fid?: string;
+  country?: number;
+  blockers: string[];
+};
+type ClaimCheckResult = { ok: true } | { ok: false; reason: string };
+export type TransferPreflightResult = {
+  ok: boolean;
+  status: string;
+  blockers: string[];
+  sender: WalletTransferEligibility;
+  recipient: WalletTransferEligibility;
+  requiredClaimTopics: string[];
+  sourceAta: string;
+  destinationAta: string;
+  destinationAtaExists: boolean;
+  sourceBalance: string;
+  transferableBalance: string;
+  simulation?: SimulationResult;
 };
 
 const CLAIM_ACCOUNT_DISCRIMINATOR = Buffer.from([113, 109, 47, 96, 242, 219, 61, 165]);
@@ -73,12 +106,82 @@ const MODULE_PROGRAM_IDS = new Set([
   MOD_COUNTRY_CAP.toBase58(),
 ]);
 
+function parseCtrTopics(data: Buffer): bigint[] {
+  if (data.length < 8 + 32 + 32 + 4) return [];
+  let offset = 8 + 32 + 32;
+  const topicCount = data.readUInt32LE(offset);
+  offset += 4;
+  const topics: bigint[] = [];
+  for (let index = 0; index < topicCount; index += 1) {
+    if (data.length < offset + 8) break;
+    topics.push(data.readBigUInt64LE(offset));
+    offset += 8;
+  }
+  return topics;
+}
+
+function parseIssuerEntryForTopic(data: Buffer, topic: bigint): boolean {
+  let offset = 8 + 32 + 32;
+  if (data.length < offset + 4) return false;
+  const topicCount = data.readUInt32LE(offset);
+  offset += 4;
+  let hasTopic = false;
+  for (let index = 0; index < topicCount; index += 1) {
+    if (data.length < offset + 8) return false;
+    if (data.readBigUInt64LE(offset) === topic) hasTopic = true;
+    offset += 8;
+  }
+  if (data.length < offset + 1) return false;
+  return data.readUInt8(offset) === 1 && hasTopic;
+}
+
+function parseClaimAccount(data: Buffer): {
+  topic: bigint;
+  issuerFid: PublicKey;
+  signerKey: PublicKey;
+  revoked: boolean;
+  expiresAt: bigint;
+} | null {
+  if (data.length < CLAIM_ACCOUNT_SIZE || !data.subarray(0, 8).equals(CLAIM_ACCOUNT_DISCRIMINATOR)) {
+    return null;
+  }
+  let offset = 8 + 32 + 4;
+  const topic = data.readBigUInt64LE(offset);
+  offset += 8;
+  const issuerFid = new PublicKey(data.subarray(offset, offset + 32));
+  offset += 32 + 32;
+  const signerKey = new PublicKey(data.subarray(offset, offset + 32));
+  offset += 32 + 64 + 8;
+  const expiresAt = data.readBigInt64LE(offset);
+  offset += 8;
+  const revoked = data.readUInt8(offset) === 1;
+  return { topic, issuerFid, signerKey, revoked, expiresAt };
+}
+
+function parseFidIsIssuerAndSigner(data: Buffer, expectedSigner: PublicKey): boolean {
+  if (data.length < 8 + 32 + 32 + 32 + 4 + 1) return false;
+  const signerKey = new PublicKey(data.subarray(8 + 32 + 32, 8 + 32 + 32 + 32));
+  const isIssuer = data.readUInt8(8 + 32 + 32 + 32 + 4) === 1;
+  return isIssuer && signerKey.equals(expectedSigner);
+}
+
+function parseWalletIdentity(data: Buffer): { fid: PublicKey; country: number; isActive: boolean } | null {
+  if (data.length < 8 + 32 + 32 + 2 + 32 + 1) return null;
+  const fid = new PublicKey(data.subarray(8 + 32, 8 + 64));
+  const country = data.readUInt16LE(8 + 64);
+  const isActive = data.readUInt8(8 + 64 + 2 + 32) === 1;
+  return { fid, country, isActive };
+}
+
+const CLAIM_ACCOUNT_SIZE = 230;
+
 // ─── TransferService ──────────────────────────────────────────────────────────
 
 export class TransferService {
   private connection: Connection;
   private provider: AnchorProvider;
   private tokenProgram: Program<Idl>;
+  private factoryStatePromise: Promise<FactoryStateAccount | null> | null = null;
 
   constructor(connection: Connection, provider: AnchorProvider) {
     this.connection = connection;
@@ -86,12 +189,44 @@ export class TransferService {
     this.tokenProgram = new Program(TokenIdl as unknown as Idl, provider);
   }
 
+  private async getFactoryState(): Promise<FactoryStateAccount | null> {
+    if (!this.factoryStatePromise) {
+      this.factoryStatePromise = fetchFactoryStateAccount().catch(() => null);
+    }
+    return this.factoryStatePromise;
+  }
+
+  private async getProgramIds(): Promise<TransferProgramIds> {
+    const state = await this.getFactoryState();
+    return {
+      token: state?.tokenProgramId ?? TOKEN_PROGRAM_ID,
+      fid: state?.fidProgramId ?? FID_PROGRAM_ID,
+      irs: state?.irsProgramId ?? IRS_PROGRAM_ID,
+      tir: state?.tirProgramId ?? TIR_PROGRAM_ID,
+      ctr: state?.ctrProgramId ?? CTR_PROGRAM_ID,
+      compliance: state?.complianceProgramId ?? COMPLIANCE_PROGRAM_ID,
+    };
+  }
+
+  private getTokenProgram(programId: PublicKey): Program<Idl> {
+    return new Program(
+      {
+        ...(TokenIdl as unknown as Record<string, unknown>),
+        address: programId.toBase58(),
+      } as Idl,
+      this.provider,
+    );
+  }
+
   // ── PDA Helpers ───────────────────────────────────────────────────────────────
 
-  private getExtraAccountMetasPda(mint: PublicKey): PublicKey {
+  private getExtraAccountMetasPda(
+    mint: PublicKey,
+    hookProgramId: PublicKey = TOKEN_HOOK_PROGRAM_ID
+  ): PublicKey {
     const [pda] = PublicKey.findProgramAddressSync(
       [SEED_EXTRA_ACCOUNT_METAS, mint.toBuffer()],
-      TOKEN_HOOK_PROGRAM_ID
+      hookProgramId
     );
     return pda;
   }
@@ -99,7 +234,8 @@ export class TransferService {
   private getTransferApprovalPda(
     sourceTa: PublicKey,
     destinationTa: PublicKey,
-    authority: PublicKey
+    authority: PublicKey,
+    hookProgramId: PublicKey = TOKEN_HOOK_PROGRAM_ID
   ): PublicKey {
     const [pda] = PublicKey.findProgramAddressSync(
       [
@@ -108,15 +244,18 @@ export class TransferService {
         destinationTa.toBuffer(),
         authority.toBuffer(),
       ],
-      TOKEN_HOOK_PROGRAM_ID
+      hookProgramId
     );
     return pda;
   }
 
-  private getTokenStatePda(mint: PublicKey): PublicKey {
+  private getTokenStatePda(
+    mint: PublicKey,
+    tokenProgramId: PublicKey = TOKEN_PROGRAM_ID
+  ): PublicKey {
     const [pda] = PublicKey.findProgramAddressSync(
       [Buffer.from("token_state"), mint.toBuffer()],
-      TOKEN_PROGRAM_ID
+      tokenProgramId
     );
     return pda;
   }
@@ -141,6 +280,7 @@ export class TransferService {
     decimals: number
   ): Promise<SimulationResult> {
     try {
+      const ids = await this.getProgramIds();
       const destinationTa = this.getTokenAccountAddress(mint, to);
       const destinationInfo = await this.connection.getAccountInfo(
         destinationTa,
@@ -160,7 +300,8 @@ export class TransferService {
         from,
         to,
         amount,
-        decimals
+        decimals,
+        ids
       );
 
       const { blockhash } =
@@ -224,15 +365,17 @@ export class TransferService {
     decimals: number
   ): Promise<TransferResult> {
     try {
+      const ids = await this.getProgramIds();
       await this.prepareRecipientTokenAccount(mint, from, to);
-      await this.prepareTransferSupportAccounts(mint, from);
+      await this.prepareTransferSupportAccounts(mint, from, ids);
 
       const { approveIx, transferIx } = await this._buildTransferInstructions(
         mint,
         from,
         to,
         amount,
-        decimals
+        decimals,
+        ids
       );
 
       await this.sendVersionedInstructions(from, [approveIx]);
@@ -248,6 +391,79 @@ export class TransferService {
     }
   }
 
+  async preflightTransfer(
+    mint: PublicKey,
+    from: PublicKey,
+    to: PublicKey,
+    amount: bigint,
+    decimals: number
+  ): Promise<TransferPreflightResult> {
+    const ids = await this.getProgramIds();
+    const tokenProgram = this.getTokenProgram(ids.token);
+    const sourceAta = this.getTokenAccountAddress(mint, from);
+    const destinationAta = this.getTokenAccountAddress(mint, to);
+    const tokenState = this.getTokenStatePda(mint, ids.token);
+    const tokenStateAccount = await (tokenProgram.account as any).tokenState.fetch(tokenState);
+    const irpState = tokenStateAccount.identityRegistry as PublicKey;
+    const complianceState = tokenStateAccount.compliance as PublicKey;
+    const irsState = await this.deriveIrsStateFromIrp(irpState);
+    const [ctrState] = PublicKey.findProgramAddressSync(
+      [Buffer.from("ctr_state"), mint.toBuffer()],
+      ids.ctr
+    );
+    const [tirState] = PublicKey.findProgramAddressSync(
+      [Buffer.from("tir_state"), mint.toBuffer()],
+      ids.tir
+    );
+    const requiredClaimTopics = await this.fetchRequiredTopics(ctrState, ids.ctr);
+    const sourceBalance = await this.getRawTokenBalance(sourceAta).catch(() => 0n);
+    const partialFreeze = await this.getPartialFreezeAmount(mint, from, ids.token);
+    const transferableBalance = sourceBalance > partialFreeze ? sourceBalance - partialFreeze : 0n;
+    const destinationInfo = await this.connection.getAccountInfo(destinationAta, "confirmed");
+
+    const sender = await this.checkWalletEligibility(mint, from, irsState, tirState, requiredClaimTopics, ids);
+    const recipient = await this.checkWalletEligibility(mint, to, irsState, tirState, requiredClaimTopics, ids);
+    const blockers = [...sender.blockers.map((item) => `Sender: ${item}`), ...recipient.blockers.map((item) => `Recipient: ${item}`)];
+
+    if (sourceBalance < amount) blockers.push("Insufficient token balance.");
+    if (transferableBalance < amount) blockers.push("Insufficient transferable balance after partial freeze.");
+
+    let simulation: SimulationResult | undefined;
+    if (blockers.length === 0 && destinationInfo) {
+      simulation = await this.simulateTransfer(mint, from, to, amount, decimals);
+      if (!simulation.success) blockers.push(simulation.error || "Transfer simulation failed.");
+    }
+
+    const recipientMissingKyc = recipient.blockers.some((item) => item.includes("topic 1"));
+    const recipientMissingAml = recipient.blockers.some((item) => item.includes("topic 2"));
+
+    let status = "READY_TO_TRANSFER";
+    if (sender.blockers.length > 0) status = this.senderStatusFromBlockers(sender.blockers);
+    else if (sourceBalance < amount) status = "INSUFFICIENT_TRANSFERABLE_BALANCE";
+    else if (transferableBalance < amount) status = "INSUFFICIENT_TRANSFERABLE_BALANCE";
+    else if (!recipient.identityExists && recipient.blockers.some((item) => item.includes("FID"))) status = "ACTION_REQUIRED_RECIPIENT_FID";
+    else if (recipientMissingKyc) status = "PENDING_KYC";
+    else if (recipientMissingAml) status = "PENDING_AML";
+    else if (!recipient.identityExists) status = "PENDING_ISSUER_WHITELIST";
+    else if (!recipient.identityActive) status = "PENDING_ISSUER_ACTIVATION";
+    else if (simulation && !simulation.success) status = "TRANSFER_SIMULATION_FAILED";
+
+    return {
+      ok: blockers.length === 0,
+      status,
+      blockers,
+      sender,
+      recipient,
+      requiredClaimTopics,
+      sourceAta: sourceAta.toBase58(),
+      destinationAta: destinationAta.toBase58(),
+      destinationAtaExists: Boolean(destinationInfo),
+      sourceBalance: sourceBalance.toString(),
+      transferableBalance: transferableBalance.toString(),
+      simulation,
+    };
+  }
+
   // ── Private Helpers ───────────────────────────────────────────────────────────
 
   /**
@@ -261,12 +477,14 @@ export class TransferService {
     amount: bigint,
     decimals: number
   ): Promise<Transaction> {
+    const ids = await this.getProgramIds();
     const { approveIx, transferIx } = await this._buildTransferInstructions(
       mint,
       from,
       to,
       amount,
-      decimals
+      decimals,
+      ids
     );
     return new Transaction().add(approveIx, transferIx);
   }
@@ -276,12 +494,14 @@ export class TransferService {
     from: PublicKey,
     to: PublicKey,
     amount: bigint,
-    decimals: number
+    decimals: number,
+    ids: TransferProgramIds
   ): Promise<TransferInstructions> {
+    const tokenProgram = this.getTokenProgram(ids.token);
     const sourceTa = this.getTokenAccountAddress(mint, from);
     const destinationTa = this.getTokenAccountAddress(mint, to);
     const extraAccountMetas = this.getExtraAccountMetasPda(mint);
-    const tokenState = this.getTokenStatePda(mint);
+    const tokenState = this.getTokenStatePda(mint, ids.token);
     const transferApproval = this.getTransferApprovalPda(
       sourceTa,
       destinationTa,
@@ -300,42 +520,42 @@ export class TransferService {
       throw new Error("Insufficient token balance.");
     }
 
-    const tokenStateAccount = await (this.tokenProgram.account as any).tokenState.fetch(tokenState);
+    const tokenStateAccount = await (tokenProgram.account as any).tokenState.fetch(tokenState);
     const irpState = tokenStateAccount.identityRegistry as PublicKey;
     const complianceState = tokenStateAccount.compliance as PublicKey;
     const irsState = await this.deriveIrsStateFromIrp(irpState);
     const [tirState] = PublicKey.findProgramAddressSync(
       [Buffer.from("tir_state"), mint.toBuffer()],
-      TIR_PROGRAM_ID
+      ids.tir
     );
     const [ctrState] = PublicKey.findProgramAddressSync(
       [Buffer.from("ctr_state"), mint.toBuffer()],
-      CTR_PROGRAM_ID
+      ids.ctr
     );
     const [fromWalletIdentity] = PublicKey.findProgramAddressSync(
       [SEED_WALLET_IDENTITY, irsState.toBuffer(), from.toBuffer()],
-      IRS_PROGRAM_ID
+      ids.irs
     );
     const [toWalletIdentity] = PublicKey.findProgramAddressSync(
       [SEED_WALLET_IDENTITY, irsState.toBuffer(), to.toBuffer()],
-      IRS_PROGRAM_ID
+      ids.irs
     );
     const [fromFrozen] = PublicKey.findProgramAddressSync(
       [Buffer.from("frozen"), mint.toBuffer(), from.toBuffer()],
-      TOKEN_PROGRAM_ID
+      ids.token
     );
     const [toFrozen] = PublicKey.findProgramAddressSync(
       [Buffer.from("frozen"), mint.toBuffer(), to.toBuffer()],
-      TOKEN_PROGRAM_ID
+      ids.token
     );
     const [fromPartialFreeze] = PublicKey.findProgramAddressSync(
       [Buffer.from("partial_freeze"), mint.toBuffer(), from.toBuffer()],
-      TOKEN_PROGRAM_ID
+      ids.token
     );
     const approvalRemainingAccounts =
-      await this.getTransferApprovalRemainingAccounts(from, to, mint, tirState, complianceState);
+      await this.getTransferApprovalRemainingAccounts(from, to, mint, tirState, complianceState, ids);
 
-    const approveIx = await this.tokenProgram.methods
+    const approveIx = await tokenProgram.methods
       .transfer(
         new BN(amount.toString()),
         new BN(sourceBalance.toString()),
@@ -349,7 +569,7 @@ export class TransferService {
         fromWallet: from,
         toWallet: to,
         extraAccountMetas,
-        controllerProgram: TOKEN_PROGRAM_ID,
+        controllerProgram: ids.token,
         hookProgram: TOKEN_HOOK_PROGRAM_ID,
         transferApproval,
         systemProgram: SystemProgram.programId,
@@ -358,7 +578,7 @@ export class TransferService {
         tirState,
         ctrState,
         complianceState,
-        complianceProgram: COMPLIANCE_PROGRAM_ID,
+        complianceProgram: ids.compliance,
         fromWalletIdentity,
         toWalletIdentity,
         fromFrozen,
@@ -386,7 +606,8 @@ export class TransferService {
       tokenState,
       transferApproval,
       complianceState,
-      from
+      from,
+      ids
     );
 
     return { approveIx, transferIx };
@@ -626,9 +847,16 @@ export class TransferService {
     tokenState: PublicKey,
     transferApproval: PublicKey,
     complianceState: PublicKey,
-    fromWallet: PublicKey
+    fromWallet: PublicKey,
+    ids: TransferProgramIds
   ): Promise<void> {
-    const complianceProgram = new Program(ComplianceIdl as unknown as Idl, this.provider);
+    const complianceProgram = new Program(
+      {
+        ...(ComplianceIdl as unknown as Record<string, unknown>),
+        address: ids.compliance.toBase58(),
+      } as Idl,
+      this.provider
+    );
     const compliance = await (complianceProgram.account as any).complianceState.fetch(
       complianceState
     );
@@ -643,11 +871,11 @@ export class TransferService {
     );
     const appended: RemainingAccount[] = [
       { pubkey: extraAccountMetas, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: ids.token, isSigner: false, isWritable: false },
       { pubkey: tokenState, isSigner: false, isWritable: false },
       { pubkey: transferApproval, isSigner: false, isWritable: true },
       { pubkey: complianceState, isSigner: false, isWritable: false },
-      { pubkey: COMPLIANCE_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: ids.compliance, isSigner: false, isWritable: false },
     ];
 
     moduleAccounts.forEach((moduleAccount, index) => {
@@ -785,10 +1013,12 @@ export class TransferService {
 
   private async prepareTransferSupportAccounts(
     mint: PublicKey,
-    sender: PublicKey
+    sender: PublicKey,
+    ids: TransferProgramIds
   ): Promise<void> {
-    const tokenState = this.getTokenStatePda(mint);
-    const tokenStateAccount = await (this.tokenProgram.account as any).tokenState.fetch(
+    const tokenProgram = this.getTokenProgram(ids.token);
+    const tokenState = this.getTokenStatePda(mint, ids.token);
+    const tokenStateAccount = await (tokenProgram.account as any).tokenState.fetch(
       tokenState
     );
     const complianceState = tokenStateAccount.compliance as PublicKey;
@@ -846,6 +1076,155 @@ export class TransferService {
     return BigInt(balance.value.amount);
   }
 
+  private async fetchRequiredTopics(ctrState: PublicKey, ctrProgramId: PublicKey): Promise<string[]> {
+    const info = await this.connection.getAccountInfo(ctrState, "confirmed");
+    if (!info) return [];
+    return parseCtrTopics(info.data).map((topic) => topic.toString());
+  }
+
+  private async getPartialFreezeAmount(
+    mint: PublicKey,
+    wallet: PublicKey,
+    tokenProgramId: PublicKey
+  ): Promise<bigint> {
+    const [partialFreeze] = PublicKey.findProgramAddressSync(
+      [Buffer.from("partial_freeze"), mint.toBuffer(), wallet.toBuffer()],
+      tokenProgramId
+    );
+    const info = await this.connection.getAccountInfo(partialFreeze, "confirmed");
+    if (!info || info.data.length < 8 + 32 + 32 + 8) return 0n;
+    return info.data.readBigUInt64LE(8 + 32 + 32);
+  }
+
+  private async checkWalletEligibility(
+    mint: PublicKey,
+    wallet: PublicKey,
+    irsState: PublicKey,
+    tirState: PublicKey,
+    requiredClaimTopics: string[],
+    ids: TransferProgramIds
+  ): Promise<WalletTransferEligibility> {
+    const [walletIdentity] = PublicKey.findProgramAddressSync(
+      [SEED_WALLET_IDENTITY, irsState.toBuffer(), wallet.toBuffer()],
+      ids.irs
+    );
+    const blockers: string[] = [];
+    const identityInfo = await this.connection.getAccountInfo(walletIdentity, "confirmed");
+
+    const [fidPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("fid"), wallet.toBuffer()],
+      ids.fid
+    );
+    const fidInfo = await this.connection.getAccountInfo(fidPda, "confirmed");
+    if (!fidInfo) {
+      blockers.push("FID is not registered.");
+    }
+
+    const parsedIdentity = identityInfo ? parseWalletIdentity(identityInfo.data) : null;
+    if (!parsedIdentity) {
+      blockers.push("Wallet is not registered in this token's IRS.");
+    } else if (!parsedIdentity.isActive) {
+      blockers.push("Wallet identity is registered but inactive in this token's IRS.");
+    }
+
+    const [frozen] = PublicKey.findProgramAddressSync(
+      [Buffer.from("frozen"), mint.toBuffer(), wallet.toBuffer()],
+      ids.token
+    );
+    const frozenInfo = await this.connection.getAccountInfo(frozen, "confirmed");
+    if (frozenInfo && frozenInfo.owner.equals(ids.token) && frozenInfo.data.length > 0) {
+      blockers.push("Wallet is frozen for this token.");
+    }
+
+    for (const topic of requiredClaimTopics) {
+      const claimCheck = parsedIdentity
+        ? await this.hasValidTrustedClaim(parsedIdentity.fid, BigInt(topic), tirState, ids)
+        : { ok: false, reason: `Missing valid trusted claim for required topic ${topic}.` };
+      if (!claimCheck.ok) {
+        blockers.push(claimCheck.reason);
+      }
+    }
+
+    return {
+      wallet: wallet.toBase58(),
+      walletIdentity: walletIdentity.toBase58(),
+      identityExists: Boolean(parsedIdentity),
+      identityActive: Boolean(parsedIdentity?.isActive),
+      fid: parsedIdentity?.fid.toBase58() ?? (fidInfo ? fidPda.toBase58() : undefined),
+      country: parsedIdentity?.country,
+      blockers,
+    };
+  }
+
+  private async hasValidTrustedClaim(
+    targetFid: PublicKey,
+    topic: bigint,
+    tirState: PublicKey,
+    ids: TransferProgramIds
+  ): Promise<ClaimCheckResult> {
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    const claimAccounts = await this.connection.getProgramAccounts(ids.fid, {
+      commitment: "confirmed",
+      filters: [
+        { dataSize: CLAIM_ACCOUNT_SIZE },
+        { memcmp: { offset: 8, bytes: targetFid.toBase58() } },
+      ],
+    });
+
+    let sawTopic = false;
+    let sawUnrevoked = false;
+    let sawUnexpired = false;
+    let sawTrusted = false;
+
+    for (const { account } of claimAccounts) {
+      const parsed = parseClaimAccount(account.data);
+      if (!parsed || parsed.topic !== topic) continue;
+      sawTopic = true;
+      if (parsed.revoked) continue;
+      sawUnrevoked = true;
+      if (parsed.expiresAt !== 0n && parsed.expiresAt < now) continue;
+      sawUnexpired = true;
+
+      const [issuerEntry] = PublicKey.findProgramAddressSync(
+        [Buffer.from("issuer_entry"), tirState.toBuffer(), parsed.issuerFid.toBuffer()],
+        ids.tir
+      );
+      const [issuerEntryInfo, issuerFidInfo] = await this.connection.getMultipleAccountsInfo(
+        [issuerEntry, parsed.issuerFid],
+        "confirmed"
+      );
+      if (!issuerEntryInfo || !parseIssuerEntryForTopic(issuerEntryInfo.data, parsed.topic)) {
+        continue;
+      }
+      sawTrusted = true;
+      if (!issuerFidInfo || !parseFidIsIssuerAndSigner(issuerFidInfo.data, parsed.signerKey)) {
+        continue;
+      }
+      return { ok: true };
+    }
+
+    const topicText = topic.toString();
+    if (!sawTopic) {
+      return { ok: false, reason: `Missing valid trusted claim for required topic ${topicText}.` };
+    }
+    if (!sawUnrevoked) {
+      return { ok: false, reason: `Claim for required topic ${topicText} is revoked.` };
+    }
+    if (!sawUnexpired) {
+      return { ok: false, reason: `Claim for required topic ${topicText} has expired.` };
+    }
+    if (!sawTrusted) {
+      return { ok: false, reason: `Claim exists for required topic ${topicText}, but its issuer is not trusted in this token's TIR.` };
+    }
+    return { ok: false, reason: `Claim for required topic ${topicText} has an invalid issuer FID signer.` };
+  }
+
+  private senderStatusFromBlockers(blockers: string[]): string {
+    if (blockers.some((item) => item.includes("frozen"))) return "SENDER_FROZEN";
+    if (blockers.some((item) => item.includes("expired"))) return "SENDER_CLAIM_EXPIRED";
+    return "SENDER_NOT_ELIGIBLE";
+  }
+
   private async deriveIrsStateFromIrp(irpState: PublicKey): Promise<PublicKey> {
     const irpRaw = await this.connection.getAccountInfo(irpState, "confirmed");
     if (!irpRaw) {
@@ -859,7 +1238,8 @@ export class TransferService {
     recipient: PublicKey,
     mint: PublicKey,
     tirState: PublicKey,
-    complianceState: PublicKey
+    complianceState: PublicKey,
+    ids: TransferProgramIds
   ): Promise<RemainingAccount[]> {
     const approvalRemainingAccounts: RemainingAccount[] = [];
     const approvalSeen = new Set<string>();
@@ -870,14 +1250,20 @@ export class TransferService {
       approvalRemainingAccounts.push({ pubkey, isSigner: false, isWritable });
     };
 
-    const fidProgram = new Program(FidIdl as unknown as Idl, this.provider);
-    const ctrProgram = new Program(CtrIdl as unknown as Idl, this.provider);
+    const fidProgram = new Program(
+      { ...(FidIdl as unknown as Record<string, unknown>), address: ids.fid.toBase58() } as Idl,
+      this.provider
+    );
+    const ctrProgram = new Program(
+      { ...(CtrIdl as unknown as Record<string, unknown>), address: ids.ctr.toBase58() } as Idl,
+      this.provider
+    );
     const requiredTopics = new Set<string>();
     try {
       const ctr = await (ctrProgram.account as any).claimTopicsState.fetch(
         PublicKey.findProgramAddressSync(
           [Buffer.from("ctr_state"), mint.toBuffer()],
-          CTR_PROGRAM_ID
+          ids.ctr
         )[0]
       );
       for (const topic of ctr.topics as Array<{ toString(): string }>) {
@@ -892,18 +1278,12 @@ export class TransferService {
     const appendClaimsForWallet = async (wallet: PublicKey) => {
       const [targetFid] = PublicKey.findProgramAddressSync(
         [Buffer.from("fid"), wallet.toBuffer()],
-        FID_PROGRAM_ID
+        ids.fid
       );
-      const claimAccounts = await this.connection.getProgramAccounts(FID_PROGRAM_ID, {
+      const claimAccounts = await this.connection.getProgramAccounts(ids.fid, {
         commitment: "confirmed",
         filters: [
-          {
-            memcmp: {
-              offset: 0,
-              bytes: CLAIM_ACCOUNT_DISCRIMINATOR.toString("base64"),
-              encoding: "base64",
-            },
-          },
+          { dataSize: CLAIM_ACCOUNT_SIZE },
           { memcmp: { offset: 8, bytes: targetFid.toBase58() } },
         ],
       });
@@ -930,7 +1310,7 @@ export class TransferService {
           const issuerFid = claim.issuerFid as PublicKey;
           const [issuerEntry] = PublicKey.findProgramAddressSync(
             [Buffer.from("issuer_entry"), tirState.toBuffer(), issuerFid.toBuffer()],
-            TIR_PROGRAM_ID
+            ids.tir
           );
           pushApproval(pubkey);
           pushApproval(issuerEntry);
@@ -948,7 +1328,10 @@ export class TransferService {
     await appendClaimsForWallet(sender);
     await appendClaimsForWallet(recipient);
 
-    const complianceProgram = new Program(ComplianceIdl as unknown as Idl, this.provider);
+    const complianceProgram = new Program(
+      { ...(ComplianceIdl as unknown as Record<string, unknown>), address: ids.compliance.toBase58() } as Idl,
+      this.provider
+    );
     try {
       const compliance = await (complianceProgram.account as any).complianceState.fetch(complianceState);
       const moduleAccounts = compliance.modules as PublicKey[];

@@ -51,6 +51,19 @@ interface HoldingRow {
   value: number;
 }
 
+type TokenTransferRequest = {
+  id: string;
+  assetId?: string | null;
+  tokenContract: string;
+  fromWallet: string;
+  toWallet: string;
+  amount?: number;
+  status: string;
+  preflightFailure?: string | null;
+  transferTxHash?: string | null;
+  createdAt: string;
+};
+
 function shortAddress(address: string) {
   return `${address.slice(0, 8)}...${address.slice(-6)}`;
 }
@@ -74,6 +87,7 @@ export default function InvestorDashboardPage() {
   const [holdings, setHoldings] = useState<HoldingRow[]>([]);
   const [loadingHoldings, setLoadingHoldings] = useState(false);
   const [purchaseRequests, setPurchaseRequests] = useState<TokenPurchaseRequest[]>([]);
+  const [transferRequests, setTransferRequests] = useState<TokenTransferRequest[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [fidAddress, setFidAddress] = useState("");
   const [fidCountry, setFidCountry] = useState<number | null>(null);
@@ -205,6 +219,32 @@ export default function InvestorDashboardPage() {
       isActive = false;
     };
   }, [trexClient, investorWallet, assets]);
+
+  useEffect(() => {
+    if (!investorWallet) return;
+    let isActive = true;
+    const loadTransferRequests = async () => {
+      try {
+        const [incoming, outgoing] = await Promise.all([
+          apiFetch<TokenTransferRequest[]>(
+            `/token-transfer-requests?${new URLSearchParams({ toWallet: investorWallet }).toString()}`,
+          ),
+          apiFetch<TokenTransferRequest[]>(
+            `/token-transfer-requests?${new URLSearchParams({ fromWallet: investorWallet }).toString()}`,
+          ),
+        ]);
+        const merged = new Map<string, TokenTransferRequest>();
+        [...incoming, ...outgoing].forEach((request) => merged.set(request.id, request));
+        if (isActive) setTransferRequests([...merged.values()]);
+      } catch {
+        if (isActive) setTransferRequests([]);
+      }
+    };
+    void loadTransferRequests();
+    return () => {
+      isActive = false;
+    };
+  }, [investorWallet]);
 
   const totalValue = useMemo(
     () => holdings.reduce((sum, row) => sum + row.value, 0),
@@ -697,6 +737,77 @@ export default function InvestorDashboardPage() {
                         </TableCell>
                         <TableCell>
                           {new Date(req.createdAt).toLocaleDateString()}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="bg-white rounded-2xl mt-6">
+        <CardHeader>
+          <CardTitle>Token Transfer Requests</CardTitle>
+          <CardDescription>
+            Secondary transfer onboarding and transfer history for this wallet.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {transferRequests.length === 0 ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">
+              No transfer requests found.
+            </div>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Direction</TableHead>
+                    <TableHead>Token</TableHead>
+                    <TableHead>Counterparty</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Tx</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {transferRequests.map((req) => {
+                    const outgoing = req.fromWallet === investorWallet;
+                    const counterparty = outgoing ? req.toWallet : req.fromWallet;
+                    const asset =
+                      (req.assetId && assetsByRequestKey.get(req.assetId)) ||
+                      assetsByRequestKey.get(req.tokenContract);
+                    return (
+                      <TableRow key={req.id}>
+                        <TableCell>{outgoing ? "Outgoing" : "Incoming"}</TableCell>
+                        <TableCell className="font-medium">
+                          {asset ? `${asset.name} (${asset.symbol})` : shortAddress(req.tokenContract)}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {shortAddress(counterparty)}
+                        </TableCell>
+                        <TableCell>{req.amount ?? "-"}</TableCell>
+                        <TableCell>
+                          <Badge variant={req.status === "TRANSFERRED" ? "default" : "secondary"}>
+                            {req.status.replaceAll("_", " ")}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {req.transferTxHash ? (
+                            <a
+                              className="inline-flex items-center gap-1 text-xs text-[#172E7F] hover:underline"
+                              href={`https://solscan.io/tx/${req.transferTxHash}?cluster=testnet`}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              View <ExternalLink className="h-3 w-3" />
+                            </a>
+                          ) : (
+                            "-"
+                          )}
                         </TableCell>
                       </TableRow>
                     );
