@@ -58,14 +58,18 @@ type AssetRequest = {
 
 type TokenTransferRequest = {
   id: string;
+  listingId?: string;
   assetId?: string | null;
   tokenContract: string;
   fromWallet: string;
-  toWallet: string;
+  toWallet?: string;
+  buyerWallet?: string;
   amount?: number;
+  amountBaseUnits?: string;
   status: string;
   issuerWallet?: string | null;
   requiredClaimTopics: string[];
+  source?: "direct" | "listing";
 };
 
 type WalletIdentityQueueState = {
@@ -82,6 +86,18 @@ type WalletIdentityQueueState = {
 
 const RECOVERY_TOOLS_ENABLED =
   process.env.NEXT_PUBLIC_ENABLE_RECOVERY_TOOLS === "true";
+
+function transferRequestStatusEndpoint(request: TokenTransferRequest) {
+  return request.source === "listing"
+    ? `/token-listings/buy-intents/${request.id}/status`
+    : `/token-transfer-requests/${request.id}/status`;
+}
+
+function transferRecipientWallet(request: TokenTransferRequest) {
+  const wallet = request.toWallet || request.buyerWallet;
+  if (!wallet) throw new Error("Recipient wallet is missing.");
+  return wallet;
+}
 
 export default function IssuerPage() {
   const { address: walletAddress } = useWallet();
@@ -192,7 +208,7 @@ export default function IssuerPage() {
     let cancelled = false;
     const timeout = window.setTimeout(async () => {
       try {
-        const [whitelist, activation] = await Promise.all([
+        const [whitelist, activation, listingWhitelist, listingActivation] = await Promise.all([
           apiFetch<TokenTransferRequest[]>(
             `/token-transfer-requests?${new URLSearchParams({
               issuerWallet: walletAddress,
@@ -205,8 +221,37 @@ export default function IssuerPage() {
               status: "PENDING_ISSUER_ACTIVATION",
             }).toString()}`,
           ),
+          apiFetch<TokenTransferRequest[]>(
+            `/token-listings/buy-intents?${new URLSearchParams({
+              issuerWallet: walletAddress,
+              status: "PENDING_ISSUER_WHITELIST",
+            }).toString()}`,
+          ),
+          apiFetch<TokenTransferRequest[]>(
+            `/token-listings/buy-intents?${new URLSearchParams({
+              issuerWallet: walletAddress,
+              status: "PENDING_ISSUER_ACTIVATION",
+            }).toString()}`,
+          ),
         ]);
-        if (!cancelled) setTransferRequests([...whitelist, ...activation]);
+        if (!cancelled) {
+          setTransferRequests([
+            ...whitelist.map((request) => ({ ...request, source: "direct" as const })),
+            ...activation.map((request) => ({ ...request, source: "direct" as const })),
+            ...listingWhitelist.map((request) => ({
+              ...request,
+              source: "listing" as const,
+              fromWallet: request.fromWallet || (request as any).sellerWallet,
+              toWallet: request.toWallet || request.buyerWallet,
+            })),
+            ...listingActivation.map((request) => ({
+              ...request,
+              source: "listing" as const,
+              fromWallet: request.fromWallet || (request as any).sellerWallet,
+              toWallet: request.toWallet || request.buyerWallet,
+            })),
+          ]);
+        }
       } catch {
         if (!cancelled) setTransferRequests([]);
       }
@@ -473,7 +518,7 @@ export default function IssuerPage() {
     try {
       if (!identityService) throw new Error("Connect issuer wallet first.");
       const mint = new PublicKey(request.tokenContract);
-      const wallet = new PublicKey(request.toWallet);
+      const wallet = new PublicKey(transferRecipientWallet(request));
       const existingIdentity = await identityService.fetchWalletIdentity(mint, wallet);
       if (!existingIdentity) {
         const investorFid = identityService.findFidPda(wallet)[0];
@@ -485,7 +530,7 @@ export default function IssuerPage() {
         }
         await identityService.registerIdentity(mint, wallet, investorFid, fidAccount.country);
       }
-      await apiFetch(`/token-transfer-requests/${request.id}/status`, {
+      await apiFetch(transferRequestStatusEndpoint(request), {
         method: "PATCH",
         body: JSON.stringify({
           status: "PENDING_ISSUER_ACTIVATION",
@@ -501,7 +546,7 @@ export default function IssuerPage() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Recipient whitelist failed.";
       if (message.includes("WalletAlreadyRegistered") || message.includes("Wallet is already registered")) {
-        await apiFetch(`/token-transfer-requests/${request.id}/status`, {
+        await apiFetch(transferRequestStatusEndpoint(request), {
           method: "PATCH",
           body: JSON.stringify({
             status: "PENDING_ISSUER_ACTIVATION",
@@ -525,18 +570,22 @@ export default function IssuerPage() {
       if (!identityService) throw new Error("Connect issuer wallet first.");
       await identityService.setIdentityActivation(
         new PublicKey(request.tokenContract),
-        new PublicKey(request.toWallet),
+        new PublicKey(transferRecipientWallet(request)),
         true,
       );
-      await apiFetch(`/token-transfer-requests/${request.id}/status`, {
+      await apiFetch(transferRequestStatusEndpoint(request), {
         method: "PATCH",
         body: JSON.stringify({
-          status: "READY_TO_TRANSFER",
+          status: request.source === "listing" ? "READY_FOR_SELLER_ACCEPTANCE" : "READY_TO_TRANSFER",
           reviewerWallet: walletAddress,
         }),
       });
       setTransferRequests((current) => current.filter((item) => item.id !== request.id));
-      toast.success("Transfer recipient activated. Investor A can now send the transfer.");
+      toast.success(
+        request.source === "listing"
+          ? "Buyer activated. Seller can now accept the listing request."
+          : "Transfer recipient activated. Investor A can now send the transfer.",
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Recipient activation failed.");
     }
@@ -887,8 +936,13 @@ export default function IssuerPage() {
                       <div className="font-semibold text-slate-900">
                         {asset ? `${asset.name} (${asset.symbol})` : "Unknown token"}
                       </div>
+                      <div className="mt-2">
+                        <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
+                          {request.source === "listing" ? "Marketplace buyer" : "Direct transfer recipient"}
+                        </span>
+                      </div>
                       <div className="mt-1 text-sm text-slate-700">
-                        {request.amount ?? "-"} tokens requested for secondary transfer
+                        {request.amountBaseUnits ?? request.amount ?? "-"} base units requested for secondary transfer
                       </div>
                       <div className="mt-1 text-xs text-slate-500">
                         Sender{" "}
@@ -897,7 +951,7 @@ export default function IssuerPage() {
                         </span>
                         {" "}to recipient{" "}
                         <span className="font-mono">
-                          {request.toWallet.slice(0, 6)}...{request.toWallet.slice(-4)}
+                          {transferRecipientWallet(request).slice(0, 6)}...{transferRecipientWallet(request).slice(-4)}
                         </span>
                       </div>
                       <div className="mt-1 text-xs text-slate-500">

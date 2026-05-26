@@ -89,6 +89,22 @@ export type TransferPreflightResult = {
   transferableBalance: string;
   simulation?: SimulationResult;
 };
+export type SellerListingCapacity = {
+  ok: boolean;
+  sourceAta: string;
+  sourceBalance: string;
+  transferableBalance: string;
+  requestedAmount: string;
+  blockers: string[];
+};
+export type TransferBuildSimulationResult = SimulationResult & {
+  destinationAta: string;
+  destinationAtaExists: boolean;
+  destinationAtaCreatedInSimulation: boolean;
+  instructionCount: number;
+  transactionSize: number | null;
+  approvalOnlySimulation: boolean;
+};
 
 const CLAIM_ACCOUNT_DISCRIMINATOR = Buffer.from([113, 109, 47, 96, 242, 219, 61, 165]);
 const RECIPIENT_ATA_NOTICE =
@@ -280,65 +296,7 @@ export class TransferService {
     decimals: number
   ): Promise<SimulationResult> {
     try {
-      const ids = await this.getProgramIds();
-      const destinationTa = this.getTokenAccountAddress(mint, to);
-      const destinationInfo = await this.connection.getAccountInfo(
-        destinationTa,
-        "confirmed"
-      );
-      if (!destinationInfo) {
-        return {
-          success: true,
-          notice: RECIPIENT_ATA_NOTICE,
-          logs: [],
-        };
-      }
-      this.assertToken2022Account(destinationInfo.owner);
-
-      const { approveIx, transferIx } = await this._buildTransferInstructions(
-        mint,
-        from,
-        to,
-        amount,
-        decimals,
-        ids
-      );
-
-      const { blockhash } =
-        await this.connection.getLatestBlockhash("confirmed");
-
-      const fullVtx = this.compileVersionedTransaction(
-        from,
-        blockhash,
-        [approveIx, transferIx]
-      );
-      const fullTxSize = this.getSerializedTransactionSize(fullVtx);
-      const simulationTarget =
-        fullTxSize !== null && fullTxSize <= 1232
-          ? fullVtx
-          : this.compileVersionedTransaction(from, blockhash, [approveIx]);
-      const simulationTargetSize = this.getSerializedTransactionSize(simulationTarget);
-      if (simulationTargetSize === null || simulationTargetSize > 1232) {
-        return {
-          success: true,
-          notice: OVERSIZED_SIMULATION_NOTICE,
-          logs: [],
-        };
-      }
-
-      const simulation = await this.connection.simulateTransaction(simulationTarget, {
-        sigVerify: false,
-        commitment: "confirmed",
-      });
-
-      const logs = simulation.value.logs ?? [];
-
-      if (simulation.value.err) {
-        const errMsg = this._decodeSimulationError(simulation.value.err, logs);
-        return { success: false, error: errMsg, logs };
-      }
-
-      return { success: true, logs };
+      return await this.buildAndSimulateTransfer(mint, from, to, amount, decimals);
     } catch (err) {
       return {
         success: false,
@@ -346,6 +304,116 @@ export class TransferService {
         logs: [],
       };
     }
+  }
+
+  async checkSellerListingCapacity(
+    mint: PublicKey,
+    seller: PublicKey,
+    amount: bigint
+  ): Promise<SellerListingCapacity> {
+    const ids = await this.getProgramIds();
+    const sourceAta = this.getTokenAccountAddress(mint, seller);
+    const sourceBalance = await this.getRawTokenBalance(sourceAta).catch(() => 0n);
+    const partialFreeze = await this.getPartialFreezeAmount(mint, seller, ids.token);
+    const transferableBalance = sourceBalance > partialFreeze ? sourceBalance - partialFreeze : 0n;
+    const blockers: string[] = [];
+    if (amount <= 0n) blockers.push("Listing amount must be greater than zero.");
+    if (sourceBalance < amount) blockers.push("Listing amount exceeds current token balance.");
+    if (transferableBalance < amount) {
+      blockers.push("Listing amount exceeds transferable balance after partial freeze.");
+    }
+    return {
+      ok: blockers.length === 0,
+      sourceAta: sourceAta.toBase58(),
+      sourceBalance: sourceBalance.toString(),
+      transferableBalance: transferableBalance.toString(),
+      requestedAmount: amount.toString(),
+      blockers,
+    };
+  }
+
+  async buildAndSimulateTransfer(
+    mint: PublicKey,
+    from: PublicKey,
+    to: PublicKey,
+    amount: bigint,
+    decimals: number
+  ): Promise<TransferBuildSimulationResult> {
+    const ids = await this.getProgramIds();
+    const destinationAta = this.getTokenAccountAddress(mint, to);
+    const destinationInfo = await this.connection.getAccountInfo(destinationAta, "confirmed");
+    if (destinationInfo) this.assertToken2022Account(destinationInfo.owner);
+
+    const setupIxs = destinationInfo
+      ? []
+      : [this.createRecipientAtaInstruction(mint, from, to)];
+    const { approveIx, transferIx } = await this._buildTransferInstructions(
+      mint,
+      from,
+      to,
+      amount,
+      decimals,
+      ids,
+      { allowMissingDestinationAta: !destinationInfo }
+    );
+
+    const { blockhash } = await this.connection.getLatestBlockhash("confirmed");
+    const fullInstructions = [...setupIxs, approveIx, transferIx];
+    const fullVtx = this.compileVersionedTransaction(from, blockhash, fullInstructions);
+    const fullTxSize = this.getSerializedTransactionSize(fullVtx);
+    let simulationTarget = fullVtx;
+    let approvalOnlySimulation = false;
+
+    if (fullTxSize === null || fullTxSize > 1232) {
+      simulationTarget = this.compileVersionedTransaction(from, blockhash, [...setupIxs, approveIx]);
+      approvalOnlySimulation = true;
+    }
+
+    const simulationTargetSize = this.getSerializedTransactionSize(simulationTarget);
+    if (simulationTargetSize === null || simulationTargetSize > 1232) {
+      return {
+        success: true,
+        notice: OVERSIZED_SIMULATION_NOTICE,
+        logs: [],
+        destinationAta: destinationAta.toBase58(),
+        destinationAtaExists: Boolean(destinationInfo),
+        destinationAtaCreatedInSimulation: !destinationInfo,
+        instructionCount: fullInstructions.length,
+        transactionSize: simulationTargetSize,
+        approvalOnlySimulation,
+      };
+    }
+
+    const simulation = await this.connection.simulateTransaction(simulationTarget, {
+      sigVerify: false,
+      commitment: "confirmed",
+    });
+    const logs = simulation.value.logs ?? [];
+
+    if (simulation.value.err) {
+      return {
+        success: false,
+        error: this._decodeSimulationError(simulation.value.err, logs),
+        logs,
+        destinationAta: destinationAta.toBase58(),
+        destinationAtaExists: Boolean(destinationInfo),
+        destinationAtaCreatedInSimulation: !destinationInfo,
+        instructionCount: fullInstructions.length,
+        transactionSize: simulationTargetSize,
+        approvalOnlySimulation,
+      };
+    }
+
+    return {
+      success: true,
+      logs,
+      destinationAta: destinationAta.toBase58(),
+      destinationAtaExists: Boolean(destinationInfo),
+      destinationAtaCreatedInSimulation: !destinationInfo,
+      instructionCount: fullInstructions.length,
+      transactionSize: simulationTargetSize,
+      approvalOnlySimulation,
+    };
   }
 
   /**
@@ -495,7 +563,8 @@ export class TransferService {
     to: PublicKey,
     amount: bigint,
     decimals: number,
-    ids: TransferProgramIds
+    ids: TransferProgramIds,
+    options: { allowMissingDestinationAta?: boolean } = {}
   ): Promise<TransferInstructions> {
     const tokenProgram = this.getTokenProgram(ids.token);
     const sourceTa = this.getTokenAccountAddress(mint, from);
@@ -511,9 +580,12 @@ export class TransferService {
     const sourceBalance = await this.getRawTokenBalance(sourceTa);
     const destinationInfo = await this.connection.getAccountInfo(destinationTa, "confirmed");
     if (!destinationInfo) {
-      throw new Error(RECIPIENT_ATA_NOTICE);
+      if (!options.allowMissingDestinationAta) {
+        throw new Error(RECIPIENT_ATA_NOTICE);
+      }
+    } else {
+      this.assertToken2022Account(destinationInfo.owner);
     }
-    this.assertToken2022Account(destinationInfo.owner);
     const destinationBalance = destinationInfo ? await this.getRawTokenBalance(destinationTa) : BigInt(0);
 
     if (sourceBalance < amount) {
@@ -861,14 +933,6 @@ export class TransferService {
       complianceState
     );
     const moduleAccounts = compliance.modules as PublicKey[];
-    if (moduleAccounts.length === 0) {
-      return;
-    }
-
-    const moduleInfos = await this.connection.getMultipleAccountsInfo(
-      moduleAccounts,
-      "confirmed"
-    );
     const appended: RemainingAccount[] = [
       { pubkey: extraAccountMetas, isSigner: false, isWritable: false },
       { pubkey: ids.token, isSigner: false, isWritable: false },
@@ -877,6 +941,11 @@ export class TransferService {
       { pubkey: complianceState, isSigner: false, isWritable: false },
       { pubkey: ids.compliance, isSigner: false, isWritable: false },
     ];
+
+    const moduleInfos =
+      moduleAccounts.length > 0
+        ? await this.connection.getMultipleAccountsInfo(moduleAccounts, "confirmed")
+        : [];
 
     moduleAccounts.forEach((moduleAccount, index) => {
       const info = moduleInfos[index];
@@ -1288,11 +1357,44 @@ export class TransferService {
         ],
       });
       const selectedTopics = new Set<string>();
+      const trustedIssuerEntryCache = new Map<string, boolean>();
+      const signerValidCache = new Map<string, boolean>();
+
+      const isTrustedIssuerForTopic = async (issuerFid: PublicKey, claimTopic: bigint) => {
+        const cacheKey = `${issuerFid.toBase58()}:${claimTopic.toString()}`;
+        if (trustedIssuerEntryCache.has(cacheKey)) {
+          return trustedIssuerEntryCache.get(cacheKey) ?? false;
+        }
+        const [issuerEntry] = PublicKey.findProgramAddressSync(
+          [Buffer.from("issuer_entry"), tirState.toBuffer(), issuerFid.toBuffer()],
+          ids.tir
+        );
+        const issuerEntryInfo = await this.connection.getAccountInfo(issuerEntry, "confirmed");
+        const trusted = Boolean(
+          issuerEntryInfo && parseIssuerEntryForTopic(issuerEntryInfo.data, claimTopic)
+        );
+        trustedIssuerEntryCache.set(cacheKey, trusted);
+        return trusted;
+      };
+
+      const issuerSignerMatchesClaim = async (issuerFid: PublicKey, signerKey: PublicKey) => {
+        const cacheKey = `${issuerFid.toBase58()}:${signerKey.toBase58()}`;
+        if (signerValidCache.has(cacheKey)) {
+          return signerValidCache.get(cacheKey) ?? false;
+        }
+        const issuerFidInfo = await this.connection.getAccountInfo(issuerFid, "confirmed");
+        const matches = Boolean(
+          issuerFidInfo && parseFidIsIssuerAndSigner(issuerFidInfo.data, signerKey)
+        );
+        signerValidCache.set(cacheKey, matches);
+        return matches;
+      };
 
       for (const { pubkey, account } of claimAccounts) {
         try {
           const claim = fidProgram.coder.accounts.decode("claimAccount", account.data);
           const claimTopic = claim.topic.toString();
+          const claimTopicValue = BigInt(claimTopic);
           const expiresAt = BigInt(claim.expiresAt.toString());
           if (requiredTopics.size > 0 && !requiredTopics.has(claimTopic)) {
             continue;
@@ -1308,6 +1410,13 @@ export class TransferService {
           }
 
           const issuerFid = claim.issuerFid as PublicKey;
+          const signerKey = claim.signerKey as PublicKey;
+          if (!(await isTrustedIssuerForTopic(issuerFid, claimTopicValue))) {
+            continue;
+          }
+          if (!(await issuerSignerMatchesClaim(issuerFid, signerKey))) {
+            continue;
+          }
           const [issuerEntry] = PublicKey.findProgramAddressSync(
             [Buffer.from("issuer_entry"), tirState.toBuffer(), issuerFid.toBuffer()],
             ids.tir

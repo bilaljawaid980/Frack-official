@@ -15,6 +15,7 @@ import { KycModule } from "./modules/kyc/kyc.module";
 import { AssetRequestsModule } from "./asset-requests/asset-requests.module";
 import { TokenPurchaseRequestsModule } from './token-purchase-requests/token-purchase-requests.module';
 import { TokenTransferRequestsModule } from './token-transfer-requests/token-transfer-requests.module';
+import { TokenListingsModule } from './token-listings/token-listings.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { TokenTransferRequestsModule } from './token-transfer-requests/token-tra
     AssetRequestsModule,
     TokenPurchaseRequestsModule,
     TokenTransferRequestsModule,
+    TokenListingsModule,
   ],
 })
 export class AppModule {}

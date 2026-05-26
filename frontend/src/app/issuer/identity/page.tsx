@@ -28,6 +28,7 @@ import { fetchFactoryStateAccount } from "@/lib/solana";
 import { copyToClipboard } from "@/lib/utils";
 import { IdentityService } from "@/services/identity";
 import { toast } from "sonner";
+import { ProviderSignerConfig } from "@/components/trex/provider-signer-config";
 
 const DEPLOYED_FID_PROGRAM_ID = new PublicKey(
   "EoENMXgL9GZBEVfjhn5KU4SkfjZeyoTEdd8NHAcMQsEB",
@@ -245,6 +246,18 @@ export default function IssuerIdentityPage() {
           )}
         </CardContent>
       </Card>
+
+      {publicKey ? (
+        <ProviderSignerConfig
+          walletAddress={publicKey.toBase58()}
+          onRotated={() => {
+            void getActiveFidProgramId().then((fidProgramId) => {
+              const fid = deriveFid(publicKey, fidProgramId);
+              setFidAddress(fid.toBase58());
+            });
+          }}
+        />
+      ) : null}
     </div>
   );
 }

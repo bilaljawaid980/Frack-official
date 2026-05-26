@@ -14,13 +14,14 @@ const menuItems = [
     items: [
       { name: "Overview", href: "/" },
       { name: "Assets", href: "/assets" },
+      { name: "Listings", href: "/listings" },
     ],
   },
   {
     category: "Investor",
     items: [
       { name: "My Portfolio", href: "/investor" },
-      { name: "Identity / KYC", href: "/identity" },
+      { name: "Investor Identity", href: "/investor/identity" },
     ],
   },
   {
@@ -95,7 +96,8 @@ export function Sidebar() {
                     : item.href;
                 const isActive =
                   item.href === "/investor"
-                    ? pathname.startsWith("/investor")
+                    ? pathname.startsWith("/investor") &&
+                      !pathname.startsWith("/investor/identity")
                     : pathname === item.href;
                 return (
                   <Link

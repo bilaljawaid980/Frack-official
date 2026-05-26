@@ -66,6 +66,10 @@ import {
   encodeU64,
   buildInstructionData,
 } from './solana';
+import {
+  detectClaimSignerMode,
+  signClaimWithBackendProviderWallet,
+} from '@/lib/claim-signer';
 import type {
   TokenInfo,
   IsVerifiedResponse,
@@ -160,7 +164,7 @@ async function sha256(input: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(digest);
 }
 
-function getLocalClaimSigner(owner: PublicKey): Keypair {
+function getStoredLocalClaimSigner(owner: PublicKey): Keypair | null {
   const storageKey = `fracks:claim-signer:${owner.toBase58()}`;
   const existing = typeof window !== 'undefined' ? window.localStorage.getItem(storageKey) : null;
   if (existing) {
@@ -168,14 +172,10 @@ function getLocalClaimSigner(owner: PublicKey): Keypair {
       const arr = JSON.parse(existing) as number[];
       return Keypair.fromSecretKey(Uint8Array.from(arr));
     } catch {
-      // regenerate below
+      return null;
     }
   }
-  const kp = Keypair.generate();
-  if (typeof window !== 'undefined') {
-    window.localStorage.setItem(storageKey, JSON.stringify(Array.from(kp.secretKey)));
-  }
-  return kp;
+  return null;
 }
 
 function normalizeCountry(country?: string | number | null): number {
@@ -1091,9 +1091,6 @@ export class TrexClient {
     expiresAt?: number,
   ): Promise<string> {
     this.ensureSigner();
-    if (!this.wallet!.signMessage) {
-      throw new Error('Wallet does not support signMessage; cannot create claim signature');
-    }
 
     const targetFid = toPublicKeyOrNull(identityAddr);
     if (!targetFid) throw new Error('Invalid identity address');
@@ -1130,6 +1127,7 @@ export class TrexClient {
     const claimCount = targetInfo.data.readUInt32LE(104);
     const [claim] = deriveClaimPDA(targetFid, claimCount);
     const expiry = BigInt(expiresAt || 0);
+    const currentSignerKey = new PublicKey(issuerInfo.data.subarray(72, 104));
 
     const dataHash = new Uint8Array(32);
     dataHash.set(await sha256(new TextEncoder().encode(data || '')));
@@ -1144,29 +1142,67 @@ export class TrexClient {
     claimPayload.set(encodeI64(expiry), 104);
     const message = await sha256(claimPayload);
     let signature: Uint8Array;
-    let claimSignerPubkey = this.wallet!.publicKey;
-    try {
-      if (!this.wallet!.signMessage) {
-        throw new Error('signMessage unavailable');
+    let claimSignerPubkey = currentSignerKey;
+    const localSigner = getStoredLocalClaimSigner(this.wallet!.publicKey);
+    const signerMode = detectClaimSignerMode({
+      onChainSignerKey: currentSignerKey,
+      connectedWallet: this.wallet!.publicKey,
+      localSigner,
+    });
+
+    if (signerMode === 'wallet-backed') {
+      try {
+        if (!this.wallet!.signMessage) {
+          throw new Error('Wallet does not support signMessage.');
+        }
+        signature = await this.wallet!.signMessage(message);
+      } catch {
+        const backend = await signClaimWithBackendProviderWallet({
+          providerWallet: this.wallet!.publicKey.toBase58(),
+          providerFid: issuerFid.toBase58(),
+          targetFid: targetFid.toBase58(),
+          topic: topic.toString(),
+          expiresAt: expiry.toString(),
+          dataHash,
+          message,
+        });
+        if (backend.signerPublicKey !== currentSignerKey.toBase58()) {
+          throw new Error(
+            `Backend provider signer returned ${backend.signerPublicKey}, but the on-chain issuer FID signer key is ${currentSignerKey.toBase58()}. ` +
+            `For this deployed FID program, backend signing must use the same provider wallet keypair.`,
+          );
+        }
+        if (!Buffer.from(backend.message).equals(Buffer.from(message))) {
+          throw new Error(
+            'Backend provider signer returned a different claim message than the frontend constructed.',
+          );
+        }
+        signature = backend.signature;
       }
-      signature = await this.wallet!.signMessage(message);
-    } catch {
-      // Fallback for wallets that block signMessage: use a local claim signer key
-      // and set it as issuer_fid.signer_key (owner-signed tx).
-      const localSigner = getLocalClaimSigner(this.wallet!.publicKey);
-      const currentSignerKey = new PublicKey(issuerInfo.data.subarray(72, 104));
-      if (!currentSignerKey.equals(localSigner.publicKey)) {
-        await this.sendInstruction(
-          PROGRAM_IDS.fid,
-          [
-            { pubkey: this.wallet!.publicKey, isSigner: true, isWritable: true },
-            { pubkey: issuerFid, isSigner: false, isWritable: true },
-          ],
-          buildInstructionData('set_signer_key', encodePubkey(localSigner.publicKey)),
+    } else if (signerMode === 'browser-local') {
+      if (!localSigner) {
+        throw new Error(
+          `This browser/profile does not hold the provider's current local claim signer. ` +
+          `On-chain issuer FID signer key: ${currentSignerKey.toBase58()}. ` +
+          `Local stored signer key: none. ` +
+          `Do not issue this claim from this browser. Use the original browser/profile that holds the current signer, or explicitly rotate the signer key in Identity Manager only if you intend to invalidate existing claims signed under the current key.`,
         );
       }
-      claimSignerPubkey = localSigner.publicKey;
+      if (!currentSignerKey.equals(localSigner.publicKey)) {
+        throw new Error(
+          `This browser/profile does not hold the provider's current local claim signer. ` +
+          `On-chain issuer FID signer key: ${currentSignerKey.toBase58()}. ` +
+          `Local stored signer key: ${localSigner.publicKey.toBase58()}. ` +
+          `Do not issue this claim from this browser. Use the original browser/profile that holds the current signer, or explicitly rotate the signer key in Identity Manager only if you intend to invalidate existing claims signed under the current key.`,
+        );
+      }
       signature = nacl.sign.detached(message, localSigner.secretKey);
+    } else {
+      throw new Error(
+        `Current provider signer is not available. On-chain issuer FID signer key: ${currentSignerKey.toBase58()}. ` +
+          `Connected wallet: ${this.wallet!.publicKey.toBase58()}. ` +
+          `For this deployed FID program, the signer key must remain aligned with the provider wallet keypair.`,
+      );
     }
 
     const edIx = Ed25519Program.createInstructionWithPublicKey({
@@ -1175,19 +1211,30 @@ export class TrexClient {
       signature,
     });
 
+    const [claimTopicIndex] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from('claim_topic_index'),
+        targetFid.toBuffer(),
+        issuerFid.toBuffer(),
+        Buffer.from(encodeU64(topic)),
+      ],
+      PROGRAM_IDS.fid,
+    );
+
     const addClaimIx = new TransactionInstruction({
       programId: PROGRAM_IDS.fid,
       keys: [
         { pubkey: this.wallet!.publicKey, isSigner: true, isWritable: true },
-        { pubkey: issuerFid, isSigner: false, isWritable: false },
         { pubkey: targetFid, isSigner: false, isWritable: true },
         { pubkey: claim, isSigner: false, isWritable: true },
+        { pubkey: claimTopicIndex, isSigner: false, isWritable: true },
         { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isSigner: false, isWritable: false },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ],
       data: buildInstructionData(
         'add_claim',
         encodeU64(topic),
+        issuerFid.toBuffer(),
         Buffer.from(dataHash),
         Buffer.from(signature).subarray(0, 64),
         encodeI64(expiry),
@@ -1207,19 +1254,80 @@ export class TrexClient {
     return sig;
   }
 
-  async revokeClaim(identityAddr: string, topic: number, _issuer: string): Promise<string> {
+  async revokeClaim(identityAddr: string, topic: number, claimRef?: string | number): Promise<string> {
     this.ensureSigner();
     const fid = toPublicKeyOrNull(identityAddr);
     if (!fid) throw new Error('Invalid identity address');
-    const [issuerFid] = deriveFidPDA(this.wallet!.publicKey);
-    const [claim] = deriveClaimPDA(fid, topic);
+
+    let claimId = typeof claimRef === 'number' ? claimRef : Number(claimRef);
+    if (!Number.isInteger(claimId) || claimId < 0) {
+      const candidateClaims = await this.getClaimsByTopic(identityAddr, topic);
+      const activeClaim = candidateClaims.find((row) => !row.revoked) || candidateClaims[0];
+      if (!activeClaim) {
+        throw new Error(`No claim found for topic ${topic} on ${identityAddr}`);
+      }
+      claimId = Number(activeClaim.claim_id);
+    }
+
+    const [claim] = deriveClaimPDA(fid, claimId);
+    const [claimInfo, fidInfo] = await Promise.all([
+      connection.getAccountInfo(claim, 'confirmed'),
+      connection.getAccountInfo(fid, 'confirmed'),
+    ]);
+    if (!claimInfo) {
+      throw new Error(`Claim account not found for claim_id ${claimId} on ${identityAddr}`);
+    }
+    if (!fidInfo || fidInfo.data.length < 72) {
+      throw new Error(`FID account ${identityAddr} not found or invalid`);
+    }
+
+    const parsedClaim = parseClaimAccount(claimInfo);
+    if (!parsedClaim) {
+      throw new Error(`Claim account ${claim.toBase58()} is not a valid ClaimAccount`);
+    }
+
+    const [claimTopicIndex] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from('claim_topic_index'),
+        new PublicKey(parsedClaim.fid).toBuffer(),
+        new PublicKey(parsedClaim.issuer_fid).toBuffer(),
+        Buffer.from(encodeU64(BigInt(parsedClaim.topic))),
+      ],
+      PROGRAM_IDS.fid,
+    );
+
+    const fidOwner = new PublicKey(fidInfo.data.subarray(8, 40));
+    const fidManagementKey = new PublicKey(fidInfo.data.subarray(40, 72));
+    const connectedWallet = this.wallet!.publicKey;
+
+    // Investor/FID owner path: remove the stale claim entirely, which also clears the topic index.
+    if (connectedWallet.equals(fidOwner) || connectedWallet.equals(fidManagementKey)) {
+      return this.sendInstruction(
+        PROGRAM_IDS.fid,
+        [
+          { pubkey: connectedWallet, isSigner: true, isWritable: true },
+          { pubkey: fid, isSigner: false, isWritable: false },
+          { pubkey: claim, isSigner: false, isWritable: true },
+          { pubkey: claimTopicIndex, isSigner: false, isWritable: true },
+        ],
+        buildInstructionData('remove_claim'),
+      );
+    }
+
+    const [issuerFid] = deriveFidPDA(connectedWallet);
+    if (issuerFid.toBase58() !== parsedClaim.issuer_fid) {
+      throw new Error(
+        `Connected wallet ${connectedWallet.toBase58()} is neither the investor FID owner/manager nor the claim issuer owner for claim ${claim.toBase58()}.`,
+      );
+    }
 
     return this.sendInstruction(
       PROGRAM_IDS.fid,
       [
-        { pubkey: this.wallet!.publicKey, isSigner: true, isWritable: true },
+        { pubkey: connectedWallet, isSigner: true, isWritable: true },
         { pubkey: issuerFid, isSigner: false, isWritable: false },
         { pubkey: claim, isSigner: false, isWritable: true },
+        { pubkey: claimTopicIndex, isSigner: false, isWritable: true },
       ],
       buildInstructionData('revoke_claim'),
     );

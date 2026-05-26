@@ -966,6 +966,7 @@ export function buildAddClaimInstruction(
   keys: AccountMeta[],
   args: {
     topic: bigint | number;
+    issuerFid: PublicKey;
     dataHash32: Buffer | Uint8Array;
     signature64: Buffer | Uint8Array;
     expiresAt: bigint | number;
@@ -977,6 +978,7 @@ export function buildAddClaimInstruction(
     buildInstructionData(
       'add_claim',
       encodeU64(args.topic),
+      encodePubkey(args.issuerFid),
       encodeFixedBytes(args.dataHash32, 32),
       encodeFixedBytes(args.signature64, 64),
       encodeI64(args.expiresAt),

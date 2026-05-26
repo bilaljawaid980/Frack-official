@@ -38,6 +38,7 @@ import { useWallet } from "@/hooks/use-wallet";
 import { usePermissions } from "@/hooks/use-permissions";
 import { UserIdentity, CLAIM_TOPIC_NAMES } from "@/types/trex-contracts";
 import { toast } from "sonner";
+import { ProviderSignerConfig } from "@/components/trex/provider-signer-config";
 
 interface IdentityManagerProps {
   userIdentity: UserIdentity | null;
@@ -222,32 +223,39 @@ export function IdentityManager({
         <div className="p-4 rounded-lg border border-purple-200 !bg-purple-200">
           <div className="flex items-start gap-3">
             <ShieldCheck className="h-5 w-5 text-purple-600 mt-0.5" />
-            <div className="flex-1">
-              <h3 className="font-semibold text-purple-900">
-                Trusted Issuer Status
-              </h3>
-              <p className="text-sm text-purple-700 mt-1">
-                You can add claims for topics:{" "}
-                <strong>
-                  {issuerTopics
-                    .map((t) => {
-                      const names: Record<number, string> = {
-                        1: "KYC",
-                        2: "AML",
-                        3: "Accredited Investor",
-                        4: "Residency",
-                        5: "Age Verification",
-                      };
-                      return names[t] || `Topic ${t}`;
-                    })
-                    .join(", ")}
-                </strong>
-              </p>
-              <p className="text-xs text-purple-600 mt-1">
-                Note: You can only add claims if you're the issuer OR the
-                OnchainID owner. The claim's "issuer" field will be set to your
-                wallet address.
-              </p>
+            <div className="flex-1 flex justify-between items-start">
+              <div>
+                <h3 className="font-semibold text-purple-900">
+                  Trusted Issuer Status
+                </h3>
+                <p className="text-sm text-purple-700 mt-1">
+                  You can add claims for topics:{" "}
+                  <strong>
+                    {issuerTopics
+                      .map((t) => {
+                        const names: Record<number, string> = {
+                          1: "KYC",
+                          2: "AML",
+                          3: "Accredited Investor",
+                          4: "Residency",
+                          5: "Age Verification",
+                        };
+                        return names[t] || `Topic ${t}`;
+                      })
+                      .join(", ")}
+                  </strong>
+                </p>
+                <p className="text-xs text-purple-600 mt-1">
+                  Note: You can only add claims if you're the issuer OR the
+                  OnchainID owner. The claim's "issuer" field will be set to your
+                  wallet address.
+                </p>
+              </div>
+              {address ? (
+                <div className="ml-4 min-w-[320px] max-w-[480px]">
+                  <ProviderSignerConfig walletAddress={address} onRotated={onUpdate} />
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

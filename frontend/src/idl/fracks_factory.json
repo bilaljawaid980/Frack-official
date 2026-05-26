@@ -159,20 +159,25 @@
           "writable": true
         },
         {
-          "name": "token_mint_account"
+          "name": "token_mint_account",
+          "writable": true
         },
         {
           "name": "extra_account_metas",
           "writable": true
         },
-        {
-          "name": "token_program",
-          "address": "92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s"
-        },
-        {
-          "name": "hook_program",
-          "address": "4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m"
-        },
+          {
+            "name": "token_program",
+            "address": "92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s"
+          },
+          {
+            "name": "token_2022_program",
+            "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+          },
+          {
+            "name": "hook_program",
+            "address": "4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m"
+          },
         {
           "name": "irp_program",
           "address": "C8jtErJYtuu7pSZczfSm1JvDmv254Nmmw1KLX6rBdY8o"

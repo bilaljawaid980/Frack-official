@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, Suspense } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { PublicKey } from "@solana/web3.js";
 import { ArrowLeft, FileText, Shield } from "lucide-react";
@@ -12,6 +12,11 @@ import { useAssetsContext } from "@/contexts/assets-context";
 import { useAnchorProvider } from "@/hooks/useAnchorProvider";
 import { useWallet } from "@/hooks/use-wallet";
 import { apiFetch } from "@/lib/backend";
+import {
+  connection,
+  fetchFactoryStateAccount,
+  type FactoryStateAccount,
+} from "@/lib/solana";
 import { IdentityService } from "@/services/identity";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,6 +26,12 @@ type TrustedIssuerMetadata = {
   label?: string;
   walletAddress?: string;
   topics?: Array<string | number>;
+};
+
+type LiveProvider = {
+  walletAddress: string;
+  topics: number[];
+  isActive: boolean;
 };
 
 function getTrustedIssuers(asset: RWAAsset): TrustedIssuerMetadata[] {
@@ -58,6 +69,91 @@ function getProviderForTopic(asset: RWAAsset, topic: "1" | "2") {
   );
 }
 
+function derivePda(seeds: Buffer[], programId: PublicKey) {
+  return PublicKey.findProgramAddressSync(seeds, programId)[0];
+}
+
+function deriveFidPda(wallet: PublicKey, fidProgramId: PublicKey) {
+  return derivePda([Buffer.from("fid"), wallet.toBuffer()], fidProgramId);
+}
+
+function deriveTirStatePda(tokenMint: PublicKey, tirProgramId: PublicKey) {
+  return derivePda([Buffer.from("tir_state"), tokenMint.toBuffer()], tirProgramId);
+}
+
+function parseIssuerEntry(data: Buffer) {
+  if (data.length < 8 + 32 + 32 + 4) return null;
+
+  let offset = 8 + 32 + 32;
+  const topicsLength = data.readUInt32LE(offset);
+  offset += 4;
+
+  const topics: number[] = [];
+  for (let index = 0; index < topicsLength; index += 1) {
+    if (data.length < offset + 8) return null;
+    topics.push(Number(data.readBigUInt64LE(offset)));
+    offset += 8;
+  }
+
+  if (data.length < offset + 1) return null;
+  const isActive = data.readUInt8(offset) === 1;
+
+  return {
+    issuerFid: new PublicKey(data.subarray(8, 40)),
+    topics,
+    isActive,
+  };
+}
+
+function parseFidOwner(data: Buffer) {
+  if (data.length < 40) return null;
+  return new PublicKey(data.subarray(8, 40)).toBase58();
+}
+
+async function fetchLiveProviders(
+  deps: FactoryStateAccount,
+  tokenContract: string,
+): Promise<LiveProvider[]> {
+  const tokenMint = new PublicKey(tokenContract);
+  const tirState = deriveTirStatePda(tokenMint, deps.tirProgramId);
+  const accounts = await connection.getProgramAccounts(deps.tirProgramId, {
+    commitment: "confirmed",
+    filters: [
+      {
+        memcmp: {
+          offset: 40,
+          bytes: tirState.toBase58(),
+        },
+      },
+    ],
+  });
+
+  const providers = await Promise.all(
+    accounts.map(async ({ account }) => {
+      const parsed = parseIssuerEntry(account.data);
+      if (!parsed) return null;
+
+      const fidInfo = await connection.getAccountInfo(parsed.issuerFid, "confirmed");
+      const walletAddress = fidInfo ? parseFidOwner(fidInfo.data) : null;
+      if (!walletAddress) return null;
+
+      const canonicalIssuerFid = deriveFidPda(
+        new PublicKey(walletAddress),
+        deps.fidProgramId,
+      );
+      if (!canonicalIssuerFid.equals(parsed.issuerFid)) return null;
+
+      return {
+        walletAddress,
+        topics: parsed.topics,
+        isActive: parsed.isActive,
+      };
+    }),
+  );
+
+  return providers.filter(Boolean) as LiveProvider[];
+}
+
 function RequestFormContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -77,6 +173,8 @@ function RequestFormContent() {
   }, [assets, requestedAssetId]);
 
   const [submitting, setSubmitting] = useState(false);
+  const [factoryState, setFactoryState] = useState<FactoryStateAccount | null>(null);
+  const [liveProviders, setLiveProviders] = useState<LiveProvider[] | null>(null);
   const [formData, setFormData] = useState({
     amount: "",
     fullName: "",
@@ -86,6 +184,40 @@ function RequestFormContent() {
     idDocumentUrl: "",
     proofOfAddressUrl: "",
   });
+
+  useEffect(() => {
+    const loadFactoryState = async () => {
+      try {
+        setFactoryState(await fetchFactoryStateAccount());
+      } catch (err) {
+        console.error("Failed to load factory state for request form", err);
+      }
+    };
+
+    loadFactoryState();
+  }, []);
+
+  useEffect(() => {
+    const loadLiveProviders = async () => {
+      if (!asset || !factoryState) {
+        setLiveProviders(null);
+        return;
+      }
+
+      try {
+        const providers = await fetchLiveProviders(
+          factoryState,
+          asset.tokenContractAddress,
+        );
+        setLiveProviders(providers);
+      } catch (err) {
+        console.error("Failed to load live TIR providers for request form", err);
+        setLiveProviders(null);
+      }
+    };
+
+    loadLiveProviders();
+  }, [asset, factoryState]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -108,11 +240,19 @@ function RequestFormContent() {
 
     try {
       const requiredClaimTopics = getRequiredClaimTopics(asset);
+      const liveKycProvider =
+        liveProviders?.find(
+          (provider) => provider.isActive && provider.topics.includes(1),
+        )?.walletAddress || "";
+      const liveAmlProvider =
+        liveProviders?.find(
+          (provider) => provider.isActive && provider.topics.includes(2),
+        )?.walletAddress || "";
       const kycProvider = requiredClaimTopics.includes("1")
-        ? getProviderForTopic(asset, "1")
+        ? liveKycProvider || getProviderForTopic(asset, "1")
         : "";
       const amlProvider = requiredClaimTopics.includes("2")
-        ? getProviderForTopic(asset, "2")
+        ? liveAmlProvider || getProviderForTopic(asset, "2")
         : "";
       const investorFid = anchorProvider
         ? await new IdentityService(anchorProvider).fetchFid(

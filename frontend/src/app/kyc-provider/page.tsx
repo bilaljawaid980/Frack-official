@@ -43,6 +43,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAnchorProvider } from "@/hooks/useAnchorProvider";
 import { useWallet } from "@/hooks/use-wallet";
 import { apiFetch } from "@/lib/backend";
+import { runClaimSignSmokeTest } from "@/lib/claim-sign-debug";
 import { IdentityService } from "@/services/identity";
 import { TokenService } from "@/services/token";
 import type { TokenPurchaseRequest } from "@/types/token-purchase-request";
@@ -50,13 +51,17 @@ import type { TokenPurchaseRequest } from "@/types/token-purchase-request";
 type ReviewType = "KYC" | "AML";
 type TokenTransferRequest = {
   id: string;
+  listingId?: string;
   tokenContract: string;
   fromWallet: string;
-  toWallet: string;
+  toWallet?: string;
+  buyerWallet?: string;
   amount?: number;
+  amountBaseUnits?: string;
   status: string;
   requiredClaimTopics: string[];
   createdAt: string;
+  source?: "direct" | "listing";
 };
 
 const RECOVERY_TOOLS_ENABLED =
@@ -76,7 +81,7 @@ function getReviewTopic(request: TokenPurchaseRequest) {
 
 export default function KycProviderPage() {
   const { address, connectWallet, isConnected, isConnecting } = useWallet();
-  const { signMessage } = useSolanaWallet();
+  const { signMessage, wallet: walletAdapterWallet } = useSolanaWallet();
   const anchorProvider = useAnchorProvider();
 
   const [requests, setRequests] = useState<TokenPurchaseRequest[]>([]);
@@ -138,6 +143,20 @@ export default function KycProviderPage() {
           }).toString()}`,
         ),
       ]);
+      const [listingKycRequests, listingAmlRequests] = await Promise.all([
+        apiFetch<TokenTransferRequest[]>(
+          `/token-listings/buy-intents?${new URLSearchParams({
+            kycProvider: address,
+            status: "PENDING_KYC",
+          }).toString()}`,
+        ),
+        apiFetch<TokenTransferRequest[]>(
+          `/token-listings/buy-intents?${new URLSearchParams({
+            amlProvider: address,
+            status: "PENDING_AML",
+          }).toString()}`,
+        ),
+      ]);
 
       const merged = new Map<string, TokenPurchaseRequest>();
       [...kycRequests, ...amlRequests].forEach((request) => {
@@ -146,7 +165,15 @@ export default function KycProviderPage() {
       setRequests([...merged.values()]);
       const transferMerged = new Map<string, TokenTransferRequest>();
       [...transferKycRequests, ...transferAmlRequests].forEach((request) => {
-        transferMerged.set(request.id, request);
+        transferMerged.set(request.id, { ...request, source: "direct" });
+      });
+      [...listingKycRequests, ...listingAmlRequests].forEach((request) => {
+        transferMerged.set(request.id, {
+          ...request,
+          source: "listing",
+          fromWallet: request.fromWallet || (request as any).sellerWallet,
+          toWallet: request.toWallet || request.buyerWallet,
+        });
       });
       setTransferRequests([...transferMerged.values()]);
     } catch (error) {
@@ -166,6 +193,42 @@ export default function KycProviderPage() {
     }, 0);
     return () => window.clearTimeout(timeout);
   }, [loadRequests]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return;
+    if (typeof window === "undefined") return;
+
+    window.__fracksClaimSignSmokeTest = async () => {
+      if (!anchorProvider || !address) {
+        throw new Error("Connect the provider wallet first.");
+      }
+
+      const request = selectedRequest ?? requests[0] ?? null;
+      if (!request) {
+        throw new Error("No KYC request is available to build a claim-sign smoke test.");
+      }
+
+      const topic = BigInt(getReviewTopic(request));
+      const identityService = new IdentityService(anchorProvider);
+      const ctx = await identityService.buildClaimSigningContext(
+        new PublicKey(request.investorWallet),
+        topic,
+      );
+
+      await runClaimSignSmokeTest({
+        adapterName: walletAdapterWallet?.adapter.name ?? null,
+        connectedWallet: address,
+        providerFid: ctx.issuerFid.toBase58(),
+        providerSignerKey: ctx.claimSigner.toBase58(),
+        adapterSignMessage: signMessage,
+        message: ctx.message,
+      });
+    };
+
+    return () => {
+      delete window.__fracksClaimSignSmokeTest;
+    };
+  }, [address, anchorProvider, requests, selectedRequest, signMessage, walletAdapterWallet]);
 
   useEffect(() => {
     if (!anchorProvider || !address || requests.length === 0) {
@@ -242,17 +305,24 @@ export default function KycProviderPage() {
       const tokenService = new TokenService(anchorProvider);
       const mint = new PublicKey(request.tokenContract);
       const providerWallet = new PublicKey(address);
-      const investorWallet = new PublicKey(request.toWallet);
+      const recipientWallet = request.toWallet || request.buyerWallet;
+      if (!recipientWallet) throw new Error("Transfer recipient wallet is missing.");
+      const investorWallet = new PublicKey(recipientWallet);
       const investorFid = await identityService.fetchFid(investorWallet);
       if (!investorFid) {
-        await apiFetch(`/token-transfer-requests/${request.id}/status`, {
+        await apiFetch(
+          request.source === "listing"
+            ? `/token-listings/buy-intents/${request.id}/status`
+            : `/token-transfer-requests/${request.id}/status`,
+          {
           method: "PATCH",
           body: JSON.stringify({
             status: "ACTION_REQUIRED_RECIPIENT_FID",
             reviewerWallet: address,
             preflightFailure: "Recipient must register FID before claim issuance.",
           }),
-        });
+          },
+        );
         toast.error("Recipient must register FID before claim issuance.", { id: loadingToast });
         await loadRequests();
         return;
@@ -270,28 +340,82 @@ export default function KycProviderPage() {
         if (!check.providerTrustedForToken) {
           throw new Error(`This wallet is not trusted for transfer claim topic ${topic}.`);
         }
+        if (check.investorHasActiveClaim && check.providerSignerValid === false) {
+          toast.loading(`Revoking stale transfer recipient claim...`, { id: loadingToast });
+          await identityService.revokeActiveClaimForTopic(investorWallet, BigInt(topic));
+        }
+        toast.loading(`Issuing fresh transfer recipient claim...`, { id: loadingToast });
         const signature = await identityService.issueClaim(
           investorWallet,
           BigInt(topic),
           signMessage,
+          {
+            walletAdapterName: walletAdapterWallet?.adapter.name ?? null,
+          },
         );
-        await apiFetch(`/token-transfer-requests/${request.id}/status`, {
+        await apiFetch(
+          request.source === "listing"
+            ? `/token-listings/buy-intents/${request.id}/status`
+            : `/token-transfer-requests/${request.id}/status`,
+          {
           method: "PATCH",
           body: JSON.stringify({ status: nextStatus, reviewerWallet: address, transferTxHash: signature }),
-        });
+          },
+        );
         toast.success("Transfer recipient claim issued.", { id: loadingToast });
         await loadRequests();
         return;
       }
 
-      await apiFetch(`/token-transfer-requests/${request.id}/status`, {
+      await apiFetch(
+        request.source === "listing"
+          ? `/token-listings/buy-intents/${request.id}/status`
+          : `/token-transfer-requests/${request.id}/status`,
+        {
         method: "PATCH",
         body: JSON.stringify({ status: nextStatus, reviewerWallet: address }),
-      });
+        },
+      );
       toast.success("Existing recipient claim accepted. Request forwarded.", { id: loadingToast });
       await loadRequests();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Transfer eligibility approval failed.", { id: loadingToast });
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Transfer eligibility approval failed.";
+      if (
+        message.includes("DuplicateClaimTopicIssuer") ||
+        message.includes("active claim already exists")
+      ) {
+        try {
+          await apiFetch(
+            request.source === "listing"
+              ? `/token-listings/buy-intents/${request.id}/status`
+              : `/token-transfer-requests/${request.id}/status`,
+            {
+              method: "PATCH",
+              body: JSON.stringify({
+                status: nextStatus,
+                reviewerWallet: address,
+              }),
+            },
+          );
+          toast.success("Transfer recipient claim already exists. Request forwarded.", {
+            id: loadingToast,
+          });
+          await loadRequests();
+          return;
+        } catch (statusError) {
+          toast.error(
+            statusError instanceof Error
+              ? statusError.message
+              : "Claim exists, but transfer request forwarding failed.",
+            { id: loadingToast },
+          );
+          return;
+        }
+      }
+      toast.error(message, { id: loadingToast });
     } finally {
       setProcessingId(null);
     }
@@ -348,20 +472,41 @@ export default function KycProviderPage() {
         // because the investor has no valid claim. In this case the provider
         // should issue the claim for the investor and advance the request.
         if (check.investorHasActiveClaim && check.providerSignerValid === false) {
-          if (!RECOVERY_TOOLS_ENABLED) {
+          toast.loading(`Revoking stale ${reviewType} claim...`, { id: loadingToast });
+          await identityService.revokeActiveClaimForTopic(investorWallet, BigInt(topic));
+          
+          toast.loading(`Issuing fresh ${reviewType} claim...`, { id: loadingToast });
+          const signature = await identityService.issueClaim(
+            investorWallet,
+            BigInt(topic),
+            signMessage,
+            {
+              walletAdapterName: walletAdapterWallet?.adapter.name ?? null,
+            },
+          );
+          const postIssueCheck = await tokenService.checkTokenScopedClaimForRequest({
+            requestId: request.id,
+            mint,
+            investorWallet,
+            providerWallet,
+            topic: BigInt(topic),
+          });
+          if (
+            !postIssueCheck.ok ||
+            !postIssueCheck.investorHasActiveClaim ||
+            postIssueCheck.claimRevoked ||
+            postIssueCheck.claimExpired ||
+            postIssueCheck.providerSignerValid === false ||
+            !postIssueCheck.providerTrustedForToken
+          ) {
             throw new Error(
-              "Existing claim was signed by an old provider FID signer key. This is a legacy recovery case; enable recovery tools to restore the provider signer or use a fresh trusted provider claim.",
+              `Fresh ${reviewType} claim was written, but it is still not valid for this token. ` +
+              `Revoke stale claim and reissue with current provider signer.`,
             );
           }
-          if (!check.claimSignerKey) {
-            throw new Error(
-              "Existing claim has a signer mismatch, but its signer key could not be decoded.",
-            );
-          }
-          await identityService.setOwnFidSignerKey(check.claimSignerKey);
-          await updateRequestStatus(request, nextStatus);
+          await updateRequestStatus(request, nextStatus, { claimTxHash: signature });
           toast.success(
-            `${reviewType} claim signer restored. Request forwarded.`,
+            `Stale ${reviewType} claim revoked and fresh claim issued.`,
             { id: loadingToast },
           );
           return;
@@ -371,7 +516,30 @@ export default function KycProviderPage() {
           investorWallet,
           BigInt(topic),
           signMessage,
+          {
+            walletAdapterName: walletAdapterWallet?.adapter.name ?? null,
+          },
         );
+        const postIssueCheck = await tokenService.checkTokenScopedClaimForRequest({
+          requestId: request.id,
+          mint,
+          investorWallet,
+          providerWallet,
+          topic: BigInt(topic),
+        });
+        if (
+          !postIssueCheck.ok ||
+          !postIssueCheck.investorHasActiveClaim ||
+          postIssueCheck.claimRevoked ||
+          postIssueCheck.claimExpired ||
+          postIssueCheck.providerSignerValid === false ||
+          !postIssueCheck.providerTrustedForToken
+        ) {
+          throw new Error(
+            `${reviewType} claim was issued but is not valid for this token yet. ` +
+            `Revoke stale claim and reissue with current provider signer.`,
+          );
+        }
         await updateRequestStatus(request, nextStatus, {
           claimTxHash: signature,
         });
@@ -674,6 +842,7 @@ export default function KycProviderPage() {
                     <TableHead>Recipient</TableHead>
                     <TableHead>Token</TableHead>
                     <TableHead>Amount</TableHead>
+                    <TableHead>Flow</TableHead>
                     <TableHead>Review</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -685,9 +854,14 @@ export default function KycProviderPage() {
                     return (
                       <TableRow key={request.id}>
                         <TableCell className="font-mono text-xs">{shortAddress(request.fromWallet)}</TableCell>
-                        <TableCell className="font-mono text-xs">{shortAddress(request.toWallet)}</TableCell>
+                        <TableCell className="font-mono text-xs">{shortAddress(request.toWallet || request.buyerWallet || "")}</TableCell>
                         <TableCell className="font-mono text-xs">{shortAddress(request.tokenContract)}</TableCell>
-                        <TableCell>{request.amount ?? "-"}</TableCell>
+                        <TableCell>{request.amountBaseUnits ?? request.amount ?? "-"}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">
+                            {request.source === "listing" ? "Marketplace" : "Direct"}
+                          </Badge>
+                        </TableCell>
                         <TableCell>
                           <Badge variant="secondary">Transfer topic {topic}</Badge>
                         </TableCell>

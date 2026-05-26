@@ -14,6 +14,23 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -26,18 +43,23 @@ import { useWallet } from "@/hooks/use-wallet";
 import { useAssetsContext } from "@/contexts/assets-context";
 import { formatCurrency } from "@/lib/utils";
 import { apiFetch } from "@/lib/backend";
+import { parseTokenAmount } from "@/lib/token-utils";
 import {
   RefreshCw,
   Wallet,
   TrendingUp,
   Layers,
   ExternalLink,
-  TriangleAlert,
   Loader2,
   CheckCircle2,
+  Send,
+  ShieldAlert,
 } from "lucide-react";
 import { useAnchorProvider } from "@/hooks/useAnchorProvider";
-import { IdentityService } from "@/services/identity";
+import {
+  TransferService,
+  type TransferPreflightResult,
+} from "@/services/transfer";
 import type { TokenPurchaseRequest } from "@/types/token-purchase-request";
 
 interface HoldingRow {
@@ -64,16 +86,41 @@ type TokenTransferRequest = {
   createdAt: string;
 };
 
+type TokenBuyIntent = {
+  id: string;
+  listingId: string;
+  assetId?: string | null;
+  tokenContract: string;
+  sellerWallet: string;
+  buyerWallet: string;
+  amountBaseUnits: string;
+  status: string;
+  simulationError?: string | null;
+  transferTxHash?: string | null;
+  createdAt: string;
+};
+
+type TokenSellListing = {
+  id: string;
+  assetId?: string | null;
+  tokenContract: string;
+  sellerWallet: string;
+  amountBaseUnits: string;
+  amountRemaining: string;
+  price?: number | null;
+  currency?: string | null;
+  status: string;
+  settlementTerms?: string | null;
+  expiresAt?: string | null;
+  createdAt: string;
+};
+
 function shortAddress(address: string) {
   return `${address.slice(0, 8)}...${address.slice(-6)}`;
 }
 
 function solscanTokenUrl(tokenContract: string) {
   return `https://solscan.io/token/${tokenContract}?cluster=testnet`;
-}
-
-function solscanAccountUrl(address: string) {
-  return `https://solscan.io/account/${address}?cluster=testnet`;
 }
 
 export default function InvestorDashboardPage() {
@@ -88,57 +135,29 @@ export default function InvestorDashboardPage() {
   const [loadingHoldings, setLoadingHoldings] = useState(false);
   const [purchaseRequests, setPurchaseRequests] = useState<TokenPurchaseRequest[]>([]);
   const [transferRequests, setTransferRequests] = useState<TokenTransferRequest[]>([]);
+  const [sellerListings, setSellerListings] = useState<TokenSellListing[]>([]);
+  const [sellerBuyIntents, setSellerBuyIntents] = useState<TokenBuyIntent[]>([]);
+  const [buyerBuyIntents, setBuyerBuyIntents] = useState<TokenBuyIntent[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
-  const [fidAddress, setFidAddress] = useState("");
-  const [fidCountry, setFidCountry] = useState<number | null>(null);
-  const [fidLoading, setFidLoading] = useState(false);
-  const [fidRegistered, setFidRegistered] = useState<boolean | null>(null);
-  const [registeringFid, setRegisteringFid] = useState(false);
-  const [fidCountryCode, setFidCountryCode] = useState("840");
-  const [resumingIdentityRequests, setResumingIdentityRequests] =
-    useState(false);
+  const [listingHolding, setListingHolding] = useState<HoldingRow | null>(null);
+  const [listingAmount, setListingAmount] = useState("");
+  const [listingPrice, setListingPrice] = useState("");
+  const [listingTerms, setListingTerms] = useState("Off-chain settlement between buyer and seller.");
+  const [listingExpiry, setListingExpiry] = useState("");
+  const [creatingListing, setCreatingListing] = useState(false);
+  const [processingListingId, setProcessingListingId] = useState<string | null>(null);
+  const [processingBuyIntentId, setProcessingBuyIntentId] = useState<string | null>(null);
+  const [directTransferTokenContract, setDirectTransferTokenContract] = useState("");
+  const [directTransferRecipient, setDirectTransferRecipient] = useState("");
+  const [directTransferAmount, setDirectTransferAmount] = useState("");
+  const [directTransferPreflight, setDirectTransferPreflight] =
+    useState<TransferPreflightResult | null>(null);
+  const [directTransferChecking, setDirectTransferChecking] = useState(false);
+  const [directTransferSending, setDirectTransferSending] = useState(false);
 
   const isOwnInvestorPage = Boolean(
     address && investorWallet && address === investorWallet,
   );
-
-  const loadFidStatus = useMemo(
-    () => async () => {
-      if (!investorWallet || !anchorProvider) {
-        setFidAddress("");
-        setFidCountry(null);
-        setFidRegistered(null);
-        return;
-      }
-
-      setFidLoading(true);
-      try {
-        const wallet = new PublicKey(investorWallet);
-        const service = new IdentityService(anchorProvider);
-        const [fid] = await service.findActiveFidPda(wallet);
-        const fidAccount = await service.fetchFid(wallet);
-
-        setFidAddress(fid.toBase58());
-        setFidRegistered(Boolean(fidAccount));
-        setFidCountry(fidAccount?.country ?? null);
-      } catch (error) {
-        console.error("Failed to load FID status", error);
-        setFidAddress("");
-        setFidCountry(null);
-        setFidRegistered(null);
-      } finally {
-        setFidLoading(false);
-      }
-    },
-    [anchorProvider, investorWallet],
-  );
-
-  useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      void loadFidStatus();
-    }, 0);
-    return () => window.clearTimeout(timeout);
-  }, [loadFidStatus]);
 
   useEffect(() => {
     let isActive = true;
@@ -246,6 +265,192 @@ export default function InvestorDashboardPage() {
     };
   }, [investorWallet]);
 
+  useEffect(() => {
+    if (!investorWallet) return;
+    let isActive = true;
+    const loadMarketplaceIntents = async () => {
+      try {
+        const [sellerRows, ready, accepted, buyerRows] = await Promise.all([
+          apiFetch<TokenSellListing[]>(
+            `/token-listings?${new URLSearchParams({
+              sellerWallet: investorWallet,
+            }).toString()}`,
+          ),
+          apiFetch<TokenBuyIntent[]>(
+            `/token-listings/buy-intents?${new URLSearchParams({
+              sellerWallet: investorWallet,
+              status: "READY_FOR_SELLER_ACCEPTANCE",
+            }).toString()}`,
+          ),
+          apiFetch<TokenBuyIntent[]>(
+            `/token-listings/buy-intents?${new URLSearchParams({
+              sellerWallet: investorWallet,
+              status: "READY_TO_TRANSFER",
+            }).toString()}`,
+          ),
+          apiFetch<TokenBuyIntent[]>(
+            `/token-listings/buy-intents?${new URLSearchParams({
+              buyerWallet: investorWallet,
+            }).toString()}`,
+          ),
+        ]);
+        if (isActive) {
+          setSellerListings(sellerRows);
+          setSellerBuyIntents([...ready, ...accepted]);
+          setBuyerBuyIntents(buyerRows);
+        }
+      } catch {
+        if (isActive) {
+          setSellerListings([]);
+          setSellerBuyIntents([]);
+          setBuyerBuyIntents([]);
+        }
+      }
+    };
+    void loadMarketplaceIntents();
+    return () => {
+      isActive = false;
+    };
+  }, [investorWallet]);
+
+  const getMarketplaceBuyIntentStatus = (preflight: Awaited<ReturnType<TransferService["preflightTransfer"]>>) => {
+    const buyer = preflight.recipient;
+    if (!buyer.identityExists && buyer.blockers.some((item) => item.includes("FID"))) {
+      return "ACTION_REQUIRED_BUYER_FID";
+    }
+    if (
+      preflight.requiredClaimTopics.includes("1") &&
+      buyer.blockers.some((item) => item.includes("topic 1"))
+    ) {
+      return "PENDING_KYC";
+    }
+    if (
+      preflight.requiredClaimTopics.includes("2") &&
+      buyer.blockers.some((item) => item.includes("topic 2"))
+    ) {
+      return "PENDING_AML";
+    }
+    if (!buyer.identityExists) return "PENDING_ISSUER_WHITELIST";
+    if (!buyer.identityActive) return "PENDING_ISSUER_ACTIVATION";
+    if (preflight.ok) return "READY_FOR_SELLER_ACCEPTANCE";
+    return preflight.status;
+  };
+
+  const recheckBuyerIntentEligibility = async (intent: TokenBuyIntent) => {
+    if (!anchorProvider || !address || address !== intent.buyerWallet) {
+      toast.error("Connect the buyer wallet to recheck eligibility.");
+      return;
+    }
+    setProcessingBuyIntentId(intent.id);
+    const loadingToast = toast.loading("Rechecking buyer eligibility...");
+    try {
+      const asset =
+        assetsByRequestKey.get(intent.tokenContract) ||
+        (intent.assetId ? assetsByRequestKey.get(intent.assetId) : undefined);
+      const decimals = Number(asset?.metadata?.decimals ?? 6);
+      const service = new TransferService(anchorProvider.connection, anchorProvider);
+      const preflight = await service.preflightTransfer(
+        new PublicKey(intent.tokenContract),
+        new PublicKey(intent.sellerWallet),
+        new PublicKey(intent.buyerWallet),
+        BigInt(intent.amountBaseUnits),
+        decimals,
+      );
+      const status = getMarketplaceBuyIntentStatus(preflight);
+      const updated = await apiFetch<TokenBuyIntent>(
+        `/token-listings/buy-intents/${intent.id}/status`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            status,
+            reviewerWallet: address,
+            preflightFailure: preflight.blockers.join("\n") || undefined,
+            simulationError: preflight.simulation?.error || undefined,
+          }),
+        },
+      );
+      setBuyerBuyIntents((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      toast.success("Eligibility rechecked.", { id: loadingToast });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to recheck eligibility.", {
+        id: loadingToast,
+      });
+    } finally {
+      setProcessingBuyIntentId(null);
+    }
+  };
+
+  const acceptAndTransferBuyIntent = async (intent: TokenBuyIntent) => {
+    if (!anchorProvider || !address || address !== intent.sellerWallet) {
+      toast.error("Connect the seller wallet to accept this request.");
+      return;
+    }
+    setProcessingBuyIntentId(intent.id);
+    const loadingToast = toast.loading("Simulating compliant transfer...");
+    try {
+      const asset = assetsByRequestKey.get(intent.tokenContract) || (intent.assetId ? assetsByRequestKey.get(intent.assetId) : undefined);
+      const decimals = Number(asset?.metadata?.decimals ?? 6);
+      const amount = BigInt(intent.amountBaseUnits);
+      const service = new TransferService(anchorProvider.connection, anchorProvider);
+      const simulation = await service.buildAndSimulateTransfer(
+        new PublicKey(intent.tokenContract),
+        new PublicKey(intent.sellerWallet),
+        new PublicKey(intent.buyerWallet),
+        amount,
+        decimals,
+      );
+      if (!simulation.success) {
+        await apiFetch(`/token-listings/buy-intents/${intent.id}/status`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            status: "TRANSFER_SIMULATION_FAILED",
+            reviewerWallet: address,
+            simulationError: simulation.error || "Transfer simulation failed.",
+          }),
+        });
+        throw new Error(simulation.error || "Transfer simulation failed.");
+      }
+
+      await apiFetch(`/token-listings/buy-intents/${intent.id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "READY_TO_TRANSFER", reviewerWallet: address }),
+      });
+      const result = await service.executeTransfer(
+        new PublicKey(intent.tokenContract),
+        new PublicKey(intent.sellerWallet),
+        new PublicKey(intent.buyerWallet),
+        amount,
+        decimals,
+      );
+      if (!result.success) throw new Error(result.error || "Transfer failed.");
+      await apiFetch(`/token-listings/buy-intents/${intent.id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: "TRANSFERRED",
+          reviewerWallet: address,
+          transferTxHash: result.signature,
+        }),
+      });
+      setSellerBuyIntents((current) => current.filter((item) => item.id !== intent.id));
+      setBuyerBuyIntents((current) =>
+        current.map((item) =>
+          item.id === intent.id
+            ? { ...item, status: "TRANSFERRED", transferTxHash: result.signature || null }
+            : item,
+        ),
+      );
+      toast.success(`Transfer submitted: ${shortAddress(result.signature)}`, { id: loadingToast });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to complete transfer.", {
+        id: loadingToast,
+      });
+    } finally {
+      setProcessingBuyIntentId(null);
+    }
+  };
+
   const totalValue = useMemo(
     () => holdings.reduce((sum, row) => sum + row.value, 0),
     [holdings],
@@ -263,82 +468,232 @@ export default function InvestorDashboardPage() {
     });
     return map;
   }, [assets]);
-
-  const resumeBlockedIdentityRequests = useCallback(async () => {
-    const blockedRequests = purchaseRequests.filter(
-      (request) => request.status === "ACTION_REQUIRED_INVESTOR_IDENTITY",
-    );
-    if (blockedRequests.length === 0 || resumingIdentityRequests) return;
-
-    setResumingIdentityRequests(true);
+  const directTransferHolding = useMemo(
+    () =>
+      holdings.find((holding) => holding.tokenContract === directTransferTokenContract) ??
+      null,
+    [directTransferTokenContract, holdings],
+  );
+  const directTransferAsset = useMemo(
+    () =>
+      directTransferHolding
+        ? assetsByRequestKey.get(directTransferHolding.assetId) ??
+          assetsByRequestKey.get(directTransferHolding.tokenContract) ??
+          null
+        : null,
+    [assetsByRequestKey, directTransferHolding],
+  );
+  const directTransferDecimals = Number(
+    directTransferAsset?.metadata?.decimals ?? 6,
+  );
+  const directTransferAmountBaseUnits = useMemo(() => {
+    if (!directTransferAmount) return 0n;
     try {
-      const resumed = await Promise.all(
-        blockedRequests.map((request) =>
-          apiFetch<TokenPurchaseRequest>(
-            `/token-purchase-requests/${request.id}/resume-after-identity`,
-            { method: "PATCH" },
-          ),
-        ),
-      );
-      const resumedById = new Map(resumed.map((request) => [request.id, request]));
-      setPurchaseRequests((current) =>
-        current.map((request) => resumedById.get(request.id) || request),
-      );
-      toast.success("Identity verified. Purchase request sent for review.");
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to resume identity-blocked requests",
-      );
-    } finally {
-      setResumingIdentityRequests(false);
+      return BigInt(parseTokenAmount(directTransferAmount, directTransferDecimals));
+    } catch {
+      return 0n;
     }
-  }, [purchaseRequests, resumingIdentityRequests]);
+  }, [directTransferAmount, directTransferDecimals]);
 
   useEffect(() => {
-    if (!fidRegistered) return;
+    if (!isOwnInvestorPage) return;
+    if (holdings.length === 0) {
+      setDirectTransferTokenContract("");
+      return;
+    }
+    if (!directTransferTokenContract || !holdings.some((holding) => holding.tokenContract === directTransferTokenContract)) {
+      setDirectTransferTokenContract(holdings[0].tokenContract);
+    }
+  }, [directTransferTokenContract, holdings, isOwnInvestorPage]);
 
-    const timeout = window.setTimeout(() => {
-      void resumeBlockedIdentityRequests();
-    }, 0);
+  const openCreateListing = (holding: HoldingRow) => {
+    setListingHolding(holding);
+    setListingAmount(String(holding.balance));
+    setListingPrice("");
+    setListingTerms("Off-chain settlement between buyer and seller.");
+    setListingExpiry("");
+  };
 
-    return () => window.clearTimeout(timeout);
-  }, [fidRegistered, resumeBlockedIdentityRequests]);
-
-  const handleRegisterFid = async () => {
+  const runDirectTransferPreflight = useCallback(async () => {
     if (!anchorProvider || !address || !isOwnInvestorPage) {
-      toast.error("Connect the investor wallet to register its FID.");
-      return;
+      toast.error("Connect the investor wallet first.");
+      return null;
+    }
+    if (!directTransferHolding) {
+      toast.error("Select a token from your holdings.");
+      return null;
+    }
+    if (!directTransferRecipient) {
+      toast.error("Enter a recipient wallet.");
+      return null;
+    }
+    if (directTransferAmountBaseUnits <= 0n) {
+      toast.error("Enter a valid transfer amount.");
+      return null;
     }
 
-    const countryCode = Number(fidCountryCode);
-    if (
-      !Number.isInteger(countryCode) ||
-      countryCode < 1 ||
-      countryCode > 999
-    ) {
-      toast.error("Enter a valid numeric country code between 1 and 999.");
-      return;
-    }
-
-    setRegisteringFid(true);
-    const loadingToast = toast.loading("Registering investor FID...");
+    setDirectTransferChecking(true);
+    setDirectTransferPreflight(null);
     try {
-      const service = new IdentityService(anchorProvider);
-      await service.ensureOwnFid(countryCode, false);
-      await loadFidStatus();
-      await resumeBlockedIdentityRequests();
-      toast.success("Investor FID registered successfully.", {
+      const service = new TransferService(
+        anchorProvider.connection,
+        anchorProvider,
+      );
+      const result = await service.preflightTransfer(
+        new PublicKey(directTransferHolding.tokenContract),
+        new PublicKey(address),
+        new PublicKey(directTransferRecipient),
+        directTransferAmountBaseUnits,
+        directTransferDecimals,
+      );
+      setDirectTransferPreflight(result);
+      if (!result.ok) {
+        toast.error(result.blockers[0] || "Transfer is not compliant.");
+      }
+      return result;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Transfer preflight failed.";
+      toast.error(message);
+      return null;
+    } finally {
+      setDirectTransferChecking(false);
+    }
+  }, [
+    address,
+    anchorProvider,
+    directTransferAmountBaseUnits,
+    directTransferDecimals,
+    directTransferHolding,
+    directTransferRecipient,
+    isOwnInvestorPage,
+  ]);
+
+  const sendDirectTransfer = useCallback(async () => {
+    if (!anchorProvider || !address || !isOwnInvestorPage) {
+      toast.error("Connect the investor wallet first.");
+      return;
+    }
+    if (!directTransferHolding) {
+      toast.error("Select a token from your holdings.");
+      return;
+    }
+
+    const preflight =
+      directTransferPreflight &&
+      directTransferPreflight.sender.wallet === address &&
+      directTransferPreflight.recipient.wallet === directTransferRecipient &&
+      directTransferPreflight.sourceAta
+        ? directTransferPreflight
+        : await runDirectTransferPreflight();
+
+    if (!preflight?.ok) {
+      return;
+    }
+
+    setDirectTransferSending(true);
+    try {
+      const service = new TransferService(
+        anchorProvider.connection,
+        anchorProvider,
+      );
+      const result = await service.executeTransfer(
+        new PublicKey(directTransferHolding.tokenContract),
+        new PublicKey(address),
+        new PublicKey(directTransferRecipient),
+        directTransferAmountBaseUnits,
+        directTransferDecimals,
+      );
+      if (!result.success) {
+        throw new Error(result.error || "Transfer failed.");
+      }
+      toast.success(`Transfer submitted: ${shortAddress(result.signature)}`);
+      setDirectTransferRecipient("");
+      setDirectTransferAmount("");
+      setDirectTransferPreflight(null);
+      await loadAssets();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Transfer failed.");
+    } finally {
+      setDirectTransferSending(false);
+    }
+  }, [
+    address,
+    anchorProvider,
+    directTransferAmountBaseUnits,
+    directTransferDecimals,
+    directTransferHolding,
+    directTransferPreflight,
+    directTransferRecipient,
+    isOwnInvestorPage,
+    loadAssets,
+    runDirectTransferPreflight,
+  ]);
+
+  const createListing = async () => {
+    if (!listingHolding || !anchorProvider || !address || !isOwnInvestorPage) return;
+    setCreatingListing(true);
+    const loadingToast = toast.loading("Checking transferable balance...");
+    try {
+      const decimals = 6;
+      const amountBaseUnits = BigInt(parseTokenAmount(listingAmount, decimals));
+      const service = new TransferService(anchorProvider.connection, anchorProvider);
+      const capacity = await service.checkSellerListingCapacity(
+        new PublicKey(listingHolding.tokenContract),
+        new PublicKey(address),
+        amountBaseUnits,
+      );
+      if (!capacity.ok) {
+        throw new Error(capacity.blockers[0] || "Listing amount is not transferable.");
+      }
+
+      await apiFetch("/token-listings", {
+        method: "POST",
+        body: JSON.stringify({
+          assetId: listingHolding.assetId,
+          tokenContract: listingHolding.tokenContract,
+          sellerWallet: address,
+          amountBaseUnits: amountBaseUnits.toString(),
+          price: listingPrice ? Number(listingPrice) : undefined,
+          currency: listingPrice ? "USD" : undefined,
+          settlementTerms: listingTerms,
+          expiresAt: listingExpiry ? new Date(listingExpiry).toISOString() : undefined,
+        }),
+      });
+      toast.success("Listing created.", { id: loadingToast });
+      setListingHolding(null);
+      const updatedListings = await apiFetch<TokenSellListing[]>(
+        `/token-listings?${new URLSearchParams({ sellerWallet: address }).toString()}`,
+      );
+      setSellerListings(updatedListings);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to create listing.", {
         id: loadingToast,
       });
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to register FID",
-        { id: loadingToast },
-      );
     } finally {
-      setRegisteringFid(false);
+      setCreatingListing(false);
+    }
+  };
+
+  const cancelListing = async (listing: TokenSellListing) => {
+    if (!address || address !== listing.sellerWallet) {
+      toast.error("Connect the seller wallet to cancel this listing.");
+      return;
+    }
+    setProcessingListingId(listing.id);
+    try {
+      const updated = await apiFetch<TokenSellListing>(`/token-listings/${listing.id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "CANCELLED", reason: "Seller cancelled listing." }),
+      });
+      setSellerListings((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      toast.success("Listing cancelled.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to cancel listing.");
+    } finally {
+      setProcessingListingId(null);
     }
   };
 
@@ -384,13 +739,12 @@ export default function InvestorDashboardPage() {
           variant="outline"
           onClick={() => {
             loadAssets();
-            void loadFidStatus();
           }}
-          disabled={assetsLoading || loadingHoldings || fidLoading}
+          disabled={assetsLoading || loadingHoldings}
         >
           <RefreshCw
             className={`h-4 w-4 mr-2 ${
-              assetsLoading || loadingHoldings || fidLoading
+              assetsLoading || loadingHoldings
                 ? "animate-spin"
                 : ""
             }`}
@@ -398,135 +752,6 @@ export default function InvestorDashboardPage() {
           Refresh
         </Button>
       </div>
-
-      <Card
-        className={`mb-6 rounded-2xl border bg-white shadow-sm ${
-          fidRegistered
-            ? "border-[#172E7F]/15"
-            : "border-[#D7A928]/25"
-        }`}
-      >
-        <CardContent className="flex flex-col gap-5 p-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 items-start gap-4">
-            <div
-              className={`rounded-xl p-3 ${
-                fidRegistered
-                  ? "bg-linear-to-tr from-[#172E7F] to-[#2A5FA6] text-white shadow-lg shadow-[#172E7F]/15"
-                  : "bg-white text-[#D7A928] ring-1 ring-[#D7A928]/25"
-              }`}
-            >
-              {fidLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : fidRegistered ? (
-                <CheckCircle2 className="h-5 w-5" />
-              ) : (
-                <TriangleAlert className="h-5 w-5" />
-              )}
-            </div>
-            <div className="min-w-0">
-              <div
-                className={`text-sm font-semibold ${
-                  fidRegistered ? "text-[#172E7F]" : "text-slate-950"
-                }`}
-              >
-                {fidLoading
-                  ? "Checking investor FID"
-                  : fidRegistered
-                    ? "Investor FID registered"
-                    : "Investor FID required"}
-              </div>
-              <p className="mt-1 max-w-xl text-sm leading-6 text-slate-600">
-                {fidRegistered
-                  ? "Your identity account is active. Trusted KYC and AML providers can now issue claims for token purchases."
-                  : "Register your FID once before a provider can issue KYC or AML claims for your token purchase requests."}
-              </p>
-              {fidRegistered && (
-                <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
-                  <div className="min-w-0">
-                    <span className="mr-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                      Derived FID PDA
-                    </span>
-                    <span
-                      className="font-mono text-slate-700"
-                      title={fidAddress || undefined}
-                    >
-                      {fidAddress ? shortAddress(fidAddress) : "Unavailable"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="mr-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                      Country
-                    </span>
-                    <span className="text-slate-600">
-                      {fidCountry ?? "N/A"}
-                    </span>
-                  </div>
-                  {fidAddress && (
-                    <button
-                      className="inline-flex items-center gap-1 font-medium text-[#172E7F] underline-offset-4 hover:underline"
-                      type="button"
-                      onClick={() =>
-                        window.open(solscanAccountUrl(fidAddress), "_blank")
-                      }
-                    >
-                      View on Solscan
-                      <ExternalLink className="h-3 w-3" />
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {fidRegistered ? (
-            <Badge className="w-fit shrink-0 bg-[#172E7F] px-4 py-2 text-white shadow-lg shadow-[#172E7F]/20 hover:bg-[#172E7F]">
-              Verified on-chain
-            </Badge>
-          ) : (
-            <div className="flex w-full flex-col gap-2 lg:w-auto lg:items-end">
-              <label
-                className="text-left text-xs font-medium text-slate-600"
-                htmlFor="fid-country-code"
-              >
-                Country code
-              </label>
-              <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto">
-                <Input
-                  className="h-10 w-full bg-white sm:w-28"
-                  id="fid-country-code"
-                  inputMode="numeric"
-                  min={1}
-                  max={999}
-                  onChange={(event) => {
-                    const value = event.target.value.replace(/\D/g, "");
-                    setFidCountryCode(value.slice(0, 3));
-                  }}
-                  placeholder="840"
-                  type="text"
-                  value={fidCountryCode}
-                />
-                <Button
-                  className="w-full bg-linear-to-tr from-[#172E7F] to-[#2A5FA6] px-6 text-white shadow-lg shadow-[#172E7F]/20 hover:from-[#1F3E95] hover:to-[#326CB8] sm:w-fit"
-                  disabled={registeringFid || fidLoading || !isOwnInvestorPage}
-                  onClick={handleRegisterFid}
-                >
-                  {registeringFid ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Registering...
-                    </>
-                  ) : (
-                    "Register FID"
-                  )}
-                </Button>
-              </div>
-              <p className="max-w-sm text-left text-xs leading-5 text-slate-500 lg:text-right">
-                Use numeric ISO country code, for example 840 for United States.
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       <div className="grid gap-4 md:grid-cols-3 mb-6">
         <Card className="bg-white rounded-2xl">
@@ -656,6 +881,16 @@ export default function InvestorDashboardPage() {
                           >
                             Transfer Tokens
                           </Button>
+                          {isOwnInvestorPage ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-9"
+                              onClick={() => openCreateListing(row)}
+                            >
+                              Create Listing
+                            </Button>
+                          ) : null}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -666,6 +901,250 @@ export default function InvestorDashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      {isOwnInvestorPage ? (
+        <Card className="mt-6 rounded-2xl bg-white">
+          <CardHeader>
+            <CardTitle>Direct Transfer</CardTitle>
+            <CardDescription>
+              Send tokens directly from your holdings. The app will run token compliance
+              preflight first and only submit if both wallets are eligible.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {holdings.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                You need token holdings before you can send a transfer.
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-4 lg:grid-cols-[1fr_1fr_180px]">
+                  <div className="space-y-2">
+                    <Label htmlFor="direct-transfer-token">Token</Label>
+                    <Select
+                      value={directTransferTokenContract}
+                      onValueChange={(value) => {
+                        setDirectTransferTokenContract(value);
+                        setDirectTransferPreflight(null);
+                      }}
+                    >
+                      <SelectTrigger
+                        id="direct-transfer-token"
+                        className="bg-white"
+                      >
+                        <SelectValue placeholder="Select a token from holdings" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {holdings.map((holding) => (
+                          <SelectItem
+                            key={holding.tokenContract}
+                            value={holding.tokenContract}
+                          >
+                            {holding.assetName} ({holding.symbol}) ·{" "}
+                            {holding.balance.toLocaleString(undefined, {
+                              maximumFractionDigits: 6,
+                            })}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="direct-transfer-recipient">
+                      Recipient wallet
+                    </Label>
+                    <Input
+                      id="direct-transfer-recipient"
+                      value={directTransferRecipient}
+                      onChange={(event) => {
+                        setDirectTransferRecipient(event.target.value.trim());
+                        setDirectTransferPreflight(null);
+                      }}
+                      placeholder="Recipient Solana wallet address"
+                      className="bg-white font-mono text-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="direct-transfer-amount">Amount</Label>
+                    <Input
+                      id="direct-transfer-amount"
+                      inputMode="decimal"
+                      value={directTransferAmount}
+                      onChange={(event) => {
+                        setDirectTransferAmount(event.target.value);
+                        setDirectTransferPreflight(null);
+                      }}
+                      placeholder="0.0"
+                      className="bg-white"
+                    />
+                  </div>
+                </div>
+
+                {directTransferHolding ? (
+                  <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 md:grid-cols-3">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                        Selected token
+                      </div>
+                      <div className="mt-1 font-medium">
+                        {directTransferHolding.assetName} ({directTransferHolding.symbol})
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                        Wallet balance
+                      </div>
+                      <div className="mt-1 font-medium">
+                        {directTransferHolding.balance.toLocaleString(undefined, {
+                          maximumFractionDigits: 6,
+                        })}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                        Token contract
+                      </div>
+                      <div
+                        className="mt-1 truncate font-mono text-xs"
+                        title={directTransferHolding.tokenContract}
+                      >
+                        {directTransferHolding.tokenContract}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    variant="outline"
+                    disabled={directTransferChecking || directTransferSending}
+                    onClick={() => void runDirectTransferPreflight()}
+                  >
+                    {directTransferChecking ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Checking
+                      </>
+                    ) : (
+                      <>
+                        <ShieldAlert className="mr-2 h-4 w-4" />
+                        Run Compliance Check
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    className="bg-linear-to-tr from-[#172E7F] to-[#2A5FA6]"
+                    disabled={!directTransferPreflight?.ok || directTransferSending}
+                    onClick={() => void sendDirectTransfer()}
+                  >
+                    {directTransferSending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Sending
+                      </>
+                    ) : (
+                      <>
+                        <Send className="mr-2 h-4 w-4" />
+                        Send Tokens
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {directTransferPreflight ? (
+                  <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Badge
+                        variant={directTransferPreflight.ok ? "default" : "secondary"}
+                      >
+                        {directTransferPreflight.ok
+                          ? "Ready to send"
+                          : directTransferPreflight.status.replaceAll("_", " ")}
+                      </Badge>
+                      <span className="text-sm text-slate-600">
+                        Source balance:{" "}
+                        {directTransferPreflight.sourceBalance.toLocaleString()}
+                      </span>
+                      <span className="text-sm text-slate-600">
+                        Transferable:{" "}
+                        {directTransferPreflight.transferableBalance.toLocaleString()}
+                      </span>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {[
+                        { label: "Sender", side: directTransferPreflight.sender },
+                        { label: "Recipient", side: directTransferPreflight.recipient },
+                      ].map(({ label, side }) => (
+                        <div
+                          key={label}
+                          className="rounded-lg border border-slate-200 bg-white p-4"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-sm font-semibold text-slate-900">
+                              {label}
+                            </div>
+                            <Badge
+                              variant={side.blockers.length === 0 ? "default" : "secondary"}
+                            >
+                              {side.blockers.length === 0 ? "Eligible" : "Blocked"}
+                            </Badge>
+                          </div>
+                          <div className="mt-2 font-mono text-xs text-slate-500">
+                            {side.wallet}
+                          </div>
+                          <div className="mt-3 space-y-2 text-sm text-slate-600">
+                            <div>
+                              FID: {side.identityExists ? "present" : "missing"}
+                            </div>
+                            <div>
+                              IRS identity: {side.identityActive ? "active" : "inactive"}
+                            </div>
+                            {side.blockers.length > 0 ? (
+                              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">
+                                {side.blockers[0]}
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 text-emerald-700">
+                                <CheckCircle2 className="h-4 w-4" />
+                                Identity and claim checks passed
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {directTransferPreflight.simulation &&
+                    !directTransferPreflight.simulation.success ? (
+                      <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-950">
+                        <div className="font-medium">Transfer hook simulation failed</div>
+                        <div className="mt-1">
+                          {directTransferPreflight.simulation.error ||
+                            "The token's transfer hook rejected the transaction after wallet identity checks passed."}
+                        </div>
+                        <div className="mt-2 text-orange-900/80">
+                          This usually means an issuer-side rule is blocking the transfer,
+                          such as max transfer, max investors, lockup, daily limit, country
+                          restrictions, or another bound compliance module.
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {directTransferPreflight.blockers.length > 0 ? (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                        {directTransferPreflight.blockers[0]}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className="bg-white rounded-2xl mt-6">
         <CardHeader>
@@ -747,6 +1226,313 @@ export default function InvestorDashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      {isOwnInvestorPage ? (
+        <Card className="bg-white rounded-2xl mt-6">
+          <CardHeader>
+            <CardTitle>Marketplace Buy Requests</CardTitle>
+            <CardDescription>
+              Your requests to buy listed tokens from other investors.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {buyerBuyIntents.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                No marketplace buy requests found.
+              </div>
+            ) : (
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Token</TableHead>
+                      <TableHead>Seller</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {buyerBuyIntents.map((intent) => {
+                      const asset =
+                        assetsByRequestKey.get(intent.tokenContract) ||
+                        (intent.assetId ? assetsByRequestKey.get(intent.assetId) : undefined);
+                      return (
+                        <TableRow key={intent.id}>
+                          <TableCell className="font-medium">
+                            {asset ? `${asset.name} (${asset.symbol})` : shortAddress(intent.tokenContract)}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {shortAddress(intent.sellerWallet)}
+                          </TableCell>
+                          <TableCell>{intent.amountBaseUnits} base units</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">{intent.status.replaceAll("_", " ")}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {[
+                              "ACTION_REQUIRED_BUYER_FID",
+                              "PENDING_KYC",
+                              "PENDING_AML",
+                              "PENDING_ISSUER_WHITELIST",
+                              "PENDING_ISSUER_ACTIVATION",
+                              "TRANSFER_SIMULATION_FAILED",
+                            ].includes(intent.status) ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={processingBuyIntentId === intent.id}
+                                onClick={() => void recheckBuyerIntentEligibility(intent)}
+                              >
+                                {processingBuyIntentId === intent.id ? (
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : null}
+                                Recheck Eligibility
+                              </Button>
+                            ) : intent.transferTxHash ? (
+                              <a
+                                href={`https://solscan.io/tx/${intent.transferTxHash}?cluster=testnet`}
+                                rel="noreferrer"
+                                target="_blank"
+                                className="text-sm text-[#172E7F] underline"
+                              >
+                                View Tx
+                              </a>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Waiting</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {isOwnInvestorPage ? (
+        <Card className="bg-white rounded-2xl mt-6">
+          <CardHeader>
+            <CardTitle>My Marketplace Listings</CardTitle>
+            <CardDescription>
+              Active and historical secondary-market listings created from this wallet.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {sellerListings.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                No marketplace listings created yet.
+              </div>
+            ) : (
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Token</TableHead>
+                      <TableHead>Listed</TableHead>
+                      <TableHead>Remaining</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sellerListings.map((listing) => {
+                      const asset =
+                        assetsByRequestKey.get(listing.tokenContract) ||
+                        (listing.assetId ? assetsByRequestKey.get(listing.assetId) : undefined);
+                      return (
+                        <TableRow key={listing.id}>
+                          <TableCell className="font-medium">
+                            {asset ? `${asset.name} (${asset.symbol})` : shortAddress(listing.tokenContract)}
+                          </TableCell>
+                          <TableCell>{listing.amountBaseUnits} base units</TableCell>
+                          <TableCell>{listing.amountRemaining} base units</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">{listing.status.replaceAll("_", " ")}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {["LISTED", "PARTIALLY_FILLED"].includes(listing.status) ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={processingListingId === listing.id}
+                                onClick={() => void cancelListing(listing)}
+                              >
+                                {processingListingId === listing.id ? (
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : null}
+                                Cancel
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Closed</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {isOwnInvestorPage ? (
+        <Card className="bg-white rounded-2xl mt-6">
+          <CardHeader>
+            <CardTitle>Eligible Buyer Requests</CardTitle>
+            <CardDescription>
+              Buyers who completed eligibility for your listings. Accepting will simulate and execute the compliant Token-2022 transfer from your wallet.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {sellerBuyIntents.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                No eligible buyer requests awaiting seller action.
+              </div>
+            ) : (
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Token</TableHead>
+                      <TableHead>Buyer</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sellerBuyIntents.map((intent) => {
+                      const asset =
+                        assetsByRequestKey.get(intent.tokenContract) ||
+                        (intent.assetId ? assetsByRequestKey.get(intent.assetId) : undefined);
+                      return (
+                        <TableRow key={intent.id}>
+                          <TableCell className="font-medium">
+                            {asset ? `${asset.name} (${asset.symbol})` : shortAddress(intent.tokenContract)}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {shortAddress(intent.buyerWallet)}
+                          </TableCell>
+                          <TableCell>{intent.amountBaseUnits} base units</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">{intent.status.replaceAll("_", " ")}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              className="bg-[#172E7F] hover:bg-[#24469E]"
+                              disabled={processingBuyIntentId === intent.id}
+                              onClick={() => void acceptAndTransferBuyIntent(intent)}
+                            >
+                              {processingBuyIntentId === intent.id ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : null}
+                              Accept & Transfer
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Dialog open={Boolean(listingHolding)} onOpenChange={(open) => !open && setListingHolding(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Secondary Market Listing</DialogTitle>
+            <DialogDescription>
+              List tokens for a buyer-driven secondary transfer. Settlement/payment remains off-chain.
+            </DialogDescription>
+          </DialogHeader>
+          {listingHolding ? (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                FRACKS verifies eligibility and executes the compliant token transfer only. Buyer payment and settlement terms are handled off-chain between parties.
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label>Token</Label>
+                  <Input value={`${listingHolding.assetName} (${listingHolding.symbol})`} disabled className="mt-2" />
+                </div>
+                <div>
+                  <Label>Available balance</Label>
+                  <Input value={listingHolding.balance.toString()} disabled className="mt-2" />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="listing-amount">Amount to list</Label>
+                <Input
+                  id="listing-amount"
+                  type="number"
+                  min="0"
+                  step="0.000001"
+                  value={listingAmount}
+                  onChange={(event) => setListingAmount(event.target.value)}
+                  className="mt-2"
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="listing-price">Indicative price (USD)</Label>
+                  <Input
+                    id="listing-price"
+                    type="number"
+                    min="0"
+                    value={listingPrice}
+                    onChange={(event) => setListingPrice(event.target.value)}
+                    placeholder="Optional"
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="listing-expiry">Expiry</Label>
+                  <Input
+                    id="listing-expiry"
+                    type="datetime-local"
+                    value={listingExpiry}
+                    onChange={(event) => setListingExpiry(event.target.value)}
+                    className="mt-2"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="listing-terms">Settlement terms</Label>
+                <Textarea
+                  id="listing-terms"
+                  value={listingTerms}
+                  onChange={(event) => setListingTerms(event.target.value)}
+                  rows={3}
+                  className="mt-2"
+                />
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setListingHolding(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void createListing()}
+              disabled={creatingListing || !listingAmount}
+              className="bg-[#172E7F] hover:bg-[#24469E]"
+            >
+              {creatingListing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Create Listing
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card className="bg-white rounded-2xl mt-6">
         <CardHeader>

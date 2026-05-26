@@ -371,3 +371,79 @@ model TokenTransferRequest {
   @@index([status])
 }
 
+model TokenSellListing {
+  id              String    @id
+  assetId         String?   @map("asset_id")
+  tokenContract   String
+  sellerWallet    String
+  amountBaseUnits String
+  amountRemaining String
+  price           Float?
+  currency        String?
+  status          String    @default("LISTED")
+  settlementTerms String?
+  expiresAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([assetId])
+  @@index([tokenContract])
+  @@index([sellerWallet])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model TokenBuyIntent {
+  id                  String    @id
+  listingId           String
+  assetId             String?   @map("asset_id")
+  tokenContract       String
+  sellerWallet        String
+  buyerWallet         String
+  amountBaseUnits     String
+  status              String    @default("BUYER_INTERESTED")
+  requiredClaimTopics String[]  @default([]) @map("required_claim_topics")
+  kycProvider         String?
+  amlProvider         String?
+  issuerWallet        String?
+  preflightFailure    String?
+  simulationError     String?
+  transferTxHash      String?
+  transferredAt       DateTime?
+  rejectionReason     String?
+  rejectedAt          DateTime?
+  rejectedBy          String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([listingId])
+  @@index([assetId])
+  @@index([tokenContract])
+  @@index([sellerWallet])
+  @@index([buyerWallet])
+  @@index([kycProvider])
+  @@index([amlProvider])
+  @@index([issuerWallet])
+  @@index([status])
+}
+
+model TokenTransferHistory {
+  id              String   @id
+  listingId       String?
+  buyIntentId     String?
+  tokenContract   String
+  fromWallet      String
+  toWallet        String
+  amountBaseUnits String
+  txHash          String
+  status          String   @default("TRANSFERRED")
+  createdAt       DateTime @default(now())
+
+  @@index([listingId])
+  @@index([buyIntentId])
+  @@index([tokenContract])
+  @@index([fromWallet])
+  @@index([toWallet])
+  @@index([txHash])
+}
+
