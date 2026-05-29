@@ -6,6 +6,7 @@ import { useWallet } from "@/hooks/use-wallet";
 import { useConnection, useWallet as useSolanaWallet } from "@solana/wallet-adapter-react";
 import { createAnchorProvider } from "@/lib/anchor";
 import { IdentityService } from "@/services/identity";
+import { useActiveTokenHolders } from "@/hooks/useBalance";
 import { useMintTokens } from "@/hooks/useTokenActions";
 import {
   Card,
@@ -52,7 +53,7 @@ type AssetRequest = {
   name: string;
   symbol: string;
   assetType: string;
-  underlyingValue: number;
+  underlyingValue: number | null;
   createdAt: string;
 };
 
@@ -97,6 +98,104 @@ function transferRecipientWallet(request: TokenTransferRequest) {
   const wallet = request.toWallet || request.buyerWallet;
   if (!wallet) throw new Error("Recipient wallet is missing.");
   return wallet;
+}
+
+function hasNonZeroBalance(balance: string) {
+  try {
+    return BigInt(balance) > BigInt(0);
+  } catch {
+    return Number(balance) > 0;
+  }
+}
+
+function formatHolderAmount(amount: bigint, decimals: number) {
+  const scale = BigInt(10) ** BigInt(decimals);
+  const whole = amount / scale;
+  const fraction = amount % scale;
+  if (decimals === 0 || fraction === BigInt(0)) return whole.toLocaleString();
+  const fractionText = fraction.toString().padStart(decimals, "0").replace(/0+$/, "");
+  return `${whole.toLocaleString()}.${fractionText}`;
+}
+
+function formatOptionalCurrency(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? `$${value.toLocaleString()}`
+    : "Pending admin review";
+}
+
+function IssuerAssetHoldersTable({
+  tokenContract,
+  fallbackBalances,
+  loadingFallback,
+}: {
+  tokenContract: string;
+  fallbackBalances: IndexedBalance[];
+  loadingFallback: boolean;
+}) {
+  const mint = useMemo(() => {
+    try {
+      return new PublicKey(tokenContract);
+    } catch {
+      return null;
+    }
+  }, [tokenContract]);
+  const holdersQuery = useActiveTokenHolders(mint, null);
+  const liveHolders = holdersQuery.data ?? [];
+  const fallbackHolders = fallbackBalances.filter((entry) =>
+    hasNonZeroBalance(entry.balance),
+  );
+  const isLoading = holdersQuery.isLoading || loadingFallback;
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Investor</TableHead>
+          <TableHead>Wallet</TableHead>
+          <TableHead className="text-right">Balance</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {liveHolders.length > 0 ? (
+          liveHolders.map((holder) => (
+            <TableRow key={holder.wallet}>
+              <TableCell>
+                {holder.identityStatus === "active"
+                  ? "Active investor"
+                  : "Investor"}
+              </TableCell>
+              <TableCell className="font-mono text-xs">
+                {holder.wallet}
+              </TableCell>
+              <TableCell className="text-right font-medium">
+                {formatHolderAmount(holder.amount, holder.decimals)}
+              </TableCell>
+            </TableRow>
+          ))
+        ) : fallbackHolders.length > 0 ? (
+          fallbackHolders.map((holder) => (
+            <TableRow key={holder.walletAddress}>
+              <TableCell>Indexed investor</TableCell>
+              <TableCell className="font-mono text-xs">
+                {holder.walletAddress}
+              </TableCell>
+              <TableCell className="text-right font-medium">
+                {holder.balance}
+              </TableCell>
+            </TableRow>
+          ))
+        ) : (
+          <TableRow>
+            <TableCell colSpan={3} className="text-sm text-slate-500">
+              {isLoading
+                ? "Loading holders..."
+                : "No current token holders found for this asset."}
+            </TableCell>
+          </TableRow>
+        )}
+      </TableBody>
+    </Table>
+  );
 }
 
 export default function IssuerPage() {
@@ -395,14 +494,6 @@ export default function IssuerPage() {
     };
   }, [issuerPurchaseQueue, identityService]);
 
-  const hasNonZeroBalance = (balance: string) => {
-    try {
-      return BigInt(balance) > 0n;
-    } catch {
-      return false;
-    }
-  };
-
   const visibleRequests = useMemo(() => {
     if (!walletAddress) return [];
     return assetRequests.filter(
@@ -629,8 +720,8 @@ export default function IssuerPage() {
                       {request.name} ({request.symbol})
                     </div>
                     <div className="text-xs capitalize text-slate-500">
-                      {request.assetType.replace("-", " ")} · $
-                      {request.underlyingValue.toLocaleString()}
+                      {request.assetType.replace("-", " ")} ·{" "}
+                      {formatOptionalCurrency(request.underlyingValue)}
                     </div>
                   </div>
                   <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
@@ -1000,9 +1091,6 @@ export default function IssuerPage() {
             <div className="space-y-6">
               {filteredAssets.map((asset) => {
                 const tokenBalances = balances[asset.tokenContract] || [];
-                const holders = tokenBalances.filter((entry) =>
-                  hasNonZeroBalance(entry.balance),
-                );
 
                 return (
                   <Card
@@ -1032,43 +1120,11 @@ export default function IssuerPage() {
                       </div>
                     </CardHeader>
                     <CardContent>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Investor</TableHead>
-                            <TableHead>Wallet</TableHead>
-                            <TableHead className="text-right">
-                              Balance
-                            </TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {holders.length === 0 ? (
-                            <TableRow>
-                              <TableCell
-                                colSpan={3}
-                                className="text-sm text-slate-500"
-                              >
-                                {loadingBalances
-                                  ? "Loading balances..."
-                                  : "No indexed holders for this asset."}
-                              </TableCell>
-                            </TableRow>
-                          ) : (
-                            holders.map((holder) => (
-                              <TableRow key={holder.walletAddress}>
-                                <TableCell>Investor</TableCell>
-                                <TableCell className="font-mono text-xs">
-                                  {holder.walletAddress}
-                                </TableCell>
-                                <TableCell className="text-right font-medium">
-                                  {loadingBalances ? "..." : holder.balance}
-                                </TableCell>
-                              </TableRow>
-                            ))
-                          )}
-                        </TableBody>
-                      </Table>
+                      <IssuerAssetHoldersTable
+                        tokenContract={asset.tokenContract}
+                        fallbackBalances={tokenBalances}
+                        loadingFallback={loadingBalances}
+                      />
                     </CardContent>
                   </Card>
                 );

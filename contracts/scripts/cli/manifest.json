@@ -701,7 +701,7 @@
   },
   {
     "program": "fracks_factory",
-    "address": "3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M",
+    "address": "6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe",
     "instruction": "accept_factory_ownership",
     "script": "scripts/cli/fracks_factory/accept_factory_ownership.js",
     "returns": null,
@@ -742,7 +742,7 @@
   },
   {
     "program": "fracks_factory",
-    "address": "3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M",
+    "address": "6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe",
     "instruction": "create_token_mint",
     "script": "scripts/cli/fracks_factory/create_token_mint.js",
     "returns": null,
@@ -782,7 +782,7 @@
   },
   {
     "program": "fracks_factory",
-    "address": "3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M",
+    "address": "6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe",
     "instruction": "deploy_token_suite",
     "script": "scripts/cli/fracks_factory/deploy_token_suite.js",
     "returns": null,
@@ -930,7 +930,7 @@
   },
   {
     "program": "fracks_factory",
-    "address": "3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M",
+    "address": "6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe",
     "instruction": "initialize_factory",
     "script": "scripts/cli/fracks_factory/initialize_factory.js",
     "returns": null,
@@ -999,7 +999,7 @@
   },
   {
     "program": "fracks_factory",
-    "address": "3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M",
+    "address": "6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe",
     "instruction": "transfer_factory_ownership",
     "script": "scripts/cli/fracks_factory/transfer_factory_ownership.js",
     "returns": null,
@@ -1048,7 +1048,7 @@
   },
   {
     "program": "fracks_factory",
-    "address": "3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M",
+    "address": "6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe",
     "instruction": "update_program_ids",
     "script": "scripts/cli/fracks_factory/update_program_ids.js",
     "returns": null,
@@ -5024,7 +5024,7 @@
   },
   {
     "program": "mod_country_cap",
-    "address": "HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW",
+    "address": "Cv1HA7nHX8vxZvyCKXjk3gYPkqhfHFXxEsyxSXyRT3Ci",
     "instruction": "can_transfer",
     "script": "scripts/cli/mod_country_cap/can_transfer.js",
     "returns": "bool",
@@ -5082,7 +5082,7 @@
   },
   {
     "program": "mod_country_cap",
-    "address": "HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW",
+    "address": "Cv1HA7nHX8vxZvyCKXjk3gYPkqhfHFXxEsyxSXyRT3Ci",
     "instruction": "created",
     "script": "scripts/cli/mod_country_cap/created.js",
     "returns": null,
@@ -5146,7 +5146,7 @@
   },
   {
     "program": "mod_country_cap",
-    "address": "HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW",
+    "address": "Cv1HA7nHX8vxZvyCKXjk3gYPkqhfHFXxEsyxSXyRT3Ci",
     "instruction": "destroyed",
     "script": "scripts/cli/mod_country_cap/destroyed.js",
     "returns": null,
@@ -5210,7 +5210,7 @@
   },
   {
     "program": "mod_country_cap",
-    "address": "HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW",
+    "address": "Cv1HA7nHX8vxZvyCKXjk3gYPkqhfHFXxEsyxSXyRT3Ci",
     "instruction": "initialize_country_count",
     "script": "scripts/cli/mod_country_cap/initialize_country_count.js",
     "returns": null,
@@ -5303,7 +5303,7 @@
   },
   {
     "program": "mod_country_cap",
-    "address": "HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW",
+    "address": "Cv1HA7nHX8vxZvyCKXjk3gYPkqhfHFXxEsyxSXyRT3Ci",
     "instruction": "initialize_module",
     "script": "scripts/cli/mod_country_cap/initialize_module.js",
     "returns": null,
@@ -5369,7 +5369,7 @@
   },
   {
     "program": "mod_country_cap",
-    "address": "HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW",
+    "address": "Cv1HA7nHX8vxZvyCKXjk3gYPkqhfHFXxEsyxSXyRT3Ci",
     "instruction": "set_hook_authority",
     "script": "scripts/cli/mod_country_cap/set_hook_authority.js",
     "returns": null,
@@ -5424,7 +5424,7 @@
   },
   {
     "program": "mod_country_cap",
-    "address": "HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW",
+    "address": "Cv1HA7nHX8vxZvyCKXjk3gYPkqhfHFXxEsyxSXyRT3Ci",
     "instruction": "transferred",
     "script": "scripts/cli/mod_country_cap/transferred.js",
     "returns": null,
@@ -5500,7 +5500,7 @@
   },
   {
     "program": "mod_country_restrict",
-    "address": "6JcKpK45GvhwaPRZoEfLFCNos2eCxCr3N3tGzzaC1ECQ",
+    "address": "BCGKsDTyncA4EbHzxGVmEi3pheotJiaxCwYvHGxERiZ7",
     "instruction": "can_transfer",
     "script": "scripts/cli/mod_country_restrict/can_transfer.js",
     "returns": "bool",
@@ -5547,7 +5547,7 @@
   },
   {
     "program": "mod_country_restrict",
-    "address": "6JcKpK45GvhwaPRZoEfLFCNos2eCxCr3N3tGzzaC1ECQ",
+    "address": "BCGKsDTyncA4EbHzxGVmEi3pheotJiaxCwYvHGxERiZ7",
     "instruction": "created",
     "script": "scripts/cli/mod_country_restrict/created.js",
     "returns": null,
@@ -5585,7 +5585,7 @@
   },
   {
     "program": "mod_country_restrict",
-    "address": "6JcKpK45GvhwaPRZoEfLFCNos2eCxCr3N3tGzzaC1ECQ",
+    "address": "BCGKsDTyncA4EbHzxGVmEi3pheotJiaxCwYvHGxERiZ7",
     "instruction": "destroyed",
     "script": "scripts/cli/mod_country_restrict/destroyed.js",
     "returns": null,
@@ -5623,7 +5623,7 @@
   },
   {
     "program": "mod_country_restrict",
-    "address": "6JcKpK45GvhwaPRZoEfLFCNos2eCxCr3N3tGzzaC1ECQ",
+    "address": "BCGKsDTyncA4EbHzxGVmEi3pheotJiaxCwYvHGxERiZ7",
     "instruction": "initialize_module",
     "script": "scripts/cli/mod_country_restrict/initialize_module.js",
     "returns": null,
@@ -5681,7 +5681,7 @@
   },
   {
     "program": "mod_country_restrict",
-    "address": "6JcKpK45GvhwaPRZoEfLFCNos2eCxCr3N3tGzzaC1ECQ",
+    "address": "BCGKsDTyncA4EbHzxGVmEi3pheotJiaxCwYvHGxERiZ7",
     "instruction": "transferred",
     "script": "scripts/cli/mod_country_restrict/transferred.js",
     "returns": null,
@@ -5719,7 +5719,7 @@
   },
   {
     "program": "mod_daily_limit",
-    "address": "EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9",
+    "address": "FYJ1K8cWUsDmbxNpgaBaEmm3RpvvfpxBBWg2MLm4x8Sq",
     "instruction": "can_transfer",
     "script": "scripts/cli/mod_daily_limit/can_transfer.js",
     "returns": "bool",
@@ -5769,7 +5769,7 @@
   },
   {
     "program": "mod_daily_limit",
-    "address": "EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9",
+    "address": "FYJ1K8cWUsDmbxNpgaBaEmm3RpvvfpxBBWg2MLm4x8Sq",
     "instruction": "created",
     "script": "scripts/cli/mod_daily_limit/created.js",
     "returns": null,
@@ -5811,7 +5811,7 @@
   },
   {
     "program": "mod_daily_limit",
-    "address": "EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9",
+    "address": "FYJ1K8cWUsDmbxNpgaBaEmm3RpvvfpxBBWg2MLm4x8Sq",
     "instruction": "destroyed",
     "script": "scripts/cli/mod_daily_limit/destroyed.js",
     "returns": null,
@@ -5853,7 +5853,7 @@
   },
   {
     "program": "mod_daily_limit",
-    "address": "EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9",
+    "address": "FYJ1K8cWUsDmbxNpgaBaEmm3RpvvfpxBBWg2MLm4x8Sq",
     "instruction": "initialize_module",
     "script": "scripts/cli/mod_daily_limit/initialize_module.js",
     "returns": null,
@@ -5913,7 +5913,7 @@
   },
   {
     "program": "mod_daily_limit",
-    "address": "EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9",
+    "address": "FYJ1K8cWUsDmbxNpgaBaEmm3RpvvfpxBBWg2MLm4x8Sq",
     "instruction": "initialize_wallet_usage",
     "script": "scripts/cli/mod_daily_limit/initialize_wallet_usage.js",
     "returns": null,
@@ -6004,7 +6004,7 @@
   },
   {
     "program": "mod_daily_limit",
-    "address": "EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9",
+    "address": "FYJ1K8cWUsDmbxNpgaBaEmm3RpvvfpxBBWg2MLm4x8Sq",
     "instruction": "set_hook_authority",
     "script": "scripts/cli/mod_daily_limit/set_hook_authority.js",
     "returns": null,
@@ -6060,7 +6060,7 @@
   },
   {
     "program": "mod_daily_limit",
-    "address": "EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9",
+    "address": "FYJ1K8cWUsDmbxNpgaBaEmm3RpvvfpxBBWg2MLm4x8Sq",
     "instruction": "transferred",
     "script": "scripts/cli/mod_daily_limit/transferred.js",
     "returns": null,
@@ -6148,7 +6148,7 @@
   },
   {
     "program": "mod_lockup",
-    "address": "GqsAXZggWEwVF9EFHHXiAKiKBkcrpzQp3SK7NPZWAfR5",
+    "address": "6XqxWPwZQrfTo2ZJeT7wBhJaXd1eKjB2kx5ZrP1CLwa9",
     "instruction": "can_transfer",
     "script": "scripts/cli/mod_lockup/can_transfer.js",
     "returns": "bool",
@@ -6185,7 +6185,7 @@
   },
   {
     "program": "mod_lockup",
-    "address": "GqsAXZggWEwVF9EFHHXiAKiKBkcrpzQp3SK7NPZWAfR5",
+    "address": "6XqxWPwZQrfTo2ZJeT7wBhJaXd1eKjB2kx5ZrP1CLwa9",
     "instruction": "created",
     "script": "scripts/cli/mod_lockup/created.js",
     "returns": null,
@@ -6222,7 +6222,7 @@
   },
   {
     "program": "mod_lockup",
-    "address": "GqsAXZggWEwVF9EFHHXiAKiKBkcrpzQp3SK7NPZWAfR5",
+    "address": "6XqxWPwZQrfTo2ZJeT7wBhJaXd1eKjB2kx5ZrP1CLwa9",
     "instruction": "destroyed",
     "script": "scripts/cli/mod_lockup/destroyed.js",
     "returns": null,
@@ -6259,7 +6259,7 @@
   },
   {
     "program": "mod_lockup",
-    "address": "GqsAXZggWEwVF9EFHHXiAKiKBkcrpzQp3SK7NPZWAfR5",
+    "address": "6XqxWPwZQrfTo2ZJeT7wBhJaXd1eKjB2kx5ZrP1CLwa9",
     "instruction": "initialize_module",
     "script": "scripts/cli/mod_lockup/initialize_module.js",
     "returns": null,
@@ -6314,7 +6314,7 @@
   },
   {
     "program": "mod_lockup",
-    "address": "GqsAXZggWEwVF9EFHHXiAKiKBkcrpzQp3SK7NPZWAfR5",
+    "address": "6XqxWPwZQrfTo2ZJeT7wBhJaXd1eKjB2kx5ZrP1CLwa9",
     "instruction": "transferred",
     "script": "scripts/cli/mod_lockup/transferred.js",
     "returns": null,
@@ -6351,7 +6351,7 @@
   },
   {
     "program": "mod_max_balance",
-    "address": "8r9euzP3dFg8d3sA6fh3Ur73cMbvEAbj5UbigHVEXimZ",
+    "address": "9BjLakhcX1ms34VjRwUgMZQAgdbsMM8C1gSPqrJTyCpH",
     "instruction": "can_transfer",
     "script": "scripts/cli/mod_max_balance/can_transfer.js",
     "returns": "bool",
@@ -6402,7 +6402,7 @@
   },
   {
     "program": "mod_max_balance",
-    "address": "8r9euzP3dFg8d3sA6fh3Ur73cMbvEAbj5UbigHVEXimZ",
+    "address": "9BjLakhcX1ms34VjRwUgMZQAgdbsMM8C1gSPqrJTyCpH",
     "instruction": "created",
     "script": "scripts/cli/mod_max_balance/created.js",
     "returns": null,
@@ -6444,7 +6444,7 @@
   },
   {
     "program": "mod_max_balance",
-    "address": "8r9euzP3dFg8d3sA6fh3Ur73cMbvEAbj5UbigHVEXimZ",
+    "address": "9BjLakhcX1ms34VjRwUgMZQAgdbsMM8C1gSPqrJTyCpH",
     "instruction": "destroyed",
     "script": "scripts/cli/mod_max_balance/destroyed.js",
     "returns": null,
@@ -6486,7 +6486,7 @@
   },
   {
     "program": "mod_max_balance",
-    "address": "8r9euzP3dFg8d3sA6fh3Ur73cMbvEAbj5UbigHVEXimZ",
+    "address": "9BjLakhcX1ms34VjRwUgMZQAgdbsMM8C1gSPqrJTyCpH",
     "instruction": "initialize_module",
     "script": "scripts/cli/mod_max_balance/initialize_module.js",
     "returns": null,
@@ -6546,7 +6546,7 @@
   },
   {
     "program": "mod_max_balance",
-    "address": "8r9euzP3dFg8d3sA6fh3Ur73cMbvEAbj5UbigHVEXimZ",
+    "address": "9BjLakhcX1ms34VjRwUgMZQAgdbsMM8C1gSPqrJTyCpH",
     "instruction": "transferred",
     "script": "scripts/cli/mod_max_balance/transferred.js",
     "returns": null,
@@ -6588,7 +6588,7 @@
   },
   {
     "program": "mod_max_investors",
-    "address": "FMSVzD74EbSiTj2XHi8xsqcp6pigdxHL7MGHxtRLYte7",
+    "address": "4KVbq2esECUHZZdsBiDMM3mxYt8K7rNJUdotG6uZJfRQ",
     "instruction": "can_transfer",
     "script": "scripts/cli/mod_max_investors/can_transfer.js",
     "returns": "bool",
@@ -6641,7 +6641,7 @@
   },
   {
     "program": "mod_max_investors",
-    "address": "FMSVzD74EbSiTj2XHi8xsqcp6pigdxHL7MGHxtRLYte7",
+    "address": "4KVbq2esECUHZZdsBiDMM3mxYt8K7rNJUdotG6uZJfRQ",
     "instruction": "created",
     "script": "scripts/cli/mod_max_investors/created.js",
     "returns": null,
@@ -6699,7 +6699,7 @@
   },
   {
     "program": "mod_max_investors",
-    "address": "FMSVzD74EbSiTj2XHi8xsqcp6pigdxHL7MGHxtRLYte7",
+    "address": "4KVbq2esECUHZZdsBiDMM3mxYt8K7rNJUdotG6uZJfRQ",
     "instruction": "destroyed",
     "script": "scripts/cli/mod_max_investors/destroyed.js",
     "returns": null,
@@ -6757,7 +6757,7 @@
   },
   {
     "program": "mod_max_investors",
-    "address": "FMSVzD74EbSiTj2XHi8xsqcp6pigdxHL7MGHxtRLYte7",
+    "address": "4KVbq2esECUHZZdsBiDMM3mxYt8K7rNJUdotG6uZJfRQ",
     "instruction": "initialize_module",
     "script": "scripts/cli/mod_max_investors/initialize_module.js",
     "returns": null,
@@ -6819,7 +6819,7 @@
   },
   {
     "program": "mod_max_investors",
-    "address": "FMSVzD74EbSiTj2XHi8xsqcp6pigdxHL7MGHxtRLYte7",
+    "address": "4KVbq2esECUHZZdsBiDMM3mxYt8K7rNJUdotG6uZJfRQ",
     "instruction": "set_hook_authority",
     "script": "scripts/cli/mod_max_investors/set_hook_authority.js",
     "returns": null,
@@ -6876,7 +6876,7 @@
   },
   {
     "program": "mod_max_investors",
-    "address": "FMSVzD74EbSiTj2XHi8xsqcp6pigdxHL7MGHxtRLYte7",
+    "address": "4KVbq2esECUHZZdsBiDMM3mxYt8K7rNJUdotG6uZJfRQ",
     "instruction": "transferred",
     "script": "scripts/cli/mod_max_investors/transferred.js",
     "returns": null,
@@ -6938,7 +6938,7 @@
   },
   {
     "program": "mod_max_transfer",
-    "address": "8EiBd6256x7CfFE1vqGLGBqviiCs64ubZzTVmDwjnQAw",
+    "address": "Ee6RXC46Nb4Bo2BTQcXBHfuxLZdzbKtPmb3sGf2Egiqh",
     "instruction": "can_transfer",
     "script": "scripts/cli/mod_max_transfer/can_transfer.js",
     "returns": "bool",
@@ -6986,7 +6986,7 @@
   },
   {
     "program": "mod_max_transfer",
-    "address": "8EiBd6256x7CfFE1vqGLGBqviiCs64ubZzTVmDwjnQAw",
+    "address": "Ee6RXC46Nb4Bo2BTQcXBHfuxLZdzbKtPmb3sGf2Egiqh",
     "instruction": "created",
     "script": "scripts/cli/mod_max_transfer/created.js",
     "returns": null,
@@ -7029,7 +7029,7 @@
   },
   {
     "program": "mod_max_transfer",
-    "address": "8EiBd6256x7CfFE1vqGLGBqviiCs64ubZzTVmDwjnQAw",
+    "address": "Ee6RXC46Nb4Bo2BTQcXBHfuxLZdzbKtPmb3sGf2Egiqh",
     "instruction": "destroyed",
     "script": "scripts/cli/mod_max_transfer/destroyed.js",
     "returns": null,
@@ -7072,7 +7072,7 @@
   },
   {
     "program": "mod_max_transfer",
-    "address": "8EiBd6256x7CfFE1vqGLGBqviiCs64ubZzTVmDwjnQAw",
+    "address": "Ee6RXC46Nb4Bo2BTQcXBHfuxLZdzbKtPmb3sGf2Egiqh",
     "instruction": "initialize_module",
     "script": "scripts/cli/mod_max_transfer/initialize_module.js",
     "returns": null,
@@ -7133,7 +7133,7 @@
   },
   {
     "program": "mod_max_transfer",
-    "address": "8EiBd6256x7CfFE1vqGLGBqviiCs64ubZzTVmDwjnQAw",
+    "address": "Ee6RXC46Nb4Bo2BTQcXBHfuxLZdzbKtPmb3sGf2Egiqh",
     "instruction": "transferred",
     "script": "scripts/cli/mod_max_transfer/transferred.js",
     "returns": null,
@@ -7176,7 +7176,7 @@
   },
   {
     "program": "mod_supply_cap",
-    "address": "EGJvV5cBN7et6Pdthyj6z7xuN8FN2u1wtGQsUjR69Rxb",
+    "address": "EkgX6pGFCFT7FuNWuBAAMePy43iU9oETLDota4nTA3x8",
     "instruction": "can_transfer",
     "script": "scripts/cli/mod_supply_cap/can_transfer.js",
     "returns": "bool",
@@ -7217,7 +7217,7 @@
   },
   {
     "program": "mod_supply_cap",
-    "address": "EGJvV5cBN7et6Pdthyj6z7xuN8FN2u1wtGQsUjR69Rxb",
+    "address": "EkgX6pGFCFT7FuNWuBAAMePy43iU9oETLDota4nTA3x8",
     "instruction": "created",
     "script": "scripts/cli/mod_supply_cap/created.js",
     "returns": null,
@@ -7268,7 +7268,7 @@
   },
   {
     "program": "mod_supply_cap",
-    "address": "EGJvV5cBN7et6Pdthyj6z7xuN8FN2u1wtGQsUjR69Rxb",
+    "address": "EkgX6pGFCFT7FuNWuBAAMePy43iU9oETLDota4nTA3x8",
     "instruction": "destroyed",
     "script": "scripts/cli/mod_supply_cap/destroyed.js",
     "returns": null,
@@ -7319,7 +7319,7 @@
   },
   {
     "program": "mod_supply_cap",
-    "address": "EGJvV5cBN7et6Pdthyj6z7xuN8FN2u1wtGQsUjR69Rxb",
+    "address": "EkgX6pGFCFT7FuNWuBAAMePy43iU9oETLDota4nTA3x8",
     "instruction": "initialize_module",
     "script": "scripts/cli/mod_supply_cap/initialize_module.js",
     "returns": null,
@@ -7378,7 +7378,7 @@
   },
   {
     "program": "mod_supply_cap",
-    "address": "EGJvV5cBN7et6Pdthyj6z7xuN8FN2u1wtGQsUjR69Rxb",
+    "address": "EkgX6pGFCFT7FuNWuBAAMePy43iU9oETLDota4nTA3x8",
     "instruction": "set_hook_authority",
     "script": "scripts/cli/mod_supply_cap/set_hook_authority.js",
     "returns": null,
@@ -7432,7 +7432,7 @@
   },
   {
     "program": "mod_supply_cap",
-    "address": "EGJvV5cBN7et6Pdthyj6z7xuN8FN2u1wtGQsUjR69Rxb",
+    "address": "EkgX6pGFCFT7FuNWuBAAMePy43iU9oETLDota4nTA3x8",
     "instruction": "transferred",
     "script": "scripts/cli/mod_supply_cap/transferred.js",
     "returns": null,

@@ -353,12 +353,47 @@ pub mod fracks_compliance {
         to_balance_after: u64,
         _to_country: u16,
     ) -> Result<()> {
+        if ctx.accounts.compliance_state.modules_paused {
+            return Ok(());
+        }
+
+        let now = Clock::get()?.unix_timestamp;
         for module_key in &ctx.accounts.compliance_state.modules {
             let module_info = ctx
                 .remaining_accounts
                 .iter()
                 .find(|account| account.key() == *module_key)
                 .ok_or_else(|| error!(FracksComplianceError::MissingModuleAccount))?;
+
+            if is_account_type(module_info, "CountryRestrictModule")? {
+                let module = deserialize_view::<CountryRestrictModuleView>(module_info)?;
+                require!(
+                    !module.blocked_countries.contains(&_to_country),
+                    FracksComplianceError::ComplianceCheckFailed
+                );
+                continue;
+            }
+
+            if is_account_type(module_info, "MaxBalanceModule")? {
+                let module = deserialize_view::<MaxBalanceModuleView>(module_info)?;
+                require!(
+                    to_balance_after <= module.max_balance,
+                    FracksComplianceError::ComplianceCheckFailed
+                );
+                continue;
+            }
+
+            if is_account_type(module_info, "MaxTransferModule")? {
+                let module = deserialize_view::<MaxTransferModuleView>(module_info)?;
+                require!(amount <= module.max_amount, FracksComplianceError::ComplianceCheckFailed);
+                continue;
+            }
+
+            if is_account_type(module_info, "LockupModule")? {
+                let module = deserialize_view::<LockupModuleView>(module_info)?;
+                require!(now >= module.lockup_end, FracksComplianceError::ComplianceCheckFailed);
+                continue;
+            }
 
             if is_account_type(module_info, "MaxInvestorsModule")? {
                 let module = deserialize_view::<MaxInvestorsModuleView>(module_info)?;
@@ -750,6 +785,8 @@ pub enum FracksComplianceError {
     ModuleHookAuthorityMismatch = 6052,
     #[msg("Missing module support account.")]
     MissingModuleSupportAccount = 6053,
+    #[msg("Compliance check failed.")]
+    ComplianceCheckFailed = 6054,
 }
 
 fn deserialize_view<T: AnchorDeserialize>(account: &AccountInfo) -> Result<T> {

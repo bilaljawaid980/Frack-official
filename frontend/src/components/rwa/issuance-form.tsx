@@ -25,6 +25,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
@@ -50,7 +51,7 @@ import {
   useDeployTokenSuite,
   useFactoryState,
 } from "@/hooks/useFactory";
-import { FACTORY_PROGRAM_ID } from "@/lib/constants";
+import { COMPLIANCE_MODULES, FACTORY_PROGRAM_ID } from "@/lib/constants";
 import { generateSalt, isValidPublicKey } from "@/lib/utils";
 import { PublicKey, Keypair } from "@solana/web3.js";
 import { queryCache } from "@/lib/query-cache";
@@ -116,15 +117,30 @@ const issuanceSchema = z.object({
       label: z.string().min(1, "Label required"),
     })),
     selectedModules: z.array(z.string()),
+    moduleParams: z.record(z.string(), z.record(z.string(), z.unknown())).default({}),
   }),
   tokenDetails: z.object({
     decimals: z.number().min(0).max(18).default(6),
     initialPrice: z.number().min(0.01, "Price must be at least $0.01"),
   }),
-  documents: z.array(z.any()).min(1, "At least one document is required"),
+  documents: z.array(z.any()).default([]),
 });
 
 export type IssuanceFormValues = z.infer<typeof issuanceSchema>;
+export type UploadedLegalDocument = {
+  file: File;
+  documentType: string;
+};
+
+const DOCUMENT_TYPE_OPTIONS = [
+  { value: "asset_document", label: "Asset Document" },
+  { value: "title_deed", label: "Title Deed / Ownership Proof" },
+  { value: "valuation_report", label: "Valuation Report" },
+  { value: "id_card", label: "ID Card" },
+  { value: "passport", label: "Passport" },
+  { value: "proof_of_address", label: "Proof of Address" },
+  { value: "other", label: "Other Legal Document" },
+];
 
 export function IssuanceForm({
   onSubmitOverride,
@@ -134,7 +150,10 @@ export function IssuanceForm({
   deploymentRequestId,
   submitLabel,
 }: {
-  onSubmitOverride?: (data: IssuanceFormValues, uploadedFiles: File[]) => Promise<void>;
+  onSubmitOverride?: (
+    data: IssuanceFormValues,
+    uploadedDocuments: UploadedLegalDocument[],
+  ) => Promise<void>;
   isApplicationMode?: boolean;
   onDeployed?: () => Promise<void> | void;
   initialValues?: Partial<IssuanceFormValues>;
@@ -143,7 +162,9 @@ export function IssuanceForm({
 } = {}) {
   const { address } = useWallet();
   const router = useRouter();
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [uploadedDocuments, setUploadedDocuments] = useState<
+    UploadedLegalDocument[]
+  >([]);
   const [currentStep, setCurrentStep] = useState(1);
   const isVerified = true;
   const hasOnchainId = true;
@@ -175,6 +196,7 @@ export function IssuanceForm({
         claimTopics: ["1"],
         trustedIssuers: [],
         selectedModules: [],
+        moduleParams: {},
       },
       tokenDetails: {
         decimals: 6,
@@ -191,6 +213,18 @@ export function IssuanceForm({
   const isPlatformAdmin = !!address && !!factoryOwner && address === factoryOwner;
   const hasFactoryOwnerMismatch =
     !!configuredPlatformOwner && !!factoryOwner && configuredPlatformOwner !== factoryOwner;
+  const formSteps = isApplicationMode
+    ? [
+        { id: 1, label: "Asset Details" },
+        { id: 2, label: "Documents" },
+      ]
+    : [
+        { id: 1, label: "Asset Details" },
+        { id: 2, label: "Valuation" },
+        { id: 3, label: "Compliance" },
+        { id: 4, label: "Tokenization" },
+      ];
+  const finalStep = formSteps[formSteps.length - 1]?.id ?? 1;
 
   useEffect(() => {
     if (address && !form.getValues("assetDetails.issuerWallet")) {
@@ -224,19 +258,47 @@ export function IssuanceForm({
       return validTypes.includes(file.type) && file.size <= 10 * 1024 * 1024;
     });
 
-    setUploadedFiles((prev) => [...prev, ...validFiles]);
-    form.setValue("documents", [...uploadedFiles, ...validFiles]);
+    const nextDocuments = [
+      ...uploadedDocuments,
+      ...validFiles.map((file) => ({
+        file,
+        documentType: "asset_document",
+      })),
+    ];
+    setUploadedDocuments(nextDocuments);
+    form.setValue(
+      "documents",
+      nextDocuments.map((document) => document.file),
+    );
+    event.target.value = "";
   };
 
   const removeFile = (index: number) => {
-    const newFiles = uploadedFiles.filter((_, i: number) => i !== index);
-    setUploadedFiles(newFiles);
-    form.setValue("documents", newFiles);
+    const nextDocuments = uploadedDocuments.filter(
+      (_, i: number) => i !== index,
+    );
+    setUploadedDocuments(nextDocuments);
+    form.setValue(
+      "documents",
+      nextDocuments.map((document) => document.file),
+    );
+  };
+
+  const updateDocumentType = (index: number, documentType: string) => {
+    const nextDocuments = uploadedDocuments.map((document, i) =>
+      i === index ? { ...document, documentType } : document,
+    );
+    setUploadedDocuments(nextDocuments);
   };
 
   const onSubmit = async (data: IssuanceFormValues) => {
+    if (currentStep < finalStep) {
+      await nextStep();
+      return;
+    }
+
     if (onSubmitOverride) {
-      await onSubmitOverride(data, uploadedFiles);
+      await onSubmitOverride(data, uploadedDocuments);
       return;
     }
 
@@ -281,6 +343,7 @@ export function IssuanceForm({
         claimTopics: data.complianceRequirements.claimTopics.map((t: string) => BigInt(t)),
         trustedIssuers,
         complianceModules: data.complianceRequirements.selectedModules,
+        complianceModuleParams: data.complianceRequirements.moduleParams,
         sharedIrs: null,
         salt,
       },
@@ -317,6 +380,7 @@ export function IssuanceForm({
                   topics: issuer.topics.map((topic) => topic.toString()),
                 })),
                 complianceModules: data.complianceRequirements.selectedModules,
+                complianceModuleParams: data.complianceRequirements.moduleParams,
                 txHash: sig,
                 salt,
               },
@@ -350,14 +414,13 @@ export function IssuanceForm({
     );
   };
 
-  const nextStep = () => {
+  const nextStep = async () => {
     // Validate current step before proceeding
     const fieldsToValidate = getStepFields(currentStep);
-    form.trigger(fieldsToValidate).then((isValid) => {
-      if (isValid) {
-        setCurrentStep((prev) => Math.min(prev + 1, 4));
-      }
-    });
+    const isValid = await form.trigger(fieldsToValidate);
+    if (isValid) {
+      setCurrentStep((prev) => Math.min(prev + 1, finalStep));
+    }
   };
 
   const prevStep = () => {
@@ -446,6 +509,22 @@ export function IssuanceForm({
   }
 
   const getStepFields = (step: number): any[] => {
+    if (isApplicationMode) {
+      if (step === 1) {
+        return [
+          "assetDetails.name",
+          "assetDetails.symbol",
+          "assetDetails.description",
+          "assetDetails.assetType",
+          "assetDetails.location",
+          "assetDetails.issuerWallet",
+          "assetDetails.isin",
+        ];
+      }
+      if (step === 2) return ["documents"];
+      return [];
+    }
+
     switch (step) {
       case 1:
         return [
@@ -547,73 +626,106 @@ export function IssuanceForm({
         </Card>
       )}
       {/* Step Indicator */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-6">
-          {[1, 2, 3, 4].map((step) => (
-            <div key={step} className="flex items-center flex-1">
-              <div className="flex flex-col items-center flex-1">
+      {isApplicationMode ? (
+        <div className="mb-8 rounded-2xl border border-slate-200 bg-slate-50/70 p-3 shadow-sm">
+          <div className="grid grid-cols-2 gap-2">
+            {formSteps.map((step, index) => {
+              const isActive = currentStep === step.id;
+              const isDone = currentStep > step.id;
+              return (
                 <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300 ${
-                    step <= currentStep
-                      ? "bg-gradient-to-br from-[#172E7F] to-[#2A5FA6] text-white shadow-[0_4px_12px_rgba(23,46,127,0.25)]"
-                      : "bg-slate-100 text-slate-400 border-2 border-slate-200"
+                  key={step.id}
+                  className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-colors ${
+                    isActive
+                      ? "bg-white text-slate-950 shadow-sm ring-1 ring-slate-200"
+                      : isDone
+                        ? "bg-white/70 text-slate-700"
+                        : "text-slate-500"
                   }`}
                 >
-                  {step < currentStep ? (
-                    <CheckCircle className="h-5 w-5" />
-                  ) : (
-                    step
-                  )}
-                </div>
-              </div>
-              {step < 4 && (
-                <div className="flex-1 h-1 mx-2">
                   <div
-                    className={`h-full rounded-full transition-all duration-300 ${
-                      step < currentStep
-                        ? "bg-gradient-to-r from-[#172E7F] to-[#2A5FA6]"
-                        : "bg-slate-200"
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                      isDone || isActive
+                        ? "bg-gradient-to-br from-[#172E7F] to-[#2A5FA6] text-white shadow-[0_4px_12px_rgba(23,46,127,0.18)]"
+                        : "border border-slate-300 bg-white text-slate-400"
                     }`}
-                  />
+                  >
+                    {isDone ? <CheckCircle className="h-4 w-4" /> : index + 1}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Step {index + 1}
+                    </div>
+                    <div className="truncate text-sm font-bold">
+                      {step.label}
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-4 gap-2 text-center">
-          <div
-            className={`text-sm font-semibold transition-colors ${
-              currentStep >= 1 ? "text-slate-900" : "text-slate-400"
-            }`}
-          >
-            Asset Details
-          </div>
-          <div
-            className={`text-sm font-semibold transition-colors ${
-              currentStep >= 2 ? "text-slate-900" : "text-slate-400"
-            }`}
-          >
-            Valuation
-          </div>
-          <div
-            className={`text-sm font-semibold transition-colors ${
-              currentStep >= 3 ? "text-slate-900" : "text-slate-400"
-            }`}
-          >
-            Compliance
-          </div>
-          <div
-            className={`text-sm font-semibold transition-colors ${
-              currentStep >= 4 ? "text-slate-900" : "text-slate-400"
-            }`}
-          >
-            Tokenization
+              );
+            })}
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-6">
+            {formSteps.map((step, index) => (
+              <div key={step.id} className="flex items-center flex-1">
+                <div className="flex flex-col items-center flex-1">
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300 ${
+                      step.id <= currentStep
+                        ? "bg-gradient-to-br from-[#172E7F] to-[#2A5FA6] text-white shadow-[0_4px_12px_rgba(23,46,127,0.25)]"
+                        : "bg-slate-100 text-slate-400 border-2 border-slate-200"
+                    }`}
+                  >
+                    {step.id < currentStep ? (
+                      <CheckCircle className="h-5 w-5" />
+                    ) : (
+                      index + 1
+                    )}
+                  </div>
+                </div>
+                {index < formSteps.length - 1 && (
+                  <div className="flex-1 h-1 mx-2">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${
+                        step.id < currentStep
+                          ? "bg-gradient-to-r from-[#172E7F] to-[#2A5FA6]"
+                          : "bg-slate-200"
+                      }`}
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-4 gap-2 text-center">
+            {formSteps.map((step) => (
+              <div
+                key={step.id}
+                className={`text-sm font-semibold transition-colors ${
+                  currentStep >= step.id ? "text-slate-900" : "text-slate-400"
+                }`}
+              >
+                {step.label}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <form
+          onSubmit={(event) => {
+            if (currentStep < finalStep) {
+              event.preventDefault();
+              void nextStep();
+              return;
+            }
+            void form.handleSubmit(onSubmit)(event);
+          }}
+          className="space-y-8"
+        >
           {/* Step 1: Asset Information */}
           {currentStep === 1 && (
             <motion.div
@@ -758,7 +870,7 @@ export function IssuanceForm({
           )}
 
           {/* Step 2: Valuation */}
-          {currentStep === 2 && (
+          {!isApplicationMode && currentStep === 2 && (
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -840,7 +952,7 @@ export function IssuanceForm({
             </motion.div>
           )}
           {/* Step 3: Compliance Configuration */}
-          {currentStep === 3 && (
+          {!isApplicationMode && currentStep === 3 && (
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -851,32 +963,6 @@ export function IssuanceForm({
                 Compliance & Trusted Framework
               </h3>
 
-              {isApplicationMode ? (
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
-                    <h4 className="text-sm font-bold text-slate-900">
-                      Compliance is set by the platform
-                    </h4>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">
-                      Your request captures the asset economics and legal
-                      context. The admin/compliance team decides the final
-                      on-chain claim topics, trusted issuers, and modules before
-                      deployment.
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-5">
-                    <h4 className="text-sm font-bold text-blue-950">
-                      Default review baseline
-                    </h4>
-                    <p className="mt-2 text-sm leading-6 text-blue-800">
-                      The request will be submitted with a baseline KYC claim.
-                      Admins can adjust this for accredited investor checks,
-                      jurisdiction restrictions, transfer limits, or other RWA
-                      requirements.
-                    </p>
-                  </div>
-                </div>
-              ) : (
               <div className="space-y-6">
                 {/* Claim Topics */}
                 <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
@@ -1031,13 +1117,125 @@ export function IssuanceForm({
                     </div>
                   )}
                 </div>
+
+                {/* Compliance Modules */}
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900">Compliance Modules</h4>
+                    <p className="text-xs text-slate-500">
+                      Selected modules are initialized and bound to this token suite.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {COMPLIANCE_MODULES.map((module) => {
+                      const selectedModules = form.watch("complianceRequirements.selectedModules");
+                      const moduleId = module.programId.toBase58();
+                      const isSelected = selectedModules.includes(moduleId);
+
+                      return (
+                        <div
+                          key={module.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => {
+                            form.setValue(
+                              "complianceRequirements.selectedModules",
+                              isSelected
+                                ? selectedModules.filter((id) => id !== moduleId)
+                                : [...selectedModules, moduleId],
+                            );
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key !== "Enter" && event.key !== " ") return;
+                            event.preventDefault();
+                            form.setValue(
+                              "complianceRequirements.selectedModules",
+                              isSelected
+                                ? selectedModules.filter((id) => id !== moduleId)
+                                : [...selectedModules, moduleId],
+                            );
+                          }}
+                          className={`rounded-2xl border p-4 text-left transition-colors ${
+                            isSelected
+                              ? "border-blue-400 bg-blue-50"
+                              : "border-slate-200 bg-white hover:bg-slate-50"
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div
+                              className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded border ${
+                                isSelected
+                                  ? "border-blue-600 bg-blue-600 text-white"
+                                  : "border-slate-300 bg-white"
+                              }`}
+                            >
+                              {isSelected ? <CheckCircle className="h-3.5 w-3.5" /> : null}
+                            </div>
+                            <div>
+                              <div className="text-sm font-semibold text-slate-900">
+                                {module.name}
+                              </div>
+                              <div className="mt-1 text-xs leading-5 text-slate-500">
+                                {module.description}
+                              </div>
+                              {isSelected ? (
+                                <div className="mt-3 space-y-2" onClick={(event) => event.stopPropagation()}>
+                                  {module.fields.map((field) => {
+                                    const moduleParams = form.watch("complianceRequirements.moduleParams") as Record<string, Record<string, unknown>>;
+                                    const value = moduleParams?.[moduleId]?.[field.key] ?? "";
+                                    const placeholder =
+                                      field.type === "countries"
+                                        ? "840,124"
+                                        : field.type === "country_caps"
+                                          ? "840:100,826:50"
+                                          : field.type === "timestamp"
+                                            ? "0"
+                                            : "1000000";
+
+                                    return (
+                                      <div key={field.key} className="space-y-1">
+                                        <Label className="text-[10px] uppercase font-bold text-slate-500">
+                                          {field.label}
+                                        </Label>
+                                        <Input
+                                          value={String(value)}
+                                          placeholder={placeholder}
+                                          className="h-9 bg-white text-sm"
+                                          onChange={(event) => {
+                                            const current =
+                                              (form.getValues("complianceRequirements.moduleParams") as Record<string, Record<string, unknown>>) ?? {};
+                                            form.setValue("complianceRequirements.moduleParams", {
+                                              ...current,
+                                              [moduleId]: {
+                                                ...(current[moduleId] ?? {}),
+                                                [field.key]: event.target.value,
+                                              },
+                                            });
+                                          }}
+                                        />
+                                        <p className="text-[11px] leading-4 text-slate-500">
+                                          {field.description}
+                                        </p>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
-              )}
             </motion.div>
           )}
 
-          {/* Step 4: Tokenization Confirmation */}
-          {currentStep === 4 && (
+          {/* Final Step: Admin tokenization or issuer legal documents */}
+          {((!isApplicationMode && currentStep === 4) ||
+            (isApplicationMode && currentStep === 2)) && (
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -1045,9 +1243,12 @@ export function IssuanceForm({
             >
               <h3 className="text-lg font-bold flex items-center gap-2 text-slate-900">
                 <FileText className="h-5 w-5 text-[#172E7F]" />
-                Mint Configuration & Suite Preview
+                {isApplicationMode
+                  ? "Legal Documents"
+                  : "Mint Configuration & Suite Preview"}
               </h3>
 
+              {!isApplicationMode && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="p-5 rounded-2xl bg-[#172E7F]/5 border border-[#172E7F]/10 space-y-4">
                   <div className="flex items-center gap-2 text-[#172E7F]">
@@ -1106,6 +1307,7 @@ export function IssuanceForm({
                   />
                 </div>
               </div>
+              )}
 
               {/* Document Summary */}
               <div className="p-5 border border-slate-200 rounded-2xl space-y-4">
@@ -1125,37 +1327,65 @@ export function IssuanceForm({
                 <Input
                   type="file"
                   multiple
-                  accept=".pdf"
+                  accept=".pdf,.jpg,.jpeg,.png"
                   onChange={handleFileUpload}
                   className="hidden"
                   id="document-upload"
                 />
 
-                {uploadedFiles.length === 0 ? (
+                {uploadedDocuments.length === 0 ? (
                   <div className="py-8 text-center bg-slate-50/50 border border-dashed border-slate-200 rounded-xl">
-                    <p className="text-xs text-slate-500">No documents attached. PDF required for compliance audit.</p>
+                    <p className="text-xs text-slate-500">
+                      No documents attached. You can add asset documents,
+                      ID card, passport, proof of address, or other legal files.
+                    </p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 gap-2">
-                    {uploadedFiles.map((file: File, index: number) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl shadow-sm">
+                    {uploadedDocuments.map((document, index: number) => (
+                      <div
+                        key={`${document.file.name}-${document.file.lastModified}-${index}`}
+                        className="flex flex-col gap-3 p-3 bg-white border border-slate-100 rounded-xl shadow-sm md:flex-row md:items-center md:justify-between"
+                      >
                         <div className="flex items-center gap-3">
                           <div className="p-2 bg-slate-50 rounded-lg text-slate-400">
                             <FileText className="h-4 w-4" />
                           </div>
                           <div className="text-xs font-medium text-slate-700 truncate max-w-[250px]">
-                            {file.name}
+                            {document.file.name}
                           </div>
                         </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 text-slate-400 hover:text-red-500"
-                          onClick={() => removeFile(index)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Select
+                            value={document.documentType}
+                            onValueChange={(value) =>
+                              updateDocumentType(index, value)
+                            }
+                          >
+                            <SelectTrigger className="h-9 w-full bg-white md:w-56">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {DOCUMENT_TYPE_OPTIONS.map((option) => (
+                                <SelectItem
+                                  key={option.value}
+                                  value={option.value}
+                                >
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-9 w-9 p-0 text-slate-400 hover:text-red-500"
+                            onClick={() => removeFile(index)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1177,11 +1407,11 @@ export function IssuanceForm({
               Back
             </Button>
 
-            {currentStep < 4 ? (
+            {currentStep < finalStep ? (
               <Button 
                 type="button" 
                 className="h-11 px-8 bg-gradient-to-r from-[#172E7F] to-[#2A5FA6] text-white hover:shadow-lg transition-all"
-                onClick={nextStep}
+                onClick={() => void nextStep()}
               >
                 Continue
                 <ChevronRight className="h-4 w-4 ml-2" />

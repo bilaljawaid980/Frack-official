@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
@@ -40,13 +40,50 @@ type TokenSellListing = {
   createdAt: string;
 };
 
+type TrustedIssuer = {
+  walletAddress?: string;
+  topics?: Array<string | number>;
+};
+
+const OPEN_LISTING_STATUSES = new Set(["LISTED", "PARTIALLY_FILLED"]);
+
 function shortAddress(address: string) {
   return `${address.slice(0, 8)}...${address.slice(-6)}`;
 }
 
-function getTrustedProvider(asset: any, topic: string) {
+function isExpired(listing: TokenSellListing) {
+  return Boolean(
+    listing.expiresAt && new Date(listing.expiresAt).getTime() <= Date.now(),
+  );
+}
+
+function isOpenListing(listing: TokenSellListing) {
+  return OPEN_LISTING_STATUSES.has(listing.status) && !isExpired(listing);
+}
+
+function displayStatus(listing: TokenSellListing) {
+  if (isExpired(listing) && OPEN_LISTING_STATUSES.has(listing.status)) {
+    return "EXPIRED";
+  }
+  return listing.status;
+}
+
+function formatExpiry(value?: string | null) {
+  if (!value) return "No expiry";
+  return new Date(value).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getTrustedProvider(
+  asset: { metadata?: { trustedIssuers?: TrustedIssuer[] } } | undefined,
+  topic: string,
+) {
   const issuers = asset?.metadata?.trustedIssuers || [];
-  return issuers.find((issuer: any) =>
+  return issuers.find((issuer) =>
     (issuer.topics || []).map(String).includes(topic),
   )?.walletAddress || null;
 }
@@ -88,24 +125,28 @@ export default function ListingsPage() {
     return map;
   }, [assets]);
 
-  const loadListings = async () => {
+  const loadListings = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const rows = await apiFetch<TokenSellListing[]>("/token-listings?open=true");
+      const rows = await apiFetch<TokenSellListing[]>("/token-listings");
       setListings(rows);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load listings.");
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    void loadListings();
   }, []);
 
+  useEffect(() => {
+    void Promise.resolve().then(loadListings);
+  }, [loadListings]);
+
   const openBuyRequest = (listing: TokenSellListing) => {
+    if (!isOpenListing(listing)) {
+      toast.error("This listing is expired or closed.");
+      return;
+    }
     const asset = assetByToken.get(listing.tokenContract);
     const decimals = Number(asset?.metadata?.decimals ?? 6);
     setSelectedListing(listing);
@@ -184,7 +225,7 @@ export default function ListingsPage() {
           </Badge>
           <h1 className="text-3xl font-semibold text-slate-950">Token Listings</h1>
           <p className="mt-2 max-w-3xl text-sm text-slate-600">
-            Buyer-driven secondary transfer listings. Buyers complete eligibility first; sellers only sign the final transfer after the buyer is compliant.
+            Buyer-driven secondary transfer listings. Active listings accept buyer eligibility requests; expired and closed listings remain visible for review.
           </p>
         </div>
         <Button variant="outline" onClick={loadListings} disabled={loading}>
@@ -202,9 +243,9 @@ export default function ListingsPage() {
 
       <Card className="bg-white">
         <CardHeader>
-          <CardTitle>Open Listings</CardTitle>
+          <CardTitle>Marketplace Listings</CardTitle>
           <CardDescription>
-            Listing creation and buyer request actions will be added after the transfer simulation foundation is verified.
+            {listings.filter(isOpenListing).length} active of {listings.length} total listings.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -215,7 +256,7 @@ export default function ListingsPage() {
           ) : loading ? (
             <div className="py-12 text-center text-sm text-slate-500">Loading listings...</div>
           ) : listings.length === 0 ? (
-            <div className="py-12 text-center text-sm text-slate-500">No open listings yet.</div>
+            <div className="py-12 text-center text-sm text-slate-500">No marketplace listings yet.</div>
           ) : (
             <div className="overflow-hidden rounded-xl border border-slate-200">
               <table className="w-full text-sm">
@@ -225,6 +266,7 @@ export default function ListingsPage() {
                     <th className="px-4 py-3 font-semibold">Seller</th>
                     <th className="px-4 py-3 font-semibold">Remaining</th>
                     <th className="px-4 py-3 font-semibold">Price</th>
+                    <th className="px-4 py-3 font-semibold">Expires</th>
                     <th className="px-4 py-3 font-semibold">Status</th>
                     <th className="px-4 py-3 text-right font-semibold">Action</th>
                   </tr>
@@ -233,6 +275,8 @@ export default function ListingsPage() {
                   {listings.map((listing) => {
                     const asset = assetByToken.get(listing.tokenContract);
                     const decimals = Number(asset?.metadata?.decimals ?? 6);
+                    const open = isOpenListing(listing);
+                    const status = displayStatus(listing);
                     return (
                       <tr key={listing.id}>
                         <td className="px-4 py-4">
@@ -246,17 +290,23 @@ export default function ListingsPage() {
                         <td className="px-4 py-4">
                           {listing.price != null ? `${listing.price} ${listing.currency || "USD"}` : "Off-chain"}
                         </td>
+                        <td className="px-4 py-4 text-slate-600">{formatExpiry(listing.expiresAt)}</td>
                         <td className="px-4 py-4">
-                          <Badge variant="secondary">{listing.status.replaceAll("_", " ")}</Badge>
+                          <Badge
+                            variant={open ? "secondary" : "outline"}
+                            className={open ? "" : "text-slate-500"}
+                          >
+                            {status.replaceAll("_", " ")}
+                          </Badge>
                         </td>
                         <td className="px-4 py-4 text-right">
                           <Button
                             size="sm"
                             className="bg-[#172E7F] hover:bg-[#24469E]"
                             onClick={() => openBuyRequest(listing)}
-                            disabled={address === listing.sellerWallet}
+                            disabled={!open || address === listing.sellerWallet}
                           >
-                            Request to Buy
+                            {open ? "Request to Buy" : "Closed"}
                           </Button>
                         </td>
                       </tr>

@@ -3,6 +3,7 @@ use anchor_lang::solana_program::{
     instruction::{AccountMeta, Instruction},
     program::{invoke, invoke_signed},
     program_option::COption,
+    system_instruction,
 };
 use anchor_lang::InstructionData;
 use anchor_spl::token_2022::spl_token_2022::{
@@ -13,6 +14,7 @@ use anchor_spl::token_2022::spl_token_2022::{
         BaseStateWithExtensions, StateWithExtensions,
     },
 };
+use anchor_spl::token_2022::Token2022;
 use fracks_compliance::{
     instruction as compliance_instruction,
     ComplianceState, CountryInvestorCountView, CountryRestrictModuleView, DailyTransferLimitModuleView,
@@ -30,6 +32,7 @@ use fracks_irp::{
 use fracks_irs::program::FracksIrs;
 use fracks_token_hook::program::FracksTokenHook;
 use solana_program::hash::hash;
+use spl_token_metadata_interface::instruction::initialize as token_metadata_initialize;
 
 declare_id!("92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s");
 
@@ -42,10 +45,12 @@ const OWNER_STATE_SPACE: usize = 8 + 32 + 32 + 1;
 const AGENT_ROLE_SPACE: usize = 8 + 32 + 32 + 1 + 1;
 const FROZEN_WALLET_SPACE: usize = 8 + 32 + 32 + 32 + 8 + 1;
 const PARTIAL_FREEZE_SPACE: usize = 8 + 32 + 32 + 8 + 32 + 1;
+const SUBSCRIPTION_ESCROW_SPACE: usize = 8 + 32 + 32 + 32 + 8 + 8 + 8 + 1 + 1;
 const TRANSFER_APPROVAL_KIND_TRANSFER: u8 = 0;
 const TRANSFER_APPROVAL_KIND_FORCED: u8 = 1;
 const TRANSFER_APPROVAL_KIND_RECOVERY: u8 = 2;
 const FRACKS_TOKEN_HOOK_ID: Pubkey = pubkey!("4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m");
+const FRACKS_FACTORY_ID: Pubkey = pubkey!("6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe");
 
 #[program]
 pub mod fracks_token {
@@ -78,6 +83,50 @@ pub mod fracks_token {
         owner_state.owner = ctx.accounts.owner.key();
         owner_state.token_mint = token_mint;
         owner_state.bump = ctx.bumps.owner_state;
+        Ok(())
+    }
+
+    pub fn initialize_mint_metadata(
+        ctx: Context<InitializeMintMetadata>,
+        name: String,
+        symbol: String,
+        uri: String,
+    ) -> Result<()> {
+        validate_metadata(&name, &symbol, &ctx.accounts.token_state.isin)?;
+        validate_token_mint_account(
+            &ctx.accounts.token_mint_account,
+            &ctx.accounts.token_state,
+            false,
+        )?;
+
+        let token_state_bump = [ctx.accounts.token_state.bump];
+        let token_state_seeds = &[
+            b"token_state".as_ref(),
+            ctx.accounts.token_state.token_mint.as_ref(),
+            token_state_bump.as_ref(),
+        ];
+        let instruction = token_metadata_initialize(
+            &spl_token_2022::id(),
+            &ctx.accounts.token_mint_account.key(),
+            &ctx.accounts.owner.key(),
+            &ctx.accounts.token_mint_account.key(),
+            &ctx.accounts.token_state.key(),
+            name,
+            symbol,
+            uri,
+        );
+
+        invoke_signed(
+            &instruction,
+            &[
+                ctx.accounts.token_mint_account.to_account_info(),
+                ctx.accounts.owner.to_account_info(),
+                ctx.accounts.token_mint_account.to_account_info(),
+                ctx.accounts.token_state.to_account_info(),
+                ctx.accounts.token_2022_program.to_account_info(),
+            ],
+            &[token_state_seeds],
+        )?;
         Ok(())
     }
 
@@ -184,6 +233,18 @@ pub mod fracks_token {
                 == to_balance_after,
             FracksTokenError::InvalidTokenAccount
         );
+        evaluate_compliance(
+            &ctx.accounts.token_state,
+            &ctx.accounts.compliance_state,
+            &ctx.remaining_accounts,
+            Pubkey::default(),
+            to,
+            amount,
+            0,
+            destination.amount,
+            0,
+            receiver_identity.country,
+        )?;
         invoke_compliance_created(
             &ctx.accounts.compliance_program,
             &ctx.accounts.compliance_state,
@@ -213,6 +274,315 @@ pub mod fracks_token {
             to,
             amount,
             by_agent: ctx.accounts.authority.key(),
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+        Ok(())
+    }
+
+    pub fn purchase_mint<'info>(
+        ctx: Context<'_, '_, '_, 'info, PurchaseMintOperation<'info>>,
+        amount: u64,
+        to_balance_after: u64,
+    ) -> Result<()> {
+        require!(amount > 0, FracksTokenError::PaymentRequired);
+        require!(!ctx.accounts.token_state.paused, FracksTokenError::TokenPaused);
+
+        let buyer = ctx.accounts.buyer.key();
+        ensure_wallet_not_frozen(
+            &ctx.accounts.to_frozen,
+            &buyer,
+            &ctx.accounts.token_state.token_mint,
+        )?;
+
+        let offering_terms = read_offering_terms(&ctx.accounts.offering_terms)?;
+        require!(offering_terms.active, FracksTokenError::OfferingInactive);
+        require!(
+            offering_terms.token_mint == ctx.accounts.token_state.token_mint,
+            FracksTokenError::InvalidOfferingTerms
+        );
+        require!(
+            offering_terms.issuer == ctx.accounts.issuer.key(),
+            FracksTokenError::InvalidIssuer
+        );
+        require!(
+            offering_terms.payment_mint.is_none(),
+            FracksTokenError::UnsupportedPaymentMint
+        );
+
+        let lamports_due = calculate_sol_payment(
+            amount,
+            offering_terms.price_per_token,
+            ctx.accounts.token_state.decimals,
+        )?;
+        require!(lamports_due > 0, FracksTokenError::PaymentRequired);
+        require!(
+            ctx.accounts.buyer.to_account_info().lamports() >= lamports_due,
+            FracksTokenError::InsufficientPaymentBalance
+        );
+
+        let receiver_identity = verify_wallet_against_irp(
+            &ctx.accounts.token_state,
+            &buyer,
+            &ctx.accounts.irp_state,
+            &ctx.accounts.irs_state,
+            &ctx.accounts.tir_state,
+            &ctx.accounts.ctr_state,
+            &ctx.accounts.wallet_identity,
+            &ctx.remaining_accounts,
+        )?;
+        validate_token_mint_account(
+            &ctx.accounts.token_mint_account,
+            &ctx.accounts.token_state,
+            true,
+        )?;
+        let destination = read_token_account(&ctx.accounts.destination_token_account)?;
+        validate_token_account(
+            &ctx.accounts.destination_token_account,
+            &destination,
+            &ctx.accounts.token_state.token_mint,
+            &buyer,
+        )?;
+        require!(
+            destination
+                .amount
+                .checked_add(amount)
+                .ok_or_else(|| error!(FracksTokenError::ArithmeticOverflow))?
+                == to_balance_after,
+            FracksTokenError::InvalidTokenAccount
+        );
+        evaluate_compliance(
+            &ctx.accounts.token_state,
+            &ctx.accounts.compliance_state,
+            &ctx.remaining_accounts,
+            Pubkey::default(),
+            buyer,
+            amount,
+            0,
+            destination.amount,
+            0,
+            receiver_identity.country,
+        )?;
+
+        invoke(
+            &system_instruction::transfer(&buyer, &ctx.accounts.issuer.key(), lamports_due),
+            &[
+                ctx.accounts.buyer.to_account_info(),
+                ctx.accounts.issuer.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+        )?;
+
+        invoke_compliance_created(
+            &ctx.accounts.compliance_program,
+            &ctx.accounts.compliance_state,
+            &ctx.remaining_accounts,
+            buyer,
+            amount,
+            to_balance_after,
+            receiver_identity.country,
+        )?;
+        let token_state_bump = [ctx.accounts.token_state.bump];
+        let token_state_seeds = &[
+            b"token_state".as_ref(),
+            ctx.accounts.token_state.token_mint.as_ref(),
+            token_state_bump.as_ref(),
+        ];
+        invoke_token_mint_to_checked(
+            &ctx.accounts.token_program,
+            &ctx.accounts.token_mint_account,
+            &ctx.accounts.destination_token_account,
+            ctx.accounts.token_state.to_account_info(),
+            token_state_seeds,
+            amount,
+            ctx.accounts.token_state.decimals,
+        )?;
+
+        emit!(TokensPurchased {
+            buyer,
+            issuer: ctx.accounts.issuer.key(),
+            amount,
+            paid_lamports: lamports_due,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+        Ok(())
+    }
+
+    pub fn deposit_subscription(
+        ctx: Context<DepositSubscription>,
+        amount: u64,
+    ) -> Result<()> {
+        require!(amount > 0, FracksTokenError::PaymentRequired);
+        require!(!ctx.accounts.token_state.paused, FracksTokenError::TokenPaused);
+
+        let offering_terms = read_offering_terms(&ctx.accounts.offering_terms)?;
+        require!(offering_terms.active, FracksTokenError::OfferingInactive);
+        require!(
+            offering_terms.token_mint == ctx.accounts.token_state.token_mint,
+            FracksTokenError::InvalidOfferingTerms
+        );
+        require!(
+            offering_terms.issuer == ctx.accounts.issuer.key(),
+            FracksTokenError::InvalidIssuer
+        );
+        require!(
+            offering_terms.payment_mint.is_none(),
+            FracksTokenError::UnsupportedPaymentMint
+        );
+
+        let lamports_due = calculate_sol_payment(
+            amount,
+            offering_terms.price_per_token,
+            ctx.accounts.token_state.decimals,
+        )?;
+        require!(lamports_due > 0, FracksTokenError::PaymentRequired);
+        require!(
+            ctx.accounts.investor.to_account_info().lamports() >= lamports_due,
+            FracksTokenError::InsufficientPaymentBalance
+        );
+
+        let escrow = &mut ctx.accounts.subscription_escrow;
+        require!(!escrow.settled, FracksTokenError::SubscriptionAlreadySettled);
+        escrow.investor = ctx.accounts.investor.key();
+        escrow.token_mint = ctx.accounts.token_state.token_mint;
+        escrow.issuer = ctx.accounts.issuer.key();
+        escrow.amount = amount;
+        escrow.paid_lamports = lamports_due;
+        escrow.created_at = Clock::get()?.unix_timestamp;
+        escrow.settled = false;
+        escrow.bump = ctx.bumps.subscription_escrow;
+
+        invoke(
+            &system_instruction::transfer(
+                &ctx.accounts.investor.key(),
+                &ctx.accounts.subscription_escrow.key(),
+                lamports_due,
+            ),
+            &[
+                ctx.accounts.investor.to_account_info(),
+                ctx.accounts.subscription_escrow.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+        )?;
+
+        emit!(SubscriptionDeposited {
+            investor: ctx.accounts.investor.key(),
+            issuer: ctx.accounts.issuer.key(),
+            amount,
+            paid_lamports: lamports_due,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+        Ok(())
+    }
+
+    pub fn settle_subscription_mint<'info>(
+        ctx: Context<'_, '_, '_, 'info, SettleSubscriptionMint<'info>>,
+        to_balance_after: u64,
+    ) -> Result<()> {
+        authorize_operator(
+            ctx.accounts.authority.key(),
+            &ctx.accounts.token_state,
+            &ctx.accounts.owner_state.to_account_info(),
+            &ctx.accounts.agent_role.to_account_info(),
+        )?;
+        require!(!ctx.accounts.token_state.paused, FracksTokenError::TokenPaused);
+
+        let investor = ctx.accounts.subscription_escrow.investor;
+        let amount = ctx.accounts.subscription_escrow.amount;
+        let paid_lamports = ctx.accounts.subscription_escrow.paid_lamports;
+        require!(!ctx.accounts.subscription_escrow.settled, FracksTokenError::SubscriptionAlreadySettled);
+        require!(
+            ctx.accounts.subscription_escrow.token_mint == ctx.accounts.token_state.token_mint,
+            FracksTokenError::InvalidSubscriptionEscrow
+        );
+        require!(
+            ctx.accounts.subscription_escrow.issuer == ctx.accounts.issuer.key(),
+            FracksTokenError::InvalidIssuer
+        );
+        require!(amount > 0 && paid_lamports > 0, FracksTokenError::PaymentRequired);
+
+        ensure_wallet_not_frozen(
+            &ctx.accounts.to_frozen,
+            &investor,
+            &ctx.accounts.token_state.token_mint,
+        )?;
+        let receiver_identity = verify_wallet_against_irp(
+            &ctx.accounts.token_state,
+            &investor,
+            &ctx.accounts.irp_state,
+            &ctx.accounts.irs_state,
+            &ctx.accounts.tir_state,
+            &ctx.accounts.ctr_state,
+            &ctx.accounts.wallet_identity,
+            &ctx.remaining_accounts,
+        )?;
+        validate_token_mint_account(
+            &ctx.accounts.token_mint_account,
+            &ctx.accounts.token_state,
+            true,
+        )?;
+        let destination = read_token_account(&ctx.accounts.destination_token_account)?;
+        validate_token_account(
+            &ctx.accounts.destination_token_account,
+            &destination,
+            &ctx.accounts.token_state.token_mint,
+            &investor,
+        )?;
+        require!(
+            destination
+                .amount
+                .checked_add(amount)
+                .ok_or_else(|| error!(FracksTokenError::ArithmeticOverflow))?
+                == to_balance_after,
+            FracksTokenError::InvalidTokenAccount
+        );
+        evaluate_compliance(
+            &ctx.accounts.token_state,
+            &ctx.accounts.compliance_state,
+            &ctx.remaining_accounts,
+            Pubkey::default(),
+            investor,
+            amount,
+            0,
+            destination.amount,
+            0,
+            receiver_identity.country,
+        )?;
+
+        **ctx.accounts.subscription_escrow.to_account_info().try_borrow_mut_lamports()? -= paid_lamports;
+        **ctx.accounts.issuer.to_account_info().try_borrow_mut_lamports()? += paid_lamports;
+        ctx.accounts.subscription_escrow.settled = true;
+
+        invoke_compliance_created(
+            &ctx.accounts.compliance_program,
+            &ctx.accounts.compliance_state,
+            &ctx.remaining_accounts,
+            investor,
+            amount,
+            to_balance_after,
+            receiver_identity.country,
+        )?;
+        let token_state_bump = [ctx.accounts.token_state.bump];
+        let token_state_seeds = &[
+            b"token_state".as_ref(),
+            ctx.accounts.token_state.token_mint.as_ref(),
+            token_state_bump.as_ref(),
+        ];
+        invoke_token_mint_to_checked(
+            &ctx.accounts.token_program,
+            &ctx.accounts.token_mint_account,
+            &ctx.accounts.destination_token_account,
+            ctx.accounts.token_state.to_account_info(),
+            token_state_seeds,
+            amount,
+            ctx.accounts.token_state.decimals,
+        )?;
+
+        emit!(SubscriptionSettled {
+            investor,
+            issuer: ctx.accounts.issuer.key(),
+            amount,
+            paid_lamports,
+            settled_by: ctx.accounts.authority.key(),
             timestamp: Clock::get()?.unix_timestamp,
         });
         Ok(())
@@ -804,6 +1174,28 @@ pub struct InitializeToken<'info> {
 }
 
 #[derive(Accounts)]
+pub struct InitializeMintMetadata<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    #[account(
+        seeds = [b"token_state", token_state.token_mint.as_ref()],
+        bump = token_state.bump
+    )]
+    pub token_state: Account<'info, TokenState>,
+    #[account(
+        seeds = [b"owner", owner_state.token_mint.as_ref()],
+        bump = owner_state.bump,
+        constraint = owner_state.token_mint == token_state.token_mint @ FracksTokenError::InvalidRegistryReference,
+        constraint = owner_state.owner == owner.key() @ FracksTokenError::NotOwner
+    )]
+    pub owner_state: Account<'info, OwnerState>,
+    /// CHECK: Verified against token_state in the instruction.
+    #[account(mut, address = token_state.token_mint @ FracksTokenError::InvalidTokenAccount)]
+    pub token_mint_account: UncheckedAccount<'info>,
+    pub token_2022_program: Program<'info, Token2022>,
+}
+
+#[derive(Accounts)]
 pub struct UpdateOwnerState<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -941,6 +1333,120 @@ pub struct MintOperation<'info> {
     pub owner_state: UncheckedAccount<'info>,
     /// CHECK: Optional agent role for delegated authority; verified in instruction.
     pub agent_role: UncheckedAccount<'info>,
+    /// CHECK: Verified in instruction against token_state.identity_registry.
+    pub irp_state: UncheckedAccount<'info>,
+    /// CHECK: Verified in instruction against the IRP and IRS views.
+    pub irs_state: UncheckedAccount<'info>,
+    /// CHECK: Verified in instruction against the IRP view.
+    pub tir_state: UncheckedAccount<'info>,
+    /// CHECK: Verified in instruction against the IRP view.
+    pub ctr_state: UncheckedAccount<'info>,
+    /// CHECK: Verified in instruction against token_state.compliance.
+    pub compliance_state: UncheckedAccount<'info>,
+    /// CHECK: Verified in instruction against compliance_state.owner.
+    pub compliance_program: UncheckedAccount<'info>,
+    /// CHECK: Verified in instruction.
+    pub wallet_identity: UncheckedAccount<'info>,
+    /// CHECK: Optional frozen marker.
+    pub to_frozen: UncheckedAccount<'info>,
+    #[account(mut)]
+    /// CHECK: Token-2022 mint validated in instruction.
+    pub token_mint_account: UncheckedAccount<'info>,
+    #[account(mut)]
+    /// CHECK: Token-2022 destination token account validated in instruction.
+    pub destination_token_account: UncheckedAccount<'info>,
+    /// CHECK: Must be the canonical Token-2022 program.
+    pub token_program: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct PurchaseMintOperation<'info> {
+    #[account(mut)]
+    pub buyer: Signer<'info>,
+    #[account(mut)]
+    /// CHECK: Receives SOL and is verified against OfferingTerms.issuer.
+    pub issuer: UncheckedAccount<'info>,
+    /// CHECK: Factory-owned OfferingTerms account verified and deserialized in instruction.
+    pub offering_terms: UncheckedAccount<'info>,
+    #[account(
+        seeds = [b"token_state", token_state.token_mint.as_ref()],
+        bump = token_state.bump
+    )]
+    pub token_state: Account<'info, TokenState>,
+    /// CHECK: Verified in instruction against token_state.identity_registry.
+    pub irp_state: UncheckedAccount<'info>,
+    /// CHECK: Verified in instruction against the IRP and IRS views.
+    pub irs_state: UncheckedAccount<'info>,
+    /// CHECK: Verified in instruction against the IRP view.
+    pub tir_state: UncheckedAccount<'info>,
+    /// CHECK: Verified in instruction against the IRP view.
+    pub ctr_state: UncheckedAccount<'info>,
+    /// CHECK: Verified in instruction against token_state.compliance.
+    pub compliance_state: UncheckedAccount<'info>,
+    /// CHECK: Verified in instruction against compliance_state.owner.
+    pub compliance_program: UncheckedAccount<'info>,
+    /// CHECK: Verified in instruction.
+    pub wallet_identity: UncheckedAccount<'info>,
+    /// CHECK: Optional frozen marker.
+    pub to_frozen: UncheckedAccount<'info>,
+    #[account(mut)]
+    /// CHECK: Token-2022 mint validated in instruction.
+    pub token_mint_account: UncheckedAccount<'info>,
+    #[account(mut)]
+    /// CHECK: Token-2022 destination token account validated in instruction.
+    pub destination_token_account: UncheckedAccount<'info>,
+    /// CHECK: Must be the canonical Token-2022 program.
+    pub token_program: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct DepositSubscription<'info> {
+    #[account(mut)]
+    pub investor: Signer<'info>,
+    #[account(mut)]
+    /// CHECK: Receives escrow settlement and is verified against OfferingTerms.issuer.
+    pub issuer: UncheckedAccount<'info>,
+    /// CHECK: Factory-owned OfferingTerms account verified and deserialized in instruction.
+    pub offering_terms: UncheckedAccount<'info>,
+    #[account(
+        seeds = [b"token_state", token_state.token_mint.as_ref()],
+        bump = token_state.bump
+    )]
+    pub token_state: Account<'info, TokenState>,
+    #[account(
+        init,
+        payer = investor,
+        space = SUBSCRIPTION_ESCROW_SPACE,
+        seeds = [b"subscription", token_state.token_mint.as_ref(), investor.key().as_ref()],
+        bump
+    )]
+    pub subscription_escrow: Account<'info, SubscriptionEscrow>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct SettleSubscriptionMint<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    #[account(mut)]
+    /// CHECK: Receives escrow SOL and is verified against SubscriptionEscrow.issuer.
+    pub issuer: UncheckedAccount<'info>,
+    #[account(
+        seeds = [b"token_state", token_state.token_mint.as_ref()],
+        bump = token_state.bump
+    )]
+    pub token_state: Account<'info, TokenState>,
+    /// CHECK: Optional owner state for direct issuer authority; verified in instruction.
+    pub owner_state: UncheckedAccount<'info>,
+    /// CHECK: Optional agent role for delegated authority; verified in instruction.
+    pub agent_role: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        seeds = [b"subscription", token_state.token_mint.as_ref(), subscription_escrow.investor.as_ref()],
+        bump = subscription_escrow.bump
+    )]
+    pub subscription_escrow: Account<'info, SubscriptionEscrow>,
     /// CHECK: Verified in instruction against token_state.identity_registry.
     pub irp_state: UncheckedAccount<'info>,
     /// CHECK: Verified in instruction against the IRP and IRS views.
@@ -1248,6 +1754,30 @@ pub struct AgentRole {
 }
 
 #[account]
+pub struct SubscriptionEscrow {
+    pub investor: Pubkey,
+    pub token_mint: Pubkey,
+    pub issuer: Pubkey,
+    pub amount: u64,
+    pub paid_lamports: u64,
+    pub created_at: i64,
+    pub settled: bool,
+    pub bump: u8,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct OfferingTermsView {
+    pub issuer: Pubkey,
+    pub token_mint: Pubkey,
+    pub price_per_token: u64,
+    pub price_decimals: u8,
+    pub payment_mint: Option<Pubkey>,
+    pub active: bool,
+    pub created_at: i64,
+    pub bump: u8,
+}
+
+#[account]
 pub struct FrozenWallet {
     pub wallet: Pubkey,
     pub token_mint: Pubkey,
@@ -1278,6 +1808,34 @@ pub struct TokensMinted {
     pub to: Pubkey,
     pub amount: u64,
     pub by_agent: Pubkey,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct TokensPurchased {
+    pub buyer: Pubkey,
+    pub issuer: Pubkey,
+    pub amount: u64,
+    pub paid_lamports: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct SubscriptionDeposited {
+    pub investor: Pubkey,
+    pub issuer: Pubkey,
+    pub amount: u64,
+    pub paid_lamports: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct SubscriptionSettled {
+    pub investor: Pubkey,
+    pub issuer: Pubkey,
+    pub amount: u64,
+    pub paid_lamports: u64,
+    pub settled_by: Pubkey,
     pub timestamp: i64,
 }
 
@@ -1401,6 +1959,60 @@ pub enum FracksTokenError {
     ProgramCalledOutsideTransfer = 6038,
     #[msg("FRACKS transfer approval is missing or invalid.")]
     MissingTransferApproval = 6039,
+    #[msg("Offering terms account is missing or invalid.")]
+    InvalidOfferingTerms = 6040,
+    #[msg("Offering is not active.")]
+    OfferingInactive = 6041,
+    #[msg("Only SOL-denominated token purchases are currently supported.")]
+    UnsupportedPaymentMint = 6042,
+    #[msg("Payment amount overflow.")]
+    PaymentAmountOverflow = 6043,
+    #[msg("A positive token amount and SOL payment are required.")]
+    PaymentRequired = 6044,
+    #[msg("Issuer wallet does not match this token offering.")]
+    InvalidIssuer = 6045,
+    #[msg("Buyer has insufficient SOL to pay the token purchase price.")]
+    InsufficientPaymentBalance = 6046,
+    #[msg("Subscription escrow is missing or invalid.")]
+    InvalidSubscriptionEscrow = 6047,
+    #[msg("Subscription escrow has already been settled.")]
+    SubscriptionAlreadySettled = 6048,
+}
+
+fn read_offering_terms(offering_terms_info: &AccountInfo<'_>) -> Result<OfferingTermsView> {
+    require!(
+        offering_terms_info.owner == &FRACKS_FACTORY_ID,
+        FracksTokenError::InvalidOfferingTerms
+    );
+    require!(
+        !offering_terms_info.data_is_empty(),
+        FracksTokenError::InvalidOfferingTerms
+    );
+
+    let data = offering_terms_info.data.borrow();
+    require!(data.len() > 8, FracksTokenError::InvalidOfferingTerms);
+    let mut account_data: &[u8] = &data[8..];
+    OfferingTermsView::deserialize(&mut account_data)
+        .map_err(|_| error!(FracksTokenError::InvalidOfferingTerms))
+}
+
+fn calculate_sol_payment(amount: u64, price_per_token: u64, token_decimals: u8) -> Result<u64> {
+    require!(price_per_token > 0, FracksTokenError::PaymentRequired);
+    let denominator = 10u128
+        .checked_pow(token_decimals as u32)
+        .ok_or_else(|| error!(FracksTokenError::PaymentAmountOverflow))?;
+    let numerator = (amount as u128)
+        .checked_mul(price_per_token as u128)
+        .ok_or_else(|| error!(FracksTokenError::PaymentAmountOverflow))?;
+    let payment = numerator
+        .checked_add(denominator.saturating_sub(1))
+        .ok_or_else(|| error!(FracksTokenError::PaymentAmountOverflow))?
+        / denominator;
+    require!(
+        payment <= u64::MAX as u128,
+        FracksTokenError::PaymentAmountOverflow
+    );
+    Ok(payment as u64)
 }
 
 fn validate_metadata(name: &str, symbol: &str, isin: &str) -> Result<()> {
@@ -1992,7 +2604,10 @@ fn ensure_wallet_not_frozen<'info>(
     wallet: &Pubkey,
     token_mint: &Pubkey,
 ) -> Result<()> {
-    if frozen_info.key() == System::id() || frozen_info.data_is_empty() || frozen_info.owner == &System::id() {
+    if frozen_info.key() == System::id()
+        || frozen_info.data_is_empty()
+        || frozen_info.owner != &id()
+    {
         return Ok(());
     }
 

@@ -38,27 +38,33 @@ export class CreateAssetRequestDto {
   @IsString()
   location?: string;
 
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  underlyingValue!: number;
+  underlyingValue?: number;
 
+  @IsOptional()
   @IsNumber()
   @Min(1)
-  totalSupply!: number;
+  totalSupply?: number;
 
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  decimals!: number;
+  decimals?: number;
 
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  initialPrice!: number;
+  initialPrice?: number;
 
+  @IsOptional()
   @IsArray()
-  claimTopics!: string[];
+  claimTopics?: string[];
 
+  @IsOptional()
   @IsArray()
-  complianceModules!: string[];
+  complianceModules?: string[];
 
   @IsOptional()
   trustedIssuers?: unknown;

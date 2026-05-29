@@ -196,6 +196,8 @@ export interface DeployTokenSuiteArgs {
   trustedIssuers: TrustedIssuerInput[];
   /** Compliance module program IDs (base-58) to attach at deployment. */
   complianceModules: string[];
+  /** Per-module initialization params keyed by module program ID. */
+  complianceModuleParams?: Record<string, Record<string, unknown>>;
   /** Optional existing IRS account to share (base-58), or null. */
   sharedIrs: string | null;
   /** 32-byte deployment salt. */

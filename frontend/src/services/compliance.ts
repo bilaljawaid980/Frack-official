@@ -4,8 +4,8 @@
 // and writing compliance state and per-module configurations.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { AnchorProvider, Idl, Program, BN } from "@coral-xyz/anchor";
-import { PublicKey } from "@solana/web3.js";
+import { AnchorProvider, Idl, Program } from "@coral-xyz/anchor";
+import { PublicKey, Transaction, TransactionInstruction } from "@solana/web3.js";
 import {
   COMPLIANCE_PROGRAM_ID,
   SEED_COMPLIANCE_STATE,
@@ -31,6 +31,9 @@ import CountryRestrictIdl from "@/idl/mod_country_restrict.json";
 import CountryCapIdl from "@/idl/mod_country_cap.json";
 
 type ComplianceProgram = Program<Idl>;
+const SET_MAX_SUPPLY_DISCRIMINATOR = Buffer.from([
+  16, 207, 140, 77, 107, 20, 202, 158,
+]);
 
 // ─── Module state account seeds (derived from IDLs) ──────────────────────────
 
@@ -41,7 +44,7 @@ const MODULE_SEEDS: Record<string, Buffer> = {
   lockup: Buffer.from("mod_lockup"),
   supply_cap: Buffer.from("mod_supply_cap"),
   max_investors: Buffer.from("mod_max_investors"),
-  country_restrict: Buffer.from("mod_country_restrict"),
+  country_restrict: Buffer.from("mod_country"),
   country_cap: Buffer.from("mod_country_cap"),
 };
 
@@ -312,6 +315,40 @@ export class ComplianceService {
     }
   }
 
+  async setSupplyCap(
+    mint: PublicKey,
+    readableMaxSupply: string,
+    decimals: number,
+  ): Promise<string> {
+    const owner = this.provider.wallet.publicKey;
+    const [moduleState] = PublicKey.findProgramAddressSync(
+      [MODULE_SEEDS.supply_cap, mint.toBuffer()],
+      MOD_SUPPLY_CAP,
+    );
+    const maxSupply = this._toTokenAmount(readableMaxSupply, decimals);
+
+    try {
+      const ix = new TransactionInstruction({
+        programId: MOD_SUPPLY_CAP,
+        keys: [
+          { pubkey: owner, isSigner: true, isWritable: false },
+          { pubkey: moduleState, isSigner: false, isWritable: true },
+        ],
+        data: Buffer.concat([
+          SET_MAX_SUPPLY_DISCRIMINATOR,
+          this._encodeBN(maxSupply),
+        ]),
+      });
+      return await this.provider.sendAndConfirm(
+        new Transaction().add(ix),
+        [],
+        { commitment: "confirmed" },
+      );
+    } catch (err) {
+      throw new Error(formatTransactionError(err));
+    }
+  }
+
   // ── Private Helpers ───────────────────────────────────────────────────────────
 
   private _getModuleProgramId(moduleType: string): PublicKey {
@@ -386,5 +423,12 @@ export class ComplianceService {
       buf.writeUInt32LE(hi, 4);
     }
     return buf;
+  }
+
+  private _toTokenAmount(value: string, decimals: number): bigint {
+    const [wholeRaw, fractionRaw = ""] = value.trim().split(".");
+    const whole = wholeRaw || "0";
+    const fraction = fractionRaw.padEnd(decimals, "0").slice(0, decimals);
+    return BigInt(whole) * 10n ** BigInt(decimals) + BigInt(fraction || "0");
   }
 }

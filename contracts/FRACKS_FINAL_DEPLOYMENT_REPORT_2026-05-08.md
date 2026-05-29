@@ -28,14 +28,14 @@ solana program set-upgrade-authority <PROGRAM_ID> \
 | Program | Program ID | Transfer Signature |
 | --- | --- | --- |
 | `fracks_fid` | `7Y6WJtDmRMcRYgENfKATsGnQTQJ2wAQfF3LhoBt3KbBH` | `4AQVH4eazQeKbk8WCsvRjUopvLfmdU1GAQ9KtPYVfTPTAXooJ` |
-| `mod_country_cap` | `HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW` | `3Xrn54FTtw5LaMHcqbKi57DQ6esBbBA7FnF612RLH2mz99bAr` |
-| `mod_country_restrict` | `6JcKpK45GvhwaPRZoEfLFCNos2eCxCr3N3tGzzaC1ECQ` | `4rVsZZ3joGWjmUKk5fUFzRkk9sTzEG653TguYpaPLjoEjqJgz` |
-| `mod_daily_limit` | `EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9` | `61mJ5dxBjtLwg7dchMz1Q7j4fMXsYW1LmZLNpeJRmMLSb18rw` |
-| `mod_lockup` | `GqsAXZggWEwVF9EFHHXiAKiKBkcrpzQp3SK7NPZWAfR5` | `3RYF7cDk9yATRA19RpYyNKLeGc6WQLg756YiUaZAmr78SYLXt` |
-| `mod_max_balance` | `8r9euzP3dFg8d3sA6fh3Ur73cMbvEAbj5UbigHVEXimZ` | `KZ5ZB37YnMYxpGpcCtrWQrAjSSth8dWyuCx5CMmE4eLrqccUv` |
-| `mod_max_investors` | `FMSVzD74EbSiTj2XHi8xsqcp6pigdxHL7MGHxtRLYte7` | `EhcdQT9ZgcP99VkRV5vBLQ1VeP63RFvBJbw7PaJZSbcjG1zxc` |
-| `mod_max_transfer` | `8EiBd6256x7CfFE1vqGLGBqviiCs64ubZzTVmDwjnQAw` | `3DQfF8oA8moLLZcY8ZtXtHXWnrMXdrax2dPjYPAbtxsDWesEj` |
-| `mod_supply_cap` | `EGJvV5cBN7et6Pdthyj6z7xuN8FN2u1wtGQsUjR69Rxb` | `2xiuENb2RgmbLEehHkuhAAbuMZsHjibq3xhaNf4tM5bWBRLvr` |
+| `mod_country_cap` | `Cv1HA7nHX8vxZvyCKXjk3gYPkqhfHFXxEsyxSXyRT3Ci` | `3Xrn54FTtw5LaMHcqbKi57DQ6esBbBA7FnF612RLH2mz99bAr` |
+| `mod_country_restrict` | `BCGKsDTyncA4EbHzxGVmEi3pheotJiaxCwYvHGxERiZ7` | `4rVsZZ3joGWjmUKk5fUFzRkk9sTzEG653TguYpaPLjoEjqJgz` |
+| `mod_daily_limit` | `FYJ1K8cWUsDmbxNpgaBaEmm3RpvvfpxBBWg2MLm4x8Sq` | `61mJ5dxBjtLwg7dchMz1Q7j4fMXsYW1LmZLNpeJRmMLSb18rw` |
+| `mod_lockup` | `6XqxWPwZQrfTo2ZJeT7wBhJaXd1eKjB2kx5ZrP1CLwa9` | `3RYF7cDk9yATRA19RpYyNKLeGc6WQLg756YiUaZAmr78SYLXt` |
+| `mod_max_balance` | `9BjLakhcX1ms34VjRwUgMZQAgdbsMM8C1gSPqrJTyCpH` | `KZ5ZB37YnMYxpGpcCtrWQrAjSSth8dWyuCx5CMmE4eLrqccUv` |
+| `mod_max_investors` | `4KVbq2esECUHZZdsBiDMM3mxYt8K7rNJUdotG6uZJfRQ` | `EhcdQT9ZgcP99VkRV5vBLQ1VeP63RFvBJbw7PaJZSbcjG1zxc` |
+| `mod_max_transfer` | `Ee6RXC46Nb4Bo2BTQcXBHfuxLZdzbKtPmb3sGf2Egiqh` | `3DQfF8oA8moLLZcY8ZtXtHXWnrMXdrax2dPjYPAbtxsDWesEj` |
+| `mod_supply_cap` | `EkgX6pGFCFT7FuNWuBAAMePy43iU9oETLDota4nTA3x8` | `2xiuENb2RgmbLEehHkuhAAbuMZsHjibq3xhaNf4tM5bWBRLvr` |
 
 ## Buffer Deployment Performed
 
@@ -56,7 +56,7 @@ squads-multisig-cli initiate-program-upgrade \
   --keypair ~/.config/solana/id.json \
   --multisig-pubkey 8jLbfuXMGrzS9zzMnwwdfaJrDXyHWeBTvtnaJgaFedmm \
   --vault-index 0 \
-  --program-to-upgrade-id 3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M \
+  --program-to-upgrade-id 6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe \
   --spill-address 7LA1ZMrc4j19sCSnXFmmiLvjo6KVWENwv9aS4oXYKq2E
 ```
 
@@ -86,7 +86,7 @@ Program explorer base:
 
 Key links:
 
-- Factory program: https://explorer.solana.com/address/3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M?cluster=testnet
+- Factory program: https://explorer.solana.com/address/6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe?cluster=testnet
 - Token program: https://explorer.solana.com/address/Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn?cluster=testnet
 - Token hook program: https://explorer.solana.com/address/CQwdsA97gSiPMUzNXjS22AUu6HmvzMK2XZVqhswYEHLi?cluster=testnet
 - Governance multisig: https://explorer.solana.com/address/8jLbfuXMGrzS9zzMnwwdfaJrDXyHWeBTvtnaJgaFedmm?cluster=testnet

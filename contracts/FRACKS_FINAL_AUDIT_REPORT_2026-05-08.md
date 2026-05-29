@@ -121,7 +121,7 @@ All program IDs below were verified on 2026-05-08:
 
 | Program | Program ID | Upgrade Authority |
 | --- | --- | --- |
-| `fracks_factory` | `3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
+| `fracks_factory` | `6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
 | `fracks_token` | `Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
 | `fracks_token_hook` | `CQwdsA97gSiPMUzNXjS22AUu6HmvzMK2XZVqhswYEHLi` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
 | `fracks_fid` | `7Y6WJtDmRMcRYgENfKATsGnQTQJ2wAQfF3LhoBt3KbBH` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
@@ -130,14 +130,14 @@ All program IDs below were verified on 2026-05-08:
 | `fracks_tir` | `Am5W7oEe8NCU4jdLP8qyUT3gjUPCDsvTSxGhdCQp1ETS` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
 | `fracks_ctr` | `B15EFQKwnfbNHXHhPVvVcw18PaBeTDsRLNRno3QS8Yna` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
 | `fracks_compliance` | `9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
-| `mod_country_cap` | `HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
-| `mod_country_restrict` | `6JcKpK45GvhwaPRZoEfLFCNos2eCxCr3N3tGzzaC1ECQ` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
-| `mod_daily_limit` | `EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
-| `mod_lockup` | `GqsAXZggWEwVF9EFHHXiAKiKBkcrpzQp3SK7NPZWAfR5` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
-| `mod_max_balance` | `8r9euzP3dFg8d3sA6fh3Ur73cMbvEAbj5UbigHVEXimZ` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
-| `mod_max_investors` | `FMSVzD74EbSiTj2XHi8xsqcp6pigdxHL7MGHxtRLYte7` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
-| `mod_max_transfer` | `8EiBd6256x7CfFE1vqGLGBqviiCs64ubZzTVmDwjnQAw` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
-| `mod_supply_cap` | `EGJvV5cBN7et6Pdthyj6z7xuN8FN2u1wtGQsUjR69Rxb` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
+| `mod_country_cap` | `Cv1HA7nHX8vxZvyCKXjk3gYPkqhfHFXxEsyxSXyRT3Ci` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
+| `mod_country_restrict` | `BCGKsDTyncA4EbHzxGVmEi3pheotJiaxCwYvHGxERiZ7` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
+| `mod_daily_limit` | `FYJ1K8cWUsDmbxNpgaBaEmm3RpvvfpxBBWg2MLm4x8Sq` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
+| `mod_lockup` | `6XqxWPwZQrfTo2ZJeT7wBhJaXd1eKjB2kx5ZrP1CLwa9` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
+| `mod_max_balance` | `9BjLakhcX1ms34VjRwUgMZQAgdbsMM8C1gSPqrJTyCpH` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
+| `mod_max_investors` | `4KVbq2esECUHZZdsBiDMM3mxYt8K7rNJUdotG6uZJfRQ` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
+| `mod_max_transfer` | `Ee6RXC46Nb4Bo2BTQcXBHfuxLZdzbKtPmb3sGf2Egiqh` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
+| `mod_supply_cap` | `EkgX6pGFCFT7FuNWuBAAMePy43iU9oETLDota4nTA3x8` | `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z` |
 
 ## 9. Deployment Architecture
 

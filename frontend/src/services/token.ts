@@ -123,6 +123,11 @@ const CLAIM_ACCOUNT_SIZE = 230;
 const CLAIM_ACCOUNT_DISCRIMINATOR = Buffer.from([
   113, 109, 47, 96, 242, 219, 61, 165,
 ]);
+const COUNTRY_RESTRICT_DISCRIMINATOR = Buffer.from([76, 19, 17, 199, 175, 143, 115, 145]);
+const MAX_BALANCE_DISCRIMINATOR = Buffer.from([71, 123, 34, 239, 158, 46, 90, 228]);
+const MAX_TRANSFER_DISCRIMINATOR = Buffer.from([108, 137, 95, 208, 99, 247, 215, 190]);
+const LOCKUP_DISCRIMINATOR = Buffer.from([211, 128, 131, 151, 82, 8, 195, 227]);
+const SUPPLY_CAP_DISCRIMINATOR = Buffer.from([147, 219, 44, 120, 239, 162, 27, 102]);
 const MODULE_PROGRAM_IDS = new Set([
   MOD_MAX_INVESTORS.toBase58(),
   MOD_COUNTRY_RESTRICT.toBase58(),
@@ -168,6 +173,10 @@ function parseClaimAccount(data: Buffer): {
   const revoked = data.readUInt8(offset) === 1;
 
   return { fid, claimId, topic, issuerFid, signerKey, revoked, expiresAt };
+}
+
+function hasDiscriminator(data: Buffer, discriminator: Buffer): boolean {
+  return data.length >= discriminator.length && data.subarray(0, discriminator.length).equals(discriminator);
 }
 
 function parseCtrTopics(data: Buffer): bigint[] {
@@ -639,6 +648,14 @@ export class TokenService {
       recipient,
       ids.token,
     );
+    const toFrozenInfo = await this.provider.connection.getAccountInfo(
+      toFrozen,
+      "confirmed",
+    );
+    const toFrozenAccount =
+      toFrozenInfo && toFrozenInfo.owner.equals(ids.token) && toFrozenInfo.data.length > 0
+        ? toFrozen
+        : SystemProgram.programId;
 
     // Fetch current balance for to_balance_after calculation
     const toBalanceBefore = destinationAccount.amount;
@@ -669,6 +686,13 @@ export class TokenService {
         claimValidation.remainingAccounts,
       );
     await this.prepareDailyLimitUsageAccounts(mintPubkey, recipient, ids);
+    await this.verifySupplyCapForMint(
+      complianceState,
+      amount,
+      toBalanceAfter,
+      walletIdentityData.country,
+      ts.decimals,
+    );
 
     try {
       const mintAccounts = [
@@ -683,7 +707,7 @@ export class TokenService {
         { pubkey: complianceState, isSigner: false, isWritable: false },
         { pubkey: ids.compliance, isSigner: false, isWritable: false },
         { pubkey: walletIdentity, isSigner: false, isWritable: false },
-        { pubkey: toFrozen, isSigner: false, isWritable: false },
+        { pubkey: toFrozenAccount, isSigner: false, isWritable: false },
         { pubkey: mintPubkey, isSigner: false, isWritable: true },
         { pubkey: destinationTokenAccount, isSigner: false, isWritable: true },
         {
@@ -712,7 +736,7 @@ export class TokenService {
           complianceState,
           complianceProgram: ids.compliance,
           walletIdentity,
-          toFrozen,
+          toFrozen: toFrozenAccount,
           tokenMintAccount: mintPubkey,
           destinationTokenAccount,
           tokenProgram: new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"),
@@ -1056,6 +1080,132 @@ export class TokenService {
     }
 
     return accounts;
+  }
+
+  private async verifySupplyCapForMint(
+    complianceState: PublicKey,
+    amount: bigint,
+    toBalanceAfter: bigint,
+    recipientCountry: number,
+    decimals: number,
+  ): Promise<void> {
+    try {
+      const complianceProgram = new Program(
+        {
+          ...(ComplianceIdl as unknown as Record<string, unknown>),
+          address: (await this.getProgramIds()).compliance.toBase58(),
+        } as Idl,
+        this.provider,
+      );
+      const compliance = await (complianceProgram.account as any).complianceState.fetch(
+        complianceState,
+      );
+      const moduleAccounts = compliance.modules as PublicKey[];
+      const moduleInfos = await this.provider.connection.getMultipleAccountsInfo(
+        moduleAccounts,
+        "confirmed",
+      );
+
+      for (const [index, moduleAccount] of moduleAccounts.entries()) {
+        const moduleInfo = moduleInfos[index];
+        if (!moduleInfo) {
+          continue;
+        }
+
+        if (
+          moduleInfo.owner.equals(MOD_COUNTRY_RESTRICT) &&
+          hasDiscriminator(moduleInfo.data, COUNTRY_RESTRICT_DISCRIMINATOR)
+        ) {
+          const count = moduleInfo.data.readUInt32LE(72);
+          for (let item = 0; item < count; item += 1) {
+            const offset = 76 + item * 2;
+            if (moduleInfo.data.length < offset + 2) break;
+            if (moduleInfo.data.readUInt16LE(offset) === recipientCountry) {
+              throw new Error(
+                `Country restricted: investor country ${recipientCountry} is blocked by Country Restrict module ${moduleAccount.toBase58()}. KYC claims cannot override token compliance rules.`,
+              );
+            }
+          }
+          continue;
+        }
+
+        if (
+          moduleInfo.owner.equals(MOD_MAX_BALANCE) &&
+          hasDiscriminator(moduleInfo.data, MAX_BALANCE_DISCRIMINATOR) &&
+          moduleInfo.data.length >= 80
+        ) {
+          const maxBalance = moduleInfo.data.readBigUInt64LE(72);
+          if (toBalanceAfter > maxBalance) {
+            throw new Error(
+              `Max balance exceeded: investor balance after mint would be ${toBalanceAfter.toString()} base units, but the token max-balance module allows ${maxBalance.toString()}.`,
+            );
+          }
+          continue;
+        }
+
+        if (
+          moduleInfo.owner.equals(MOD_MAX_TRANSFER) &&
+          hasDiscriminator(moduleInfo.data, MAX_TRANSFER_DISCRIMINATOR) &&
+          moduleInfo.data.length >= 80
+        ) {
+          const maxAmount = moduleInfo.data.readBigUInt64LE(72);
+          if (amount > maxAmount) {
+            throw new Error(
+              `Max transfer/mint amount exceeded: this mint is ${amount.toString()} base units, but the module allows ${maxAmount.toString()}.`,
+            );
+          }
+          continue;
+        }
+
+        if (
+          moduleInfo.owner.equals(MOD_LOCKUP) &&
+          hasDiscriminator(moduleInfo.data, LOCKUP_DISCRIMINATOR) &&
+          moduleInfo.data.length >= 80
+        ) {
+          const lockupEnd = moduleInfo.data.readBigInt64LE(72);
+          const now = BigInt(Math.floor(Date.now() / 1000));
+          if (now < lockupEnd) {
+            throw new Error(
+              `Lockup active: this token cannot mint/transfer until Unix time ${lockupEnd.toString()}.`,
+            );
+          }
+          continue;
+        }
+
+        if (
+          moduleInfo.owner.equals(MOD_SUPPLY_CAP) &&
+          hasDiscriminator(moduleInfo.data, SUPPLY_CAP_DISCRIMINATOR) &&
+          moduleInfo.data.length >= 121
+        ) {
+          const maxSupply = moduleInfo.data.readBigUInt64LE(104);
+          const trackedSupply = moduleInfo.data.readBigUInt64LE(112);
+          const newSupply = trackedSupply + amount;
+          if (newSupply <= maxSupply) {
+            continue;
+          }
+
+          const scale = 10n ** BigInt(decimals);
+          const looksUnscaled = maxSupply > 0n && maxSupply * scale >= newSupply;
+          throw new Error(
+            looksUnscaled
+              ? `Supply cap mismatch: this token's Supply Cap module is set to ${maxSupply.toString()} base units, but minting ${amount.toString()} base units requires a decimals-scaled cap. Connect the module owner/platform admin and update Supply Cap ${moduleAccount.toBase58()} to at least ${(maxSupply * scale).toString()} base units, or redeploy the token after this fix.`
+              : `Max supply exceeded: current module supply is ${trackedSupply.toString()} base units, this mint adds ${amount.toString()}, and the configured cap is ${maxSupply.toString()}.`,
+          );
+        }
+      }
+    } catch (err) {
+      if (
+        err instanceof Error &&
+        (err.message.includes("Supply cap") ||
+          err.message.includes("Max supply") ||
+          err.message.includes("Country restricted") ||
+          err.message.includes("Max balance") ||
+          err.message.includes("Max transfer") ||
+          err.message.includes("Lockup active"))
+      ) {
+        throw err;
+      }
+    }
   }
 
   private async validateRecipientClaimsForMint(

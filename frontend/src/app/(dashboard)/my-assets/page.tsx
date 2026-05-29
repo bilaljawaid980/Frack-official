@@ -6,7 +6,10 @@ import { Building2, PlusCircle, LayoutDashboard, Clock, CheckCircle } from "luci
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { IssuanceForm } from "@/components/rwa/issuance-form";
+import {
+  IssuanceForm,
+  type UploadedLegalDocument,
+} from "@/components/rwa/issuance-form";
 import { useAssetsContext } from "@/contexts/assets-context";
 import { useWallet } from "@/hooks/use-wallet";
 import { formatCurrency } from "@/lib/utils";
@@ -32,7 +35,10 @@ export default function MyAssetsPage() {
     (a) => a.issuer.toLowerCase() === address.toLowerCase() || a.issuerAddress?.toLowerCase() === address.toLowerCase()
   );
 
-  const handleApply = async (data: any, uploadedFiles: File[]) => {
+  const handleApply = async (
+    data: any,
+    uploadedFiles: UploadedLegalDocument[],
+  ) => {
     try {
       // In a real app, you would upload files to IPFS/S3 here
       // and send the URLs to the backend.

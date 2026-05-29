@@ -11,13 +11,11 @@ import {
   TransactionMessage,
   TransactionInstruction,
   VersionedTransaction,
-  Ed25519Program,
   SystemProgram,
   SYSVAR_INSTRUCTIONS_PUBKEY,
   type AccountInfo,
   type AccountMeta,
 } from '@solana/web3.js';
-import nacl from 'tweetnacl';
 import {
   createInitializeMint2Instruction,
   createInitializePermanentDelegateInstruction,
@@ -56,6 +54,7 @@ import {
   deriveWalletIdentityPDA,
   buildCreateTokenMintInstruction,
   buildDeployTokenSuiteInstruction,
+  deriveComplianceModuleStatePDA,
   buildMintInstruction,
   fetchDeploymentAccount,
   fetchFactoryStateAccount,
@@ -66,10 +65,6 @@ import {
   encodeU64,
   buildInstructionData,
 } from './solana';
-import {
-  detectClaimSignerMode,
-  signClaimWithBackendProviderWallet,
-} from '@/lib/claim-signer';
 import type {
   TokenInfo,
   IsVerifiedResponse,
@@ -162,20 +157,6 @@ async function sha256(input: Uint8Array): Promise<Uint8Array> {
   const bytes = new Uint8Array(input);
   const digest = await crypto.subtle.digest('SHA-256', bytes.buffer);
   return new Uint8Array(digest);
-}
-
-function getStoredLocalClaimSigner(owner: PublicKey): Keypair | null {
-  const storageKey = `fracks:claim-signer:${owner.toBase58()}`;
-  const existing = typeof window !== 'undefined' ? window.localStorage.getItem(storageKey) : null;
-  if (existing) {
-    try {
-      const arr = JSON.parse(existing) as number[];
-      return Keypair.fromSecretKey(Uint8Array.from(arr));
-    } catch {
-      return null;
-    }
-  }
-  return null;
 }
 
 function normalizeCountry(country?: string | number | null): number {
@@ -331,6 +312,11 @@ export class TrexClient {
     if (fromArg) return fromArg;
     const fromConfig = toPublicKeyOrNull(TREX_CONTRACTS.token);
     if (fromConfig) return fromConfig;
+    const fromTokenMints = (process.env.NEXT_PUBLIC_TOKEN_MINTS || "")
+      .split(",")
+      .map((mint) => toPublicKeyOrNull(mint.trim()))
+      .find((mint): mint is PublicKey => mint !== null);
+    if (fromTokenMints) return fromTokenMints;
     const fromEnv = toPublicKeyOrNull(process.env.NEXT_PUBLIC_FRACKS_TOKEN_MINT || null);
     if (fromEnv) return fromEnv;
     return null;
@@ -434,6 +420,27 @@ export class TrexClient {
     } catch {
       return '0';
     }
+  }
+
+  async getToken2022Holdings(address: string): Promise<Array<{ mint: string; amount: string; decimals: number }>> {
+    const owner = toPublicKeyOrNull(address);
+    if (!owner) return [];
+
+    const accounts = await connection.getParsedTokenAccountsByOwner(owner, {
+      programId: TOKEN_2022_PROGRAM_ID,
+    });
+
+    return accounts.value
+      .map(({ account }) => {
+        const parsed = account.data.parsed?.info;
+        const tokenAmount = parsed?.tokenAmount;
+        return {
+          mint: String(parsed?.mint || ""),
+          amount: String(tokenAmount?.amount || "0"),
+          decimals: Number(tokenAmount?.decimals || 0),
+        };
+      })
+      .filter((holding) => holding.mint && BigInt(holding.amount) > 0n);
   }
 
   async getNativeBalance(address: string): Promise<string> {
@@ -1132,84 +1139,15 @@ export class TrexClient {
     const dataHash = new Uint8Array(32);
     dataHash.set(await sha256(new TextEncoder().encode(data || '')));
 
-    // Mirror fracks-fid::construct_claim_message exactly:
-    // hash(issuer_fid || holder_fid || topic_le || data_hash || expires_at_le)
-    const claimPayload = new Uint8Array(32 + 32 + 8 + 32 + 8);
-    claimPayload.set(issuerFid.toBytes(), 0);
-    claimPayload.set(targetFid.toBytes(), 32);
-    claimPayload.set(encodeU64(topic), 64);
-    claimPayload.set(dataHash, 72);
-    claimPayload.set(encodeI64(expiry), 104);
-    const message = await sha256(claimPayload);
-    let signature: Uint8Array;
-    let claimSignerPubkey = currentSignerKey;
-    const localSigner = getStoredLocalClaimSigner(this.wallet!.publicKey);
-    const signerMode = detectClaimSignerMode({
-      onChainSignerKey: currentSignerKey,
-      connectedWallet: this.wallet!.publicKey,
-      localSigner,
-    });
-
-    if (signerMode === 'wallet-backed') {
-      try {
-        if (!this.wallet!.signMessage) {
-          throw new Error('Wallet does not support signMessage.');
-        }
-        signature = await this.wallet!.signMessage(message);
-      } catch {
-        const backend = await signClaimWithBackendProviderWallet({
-          providerWallet: this.wallet!.publicKey.toBase58(),
-          providerFid: issuerFid.toBase58(),
-          targetFid: targetFid.toBase58(),
-          topic: topic.toString(),
-          expiresAt: expiry.toString(),
-          dataHash,
-          message,
-        });
-        if (backend.signerPublicKey !== currentSignerKey.toBase58()) {
-          throw new Error(
-            `Backend provider signer returned ${backend.signerPublicKey}, but the on-chain issuer FID signer key is ${currentSignerKey.toBase58()}. ` +
-            `For this deployed FID program, backend signing must use the same provider wallet keypair.`,
-          );
-        }
-        if (!Buffer.from(backend.message).equals(Buffer.from(message))) {
-          throw new Error(
-            'Backend provider signer returned a different claim message than the frontend constructed.',
-          );
-        }
-        signature = backend.signature;
-      }
-    } else if (signerMode === 'browser-local') {
-      if (!localSigner) {
-        throw new Error(
-          `This browser/profile does not hold the provider's current local claim signer. ` +
-          `On-chain issuer FID signer key: ${currentSignerKey.toBase58()}. ` +
-          `Local stored signer key: none. ` +
-          `Do not issue this claim from this browser. Use the original browser/profile that holds the current signer, or explicitly rotate the signer key in Identity Manager only if you intend to invalidate existing claims signed under the current key.`,
-        );
-      }
-      if (!currentSignerKey.equals(localSigner.publicKey)) {
-        throw new Error(
-          `This browser/profile does not hold the provider's current local claim signer. ` +
-          `On-chain issuer FID signer key: ${currentSignerKey.toBase58()}. ` +
-          `Local stored signer key: ${localSigner.publicKey.toBase58()}. ` +
-          `Do not issue this claim from this browser. Use the original browser/profile that holds the current signer, or explicitly rotate the signer key in Identity Manager only if you intend to invalidate existing claims signed under the current key.`,
-        );
-      }
-      signature = nacl.sign.detached(message, localSigner.secretKey);
-    } else {
+    if (!currentSignerKey.equals(this.wallet!.publicKey)) {
       throw new Error(
-        `Current provider signer is not available. On-chain issuer FID signer key: ${currentSignerKey.toBase58()}. ` +
+        `Provider FID signer key must equal the connected provider wallet for the updated Phantom-only claim flow. ` +
+          `On-chain signer key: ${currentSignerKey.toBase58()}. ` +
           `Connected wallet: ${this.wallet!.publicKey.toBase58()}. ` +
-          `For this deployed FID program, the signer key must remain aligned with the provider wallet keypair.`,
+          `Restore the provider FID signer key to the provider wallet in Identity Manager, then issue the claim again.`,
       );
     }
-
-    const edIx = Ed25519Program.createInstructionWithPublicKey({
-      publicKey: claimSignerPubkey.toBytes(),
-      message,
-      signature,
-    });
+    const signature = new Uint8Array(64);
 
     const [claimTopicIndex] = PublicKey.findProgramAddressSync(
       [
@@ -1241,7 +1179,7 @@ export class TrexClient {
       ),
     });
 
-    const tx = new Transaction().add(edIx, addClaimIx);
+    const tx = new Transaction().add(addClaimIx);
     tx.feePayer = this.wallet!.publicKey;
     const latest = await connection.getLatestBlockhash('confirmed');
     tx.recentBlockhash = latest.blockhash;
@@ -1898,11 +1836,6 @@ async createAssetToken(params: CreateAssetParams): Promise<{ assetId: number; to
   const saltBuf = Buffer.from(salt);
   const [deployment] = deriveDeploymentPDA(issuer, saltBuf);
   const [factoryStatePda] = deriveFactoryStatePDA();
-  const [offeringTerms] = PublicKey.findProgramAddressSync(
-    [Buffer.from('offering_terms'), tokenMint.publicKey.toBuffer()],
-    PROGRAM_IDS.factory,
-  );
-
   const trustedIssuers: Array<{ issuerFid: PublicKey; topics: number[]; label: string }> = [];
   const issuerWallets = params.claimDetails?.issuers || [];
   for (let idx = 0; idx < issuerWallets.length; idx += 1) {
@@ -1928,6 +1861,9 @@ async createAssetToken(params: CreateAssetParams): Promise<{ assetId: number; to
     .filter(Boolean)
     .map((v) => toPublicKeyOrNull(v))
     .filter((v): v is PublicKey => !!v);
+  const moduleStatePdas = moduleList.map((moduleProgram) =>
+    deriveComplianceModuleStatePDA(moduleProgram, tokenMint.publicKey)[0],
+  );
 
   const mintLen = getMintLen([ExtensionType.TransferHook, ExtensionType.PermanentDelegate]);
   const mintRent = await connection.getMinimumBalanceForRentExemption(mintLen, 'confirmed');
@@ -1973,8 +1909,8 @@ async createAssetToken(params: CreateAssetParams): Promise<{ assetId: number; to
     const [issuerEntry] = deriveIssuerEntryPDA(tirState, entry.issuerFid);
     return { pubkey: issuerEntry, isSigner: false, isWritable: true as const };
   });
-  const moduleMetas = moduleList.map((modulePk) => ({
-    pubkey: modulePk,
+  const moduleMetas = moduleStatePdas.map((moduleState) => ({
+    pubkey: moduleState,
     isSigner: false,
     isWritable: false as const,
   }));
@@ -1988,11 +1924,8 @@ async createAssetToken(params: CreateAssetParams): Promise<{ assetId: number; to
     isin: params.referenceId,
     claimTopics,
     trustedIssuers,
-    complianceModules: moduleList,
+    complianceModules: moduleStatePdas,
     sharedIrs,
-    pricePerToken: BigInt(Math.max(0, Math.round(Number(params.underlyingValue || 0) * 10 ** decimals))),
-    priceDecimals: decimals,
-    paymentMint: null,
     salt: saltBuf,
   };
 
@@ -2001,7 +1934,6 @@ async createAssetToken(params: CreateAssetParams): Promise<{ assetId: number; to
     { pubkey: factoryStatePda, isSigner: false, isWritable: true },
     { pubkey: issuer, isSigner: false, isWritable: false },
     { pubkey: deployment, isSigner: false, isWritable: true },
-    { pubkey: offeringTerms, isSigner: false, isWritable: true },
     { pubkey: tokenState, isSigner: false, isWritable: true },
     { pubkey: ownerState, isSigner: false, isWritable: true },
     { pubkey: irsState, isSigner: false, isWritable: true },
@@ -2009,9 +1941,10 @@ async createAssetToken(params: CreateAssetParams): Promise<{ assetId: number; to
     { pubkey: ctrState, isSigner: false, isWritable: true },
     { pubkey: irpState, isSigner: false, isWritable: true },
     { pubkey: complianceState, isSigner: false, isWritable: true },
-    { pubkey: tokenMint.publicKey, isSigner: false, isWritable: false },
+    { pubkey: tokenMint.publicKey, isSigner: false, isWritable: true },
     { pubkey: extraAccountMetas, isSigner: false, isWritable: true },
     { pubkey: PROGRAM_IDS.token, isSigner: false, isWritable: false },
+    { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: PROGRAM_IDS.tokenHook, isSigner: false, isWritable: false },
     { pubkey: PROGRAM_IDS.irp, isSigner: false, isWritable: false },
     { pubkey: PROGRAM_IDS.irs, isSigner: false, isWritable: false },

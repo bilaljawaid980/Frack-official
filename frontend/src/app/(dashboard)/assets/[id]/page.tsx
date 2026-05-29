@@ -1,8 +1,10 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { PublicKey } from "@solana/web3.js";
+import { useConnection } from "@solana/wallet-adapter-react";
 import {
   ArrowLeft,
   Building2,
@@ -26,10 +28,24 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useWallet } from "@/hooks/use-wallet";
 import { useAssetsContext } from "@/contexts/assets-context";
-import { RWAAsset } from "@/types/rwa";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, getCountryName } from "@/lib/utils";
+import {
+  getBlockedCountries,
+  getComplianceRuleRows,
+  getRequiredClaimTopics,
+  getTrustedIssuers,
+} from "@/lib/asset-compliance";
+
+function optionalNumber(value: unknown, fallback = 0) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function formatOptionalNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value.toLocaleString()
+    : "Pending review";
+}
 
 export default function AssetDetailPage({
   params,
@@ -38,16 +54,45 @@ export default function AssetDetailPage({
 }) {
   const resolvedParams = use(params);
   const router = useRouter();
-  const { address } = useWallet();
+  const { connection } = useConnection();
   const { assets, loading } = useAssetsContext();
-  const [asset, setAsset] = useState<RWAAsset | null>(null);
+  const [onchainTokenizedAmount, setOnchainTokenizedAmount] = useState<number | null>(null);
+
+  const asset = useMemo(
+    () => assets.find((a) => a.id === resolvedParams.id) || null,
+    [assets, resolvedParams.id],
+  );
 
   useEffect(() => {
-    if (assets.length > 0) {
-      const found = assets.find((a) => a.id === resolvedParams.id);
-      setAsset(found || null);
-    }
-  }, [assets, resolvedParams.id]);
+    let isActive = true;
+
+    const loadOnchainSupply = async () => {
+      if (!asset?.tokenContractAddress) {
+        setOnchainTokenizedAmount(null);
+        return;
+      }
+
+      try {
+        const mint = new PublicKey(asset.tokenContractAddress);
+        const supply = await connection.getTokenSupply(mint, "confirmed");
+        const decimals = supply.value.decimals;
+        const raw = Number(supply.value.amount);
+        const uiAmount = Number.isFinite(raw) ? raw / 10 ** decimals : 0;
+        if (isActive) {
+          setOnchainTokenizedAmount(uiAmount);
+        }
+      } catch {
+        if (isActive) {
+          setOnchainTokenizedAmount(null);
+        }
+      }
+    };
+
+    loadOnchainSupply();
+    return () => {
+      isActive = false;
+    };
+  }, [asset?.tokenContractAddress, connection]);
 
   if (loading) {
     return (
@@ -67,7 +112,7 @@ export default function AssetDetailPage({
           <Building2 className="h-16 w-16 text-muted-foreground mx-auto" />
           <h2 className="text-2xl font-bold">Asset Not Found</h2>
           <p className="text-muted-foreground">
-            The asset you're looking for doesn't exist or has been removed.
+            The asset you&apos;re looking for doesn&apos;t exist or has been removed.
           </p>
           <Button onClick={() => router.push("/assets")}>
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -88,6 +133,16 @@ export default function AssetDetailPage({
   } as const;
 
   const Icon = typeIcons[asset.assetType] || Building2;
+  const totalSupply = optionalNumber(asset.totalSupply);
+  const tokenizedAmount = optionalNumber(
+    onchainTokenizedAmount ?? asset.tokenizedAmount,
+  );
+  const tokenizedPercent =
+    totalSupply > 0 ? (tokenizedAmount / totalSupply) * 100 : 0;
+  const requiredClaimTopics = getRequiredClaimTopics(asset);
+  const trustedIssuers = getTrustedIssuers(asset);
+  const complianceRows = getComplianceRuleRows(asset);
+  const blockedCountries = getBlockedCountries(asset);
 
   return (
     <div className="p-8 glass-panel rounded-[22px]">
@@ -164,7 +219,7 @@ export default function AssetDetailPage({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {asset.totalSupply.toLocaleString()}
+              {formatOptionalNumber(asset.totalSupply)}
             </div>
             <p className="text-xs text-gray-500">{asset.symbol} tokens</p>
           </CardContent>
@@ -179,11 +234,10 @@ export default function AssetDetailPage({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {asset.tokenizedAmount.toLocaleString()}
+              {tokenizedAmount.toLocaleString()}
             </div>
             <p className="text-xs text-gray-500">
-              {((asset.tokenizedAmount / asset.totalSupply) * 100).toFixed(1)}%
-              tokenized
+              {tokenizedPercent.toFixed(1)}% tokenized
             </p>
           </CardContent>
         </Card>
@@ -278,63 +332,108 @@ export default function AssetDetailPage({
         </TabsContent>
 
         <TabsContent value="compliance" className="space-y-4">
-          <Card>
+          <Card className="bg-white rounded-2xl">
             <CardHeader>
               <CardTitle>Compliance Requirements</CardTitle>
               <CardDescription>
-                Investment requirements and restrictions for this asset
+                Rules indexed from this asset&apos;s deployed compliance metadata.
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Shield className="h-5 w-5 text-primary" />
-                    <div>
-                      <p className="font-medium">KYC Required</p>
-                      <p className="text-sm text-muted-foreground">
-                        Identity verification mandatory
-                      </p>
-                    </div>
-                  </div>
-                  <Badge variant={asset.kycRequired ? "default" : "secondary"}>
-                    {asset.kycRequired ? "Required" : "Not Required"}
-                  </Badge>
+            <CardContent className="space-y-5">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-xl border border-slate-200 p-4">
+                  <p className="text-sm font-semibold text-slate-900">Required Claims</p>
+                  <p className="mt-2 text-2xl font-bold text-[#172E7F]">
+                    {requiredClaimTopics.length || 0}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {requiredClaimTopics.length > 0
+                      ? requiredClaimTopics.map((topic) => `Topic ${topic}`).join(", ")
+                      : "No claim topics indexed"}
+                  </p>
                 </div>
+                <div className="rounded-xl border border-slate-200 p-4">
+                  <p className="text-sm font-semibold text-slate-900">Trusted Issuers</p>
+                  <p className="mt-2 text-2xl font-bold text-[#172E7F]">
+                    {trustedIssuers.length}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    KYC/AML providers allowed to issue claims
+                  </p>
+                </div>
+                <div className="rounded-xl border border-slate-200 p-4">
+                  <p className="text-sm font-semibold text-slate-900">Restricted Countries</p>
+                  <p className="mt-2 text-2xl font-bold text-[#172E7F]">
+                    {blockedCountries.length}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {blockedCountries.length > 0
+                      ? blockedCountries
+                          .map((code) => `${code} ${getCountryName(code)}`)
+                          .join(", ")
+                      : "No blocked countries indexed"}
+                  </p>
+                </div>
+              </div>
 
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Shield className="h-5 w-5 text-primary" />
-                    <div>
-                      <p className="font-medium">AML Checks</p>
-                      <p className="text-sm text-muted-foreground">
-                        Anti-money laundering compliance
-                      </p>
-                    </div>
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold">KYC / AML Providers</h3>
+                {trustedIssuers.length === 0 ? (
+                  <div className="rounded-xl border border-slate-200 p-4 text-sm text-slate-500">
+                    No trusted issuer metadata indexed for this asset.
                   </div>
-                  <Badge variant={asset.amlRequired ? "default" : "secondary"}>
-                    {asset.amlRequired ? "Required" : "Not Required"}
-                  </Badge>
-                </div>
+                ) : (
+                  trustedIssuers.map((issuer, index) => (
+                    <div
+                      key={`${issuer.walletAddress || issuer.issuerFid || index}`}
+                      className="grid gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-[1fr_auto]"
+                    >
+                      <div>
+                        <p className="font-semibold text-slate-900">
+                          {issuer.label || "Trusted Issuer"}
+                        </p>
+                        <p className="mt-1 break-all font-mono text-xs text-slate-500">
+                          {issuer.walletAddress || "Wallet not indexed"}
+                        </p>
+                        {issuer.issuerFid ? (
+                          <p className="mt-1 break-all font-mono text-xs text-slate-500">
+                            FID {issuer.issuerFid}
+                          </p>
+                        ) : null}
+                      </div>
+                      <Badge variant="secondary">
+                        {(issuer.topics || []).map((topic) => `Topic ${topic}`).join(", ") || "No topics"}
+                      </Badge>
+                    </div>
+                  ))
+                )}
+              </div>
 
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Users className="h-5 w-5 text-primary" />
-                    <div>
-                      <p className="font-medium">Accredited Investors Only</p>
-                      <p className="text-sm text-muted-foreground">
-                        Restricted to accredited investors
-                      </p>
-                    </div>
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold">Compliance Modules</h3>
+                {complianceRows.length === 0 ? (
+                  <div className="rounded-xl border border-slate-200 p-4 text-sm text-slate-500">
+                    No compliance module parameters indexed for this asset.
                   </div>
-                  <Badge
-                    variant={
-                      asset.accreditedInvestorsOnly ? "default" : "secondary"
-                    }
-                  >
-                    {asset.accreditedInvestorsOnly ? "Yes" : "No"}
-                  </Badge>
-                </div>
+                ) : (
+                  complianceRows.map((rule) => (
+                    <div
+                      key={rule.id}
+                      className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 p-4"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Shield className="h-5 w-5 text-[#172E7F]" />
+                        <div>
+                          <p className="font-semibold text-slate-900">{rule.label}</p>
+                          <p className="text-sm text-slate-500">{rule.description}</p>
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="max-w-sm break-all text-right">
+                        {rule.value}
+                      </Badge>
+                    </div>
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>

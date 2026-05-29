@@ -35,6 +35,7 @@ const menuItems = [
   {
     category: "Admin",
     items: [
+      { name: "KYC Provider", href: "/kyc-provider" },
       { name: "Asset Issuance", href: "/issuance" },
       { name: "Token Admin", href: "/token-admin" },
       { name: "Compliance", href: "/compliance" },

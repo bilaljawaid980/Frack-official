@@ -59,6 +59,8 @@ type TokenTransferRequest = {
   amount?: number;
   amountBaseUnits?: string;
   status: string;
+  kycProvider?: string | null;
+  amlProvider?: string | null;
   requiredClaimTopics: string[];
   createdAt: string;
   source?: "direct" | "listing";
@@ -77,6 +79,14 @@ function getReviewType(request: TokenPurchaseRequest): ReviewType {
 
 function getReviewTopic(request: TokenPurchaseRequest) {
   return request.status === "PENDING_AML" ? "2" : "1";
+}
+
+function getAssignedProviderWallet(
+  request: { status: string; kycProvider?: string | null; amlProvider?: string | null },
+) {
+  return request.status === "PENDING_AML"
+    ? request.amlProvider ?? null
+    : request.kycProvider ?? null;
 }
 
 export default function KycProviderPage() {
@@ -294,6 +304,17 @@ export default function KycProviderPage() {
     }
 
     const topic = request.status === "PENDING_AML" ? "2" : "1";
+    const expectedProvider = getAssignedProviderWallet(request);
+    if (
+      expectedProvider &&
+      address.toLowerCase() !== expectedProvider.toLowerCase()
+    ) {
+      toast.error(
+        `Connect the assigned provider wallet ${shortAddress(expectedProvider)} to review this request.`,
+      );
+      return;
+    }
+
     const nextStatus =
       topic === "1" && request.requiredClaimTopics.includes("2")
         ? "PENDING_AML"
@@ -429,6 +450,17 @@ export default function KycProviderPage() {
 
     const topic = getReviewTopic(request);
     const reviewType = getReviewType(request);
+    const expectedProvider = getAssignedProviderWallet(request);
+    if (
+      expectedProvider &&
+      address.toLowerCase() !== expectedProvider.toLowerCase()
+    ) {
+      toast.error(
+        `Connect the assigned ${reviewType} provider wallet ${shortAddress(expectedProvider)} to approve this request.`,
+      );
+      return;
+    }
+
     const nextStatus =
       topic === "1" && request.requiredClaimTopics.includes("2")
         ? "PENDING_AML"

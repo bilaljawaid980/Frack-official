@@ -123,12 +123,18 @@ function solscanTokenUrl(tokenContract: string) {
   return `https://solscan.io/token/${tokenContract}?cluster=testnet`;
 }
 
+function formatBaseUnits(rawAmount: string, decimals: number) {
+  const raw = Number(rawAmount);
+  if (!Number.isFinite(raw)) return 0;
+  return raw / 10 ** decimals;
+}
+
 export default function InvestorDashboardPage() {
   const params = useParams();
   const { address, trexClient, connectWallet, isConnected } = useWallet();
   const anchorProvider = useAnchorProvider();
   const routeWallet = typeof params?.id === "string" ? params.id : undefined;
-  const investorWallet = routeWallet || address || "";
+  const investorWallet = address || routeWallet || "";
 
   const { assets, loading: assetsLoading, loadAssets } = useAssetsContext();
   const [holdings, setHoldings] = useState<HoldingRow[]>([]);
@@ -197,13 +203,14 @@ export default function InvestorDashboardPage() {
 
       setLoadingHoldings(true);
       try {
-        const rows = await Promise.all(
+        const indexedRows = await Promise.all(
           assets.map(async (asset) => {
             const raw = await trexClient
               .getBalanceForToken(asset.tokenContractAddress, investorWallet)
               .catch(() => "0");
             const rawBalance = Number(raw) || 0;
-            const balance = rawBalance / 1_000_000;
+            const decimals = Number(asset.metadata?.decimals ?? 6);
+            const balance = formatBaseUnits(raw, decimals);
             const value = balance * (asset.tokenPrice || 0);
             return {
               assetId: asset.id,
@@ -217,9 +224,30 @@ export default function InvestorDashboardPage() {
             };
           }),
         );
+        const rowsByMint = new Map(indexedRows.map((row) => [row.tokenContract, row]));
+        const discoveredHoldings = await trexClient
+          .getToken2022Holdings(investorWallet)
+          .catch(() => []);
+
+        for (const holding of discoveredHoldings) {
+          if (rowsByMint.has(holding.mint)) continue;
+          const balance = formatBaseUnits(holding.amount, holding.decimals);
+          rowsByMint.set(holding.mint, {
+            assetId: holding.mint,
+            assetName: shortAddress(holding.mint),
+            symbol: "TOKEN",
+            tokenContract: holding.mint,
+            tokenPrice: 0,
+            rawBalance: Number(holding.amount) || 0,
+            balance,
+            value: 0,
+          });
+        }
 
         if (isActive) {
-          setHoldings(rows.filter((row) => row.rawBalance > 0));
+          setHoldings(
+            Array.from(rowsByMint.values()).filter((row) => row.rawBalance > 0),
+          );
         }
       } catch (error) {
         console.error("Failed to load holdings:", error);

@@ -2,8 +2,6 @@ use anchor_lang::prelude::*;
 
 pub mod utils;
 
-use utils::{construct_claim_message, verify_ed25519_instruction};
-
 declare_id!("EoENMXgL9GZBEVfjhn5KU4SkfjZeyoTEdd8NHAcMQsEB");
 
 const COUNTRY_MAX: u16 = 999;
@@ -92,30 +90,17 @@ pub mod fracks_fid {
     pub fn add_claim(
         ctx: Context<AddClaim>,
         topic: u64,
+        issuer_fid: Pubkey,
         data_hash: [u8; 32],
         signature: [u8; 64],
         expires_at: i64,
     ) -> Result<()> {
-        require!(ctx.accounts.issuer_fid.is_issuer, FracksFidError::InvalidIssuerFid);
-        require_keys_eq!(
-            ctx.accounts.issuer_owner.key(),
-            ctx.accounts.issuer_fid.owner,
-            FracksFidError::Unauthorized
-        );
-
-        let message = construct_claim_message(
-            &ctx.accounts.issuer_fid.key(),
-            &ctx.accounts.target_fid.key(),
-            topic,
-            &data_hash,
-            expires_at,
-        );
-        verify_ed25519_instruction(
-            &ctx.accounts.instructions_sysvar,
-            &ctx.accounts.issuer_fid.signer_key,
-            &message,
-            &signature,
-        )?;
+        let expected_issuer_fid = Pubkey::find_program_address(
+            &[b"fid", ctx.accounts.issuer_owner.key().as_ref()],
+            ctx.program_id,
+        )
+        .0;
+        require_keys_eq!(issuer_fid, expected_issuer_fid, FracksFidError::InvalidIssuerFid);
 
         let target_fid = &mut ctx.accounts.target_fid;
         let claim = &mut ctx.accounts.claim;
@@ -130,9 +115,11 @@ pub mod fracks_fid {
         claim.fid = target_fid.key();
         claim.claim_id = claim_id;
         claim.topic = topic;
-        claim.issuer_fid = ctx.accounts.issuer_fid.key();
+        claim.issuer_fid = issuer_fid;
         claim.data_hash = data_hash;
-        claim.signer_key = ctx.accounts.issuer_fid.signer_key;
+        // The provider wallet signs the transaction through the wallet adapter.
+        // Browser wallets like Phantom should not need an extra signMessage step.
+        claim.signer_key = ctx.accounts.issuer_owner.key();
         claim.signature = signature;
         claim.issued_at = Clock::get()?.unix_timestamp;
         claim.expires_at = expires_at;
@@ -140,7 +127,7 @@ pub mod fracks_fid {
         claim.bump = ctx.bumps.claim;
 
         claim_topic_index.target_fid = target_fid.key();
-        claim_topic_index.issuer_fid = ctx.accounts.issuer_fid.key();
+        claim_topic_index.issuer_fid = issuer_fid;
         claim_topic_index.topic = topic;
         claim_topic_index.active_claim = claim.key();
         claim_topic_index.active_claim_id = claim_id;
@@ -167,12 +154,7 @@ pub mod fracks_fid {
     pub fn revoke_claim(ctx: Context<RevokeClaim>) -> Result<()> {
         require_keys_eq!(
             ctx.accounts.issuer_owner.key(),
-            ctx.accounts.issuer_fid.owner,
-            FracksFidError::Unauthorized
-        );
-        require_keys_eq!(
-            ctx.accounts.claim.issuer_fid,
-            ctx.accounts.issuer_fid.key(),
+            ctx.accounts.claim.signer_key,
             FracksFidError::InvalidIssuerFid
         );
 
@@ -187,7 +169,7 @@ pub mod fracks_fid {
             fid: claim.fid,
             claim_id: claim.claim_id,
             topic: claim.topic,
-            by_issuer: ctx.accounts.issuer_fid.key(),
+            by_issuer: ctx.accounts.issuer_owner.key(),
             timestamp: Clock::get()?.unix_timestamp,
         });
 
@@ -266,15 +248,10 @@ pub struct UpdateFidProfile<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(topic: u64)]
+#[instruction(topic: u64, issuer_fid: Pubkey)]
 pub struct AddClaim<'info> {
     #[account(mut)]
     pub issuer_owner: Signer<'info>,
-    #[account(
-        seeds = [b"fid", issuer_fid.owner.as_ref()],
-        bump = issuer_fid.bump
-    )]
-    pub issuer_fid: Account<'info, FidAccount>,
     #[account(mut)]
     pub target_fid: Account<'info, FidAccount>,
     #[account(
@@ -289,7 +266,12 @@ pub struct AddClaim<'info> {
         init_if_needed,
         payer = issuer_owner,
         space = CLAIM_TOPIC_INDEX_SPACE,
-        seeds = [b"claim_topic_index", target_fid.key().as_ref(), issuer_fid.key().as_ref(), &topic.to_le_bytes()],
+        seeds = [
+            b"claim_topic_index",
+            target_fid.key().as_ref(),
+            issuer_fid.as_ref(),
+            &topic.to_le_bytes()
+        ],
         bump
     )]
     pub claim_topic_index: Account<'info, ClaimTopicIndex>,
@@ -303,11 +285,6 @@ pub struct RevokeClaim<'info> {
     #[account(mut)]
     pub issuer_owner: Signer<'info>,
     #[account(
-        seeds = [b"fid", issuer_fid.owner.as_ref()],
-        bump = issuer_fid.bump
-    )]
-    pub issuer_fid: Account<'info, FidAccount>,
-    #[account(
         mut,
         seeds = [b"claim", claim.fid.as_ref(), &claim.claim_id.to_le_bytes()],
         bump = claim.bump
@@ -315,10 +292,10 @@ pub struct RevokeClaim<'info> {
     pub claim: Account<'info, ClaimAccount>,
     #[account(
         mut,
-        seeds = [b"claim_topic_index", claim.fid.as_ref(), issuer_fid.key().as_ref(), &claim.topic.to_le_bytes()],
+        seeds = [b"claim_topic_index", claim.fid.as_ref(), claim.issuer_fid.as_ref(), &claim.topic.to_le_bytes()],
         bump = claim_topic_index.bump,
         constraint = claim_topic_index.target_fid == claim.fid @ FracksFidError::InvalidClaimTopicIndex,
-        constraint = claim_topic_index.issuer_fid == issuer_fid.key() @ FracksFidError::InvalidClaimTopicIndex,
+        constraint = claim_topic_index.issuer_fid == claim.issuer_fid @ FracksFidError::InvalidClaimTopicIndex,
         constraint = claim_topic_index.topic == claim.topic @ FracksFidError::InvalidClaimTopicIndex
     )]
     pub claim_topic_index: Account<'info, ClaimTopicIndex>,

@@ -1107,7 +1107,7 @@ use fracks_token_hook::program::FracksTokenHook;
 use fracks_token::cpi::accounts::InitializeToken;
 use fracks_token::program::FracksToken;
 
-declare_id!("3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M");
+declare_id!("6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe");
 
 const MAX_CLAIM_TOPICS: usize = 20;
 const MAX_TRUSTED_ISSUERS: usize = 16;
@@ -3641,9 +3641,9 @@ declare_id!("CQwdsA97gSiPMUzNXjS22AUu6HmvzMK2XZVqhswYEHLi");
 
 const FRACKS_TOKEN_PROGRAM_ID: Pubkey = pubkey!("Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn");
 const FRACKS_COMPLIANCE_PROGRAM_ID: Pubkey = pubkey!("9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d");
-const MOD_MAX_INVESTORS_PROGRAM_ID: Pubkey = pubkey!("FMSVzD74EbSiTj2XHi8xsqcp6pigdxHL7MGHxtRLYte7");
-const MOD_DAILY_LIMIT_PROGRAM_ID: Pubkey = pubkey!("EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9");
-const MOD_COUNTRY_CAP_PROGRAM_ID: Pubkey = pubkey!("HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW");
+const MOD_MAX_INVESTORS_PROGRAM_ID: Pubkey = pubkey!("4KVbq2esECUHZZdsBiDMM3mxYt8K7rNJUdotG6uZJfRQ");
+const MOD_DAILY_LIMIT_PROGRAM_ID: Pubkey = pubkey!("FYJ1K8cWUsDmbxNpgaBaEmm3RpvvfpxBBWg2MLm4x8Sq");
+const MOD_COUNTRY_CAP_PROGRAM_ID: Pubkey = pubkey!("Cv1HA7nHX8vxZvyCKXjk3gYPkqhfHFXxEsyxSXyRT3Ci");
 const TRANSFER_APPROVAL_SPACE: usize = 8 + (32 * 6) + (8 * 3) + (2 * 2) + 1 + 1 + 1 + 1;
 const BASE_EXTRA_METAS: usize = 5;
 const MAX_MODULE_EXTRA_METAS: usize = 4;
@@ -6817,7 +6817,7 @@ mod tests {
 ```
 use anchor_lang::prelude::*;
 
-declare_id!("HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW");
+declare_id!("Cv1HA7nHX8vxZvyCKXjk3gYPkqhfHFXxEsyxSXyRT3Ci");
 
 const MAX_COUNTRY_CAPS: usize = 32;
 const MODULE_SPACE: usize = 8 + 32 + 32 + 32 + 4 + (10 * MAX_COUNTRY_CAPS) + 1;
@@ -7123,7 +7123,7 @@ fn is_module_authority(module: &InvestorCountryCapModule, authority: Pubkey) -> 
 ```
 use anchor_lang::prelude::*;
 
-declare_id!("6JcKpK45GvhwaPRZoEfLFCNos2eCxCr3N3tGzzaC1ECQ");
+declare_id!("BCGKsDTyncA4EbHzxGVmEi3pheotJiaxCwYvHGxERiZ7");
 
 const MAX_COUNTRIES: usize = 32;
 const MODULE_SPACE: usize = 8 + 32 + 32 + 4 + (2 * MAX_COUNTRIES) + 1;
@@ -7214,7 +7214,7 @@ pub enum ModCountryRestrictError {
 ```
 use anchor_lang::prelude::*;
 
-declare_id!("EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9");
+declare_id!("FYJ1K8cWUsDmbxNpgaBaEmm3RpvvfpxBBWg2MLm4x8Sq");
 
 const MODULE_SPACE: usize = 8 + 32 + 32 + 32 + 8 + 1;
 const USAGE_SPACE: usize = 8 + 32 + 32 + 8 + 8 + 1;
@@ -7430,7 +7430,7 @@ fn is_module_authority(module: &DailyTransferLimitModule, authority: Pubkey) -> 
 ```
 use anchor_lang::prelude::*;
 
-declare_id!("GqsAXZggWEwVF9EFHHXiAKiKBkcrpzQp3SK7NPZWAfR5");
+declare_id!("6XqxWPwZQrfTo2ZJeT7wBhJaXd1eKjB2kx5ZrP1CLwa9");
 
 const MODULE_SPACE: usize = 8 + 32 + 32 + 8 + 1;
 
@@ -7508,7 +7508,7 @@ pub struct LockupModule {
 ```
 use anchor_lang::prelude::*;
 
-declare_id!("8r9euzP3dFg8d3sA6fh3Ur73cMbvEAbj5UbigHVEXimZ");
+declare_id!("9BjLakhcX1ms34VjRwUgMZQAgdbsMM8C1gSPqrJTyCpH");
 
 const MODULE_SPACE: usize = 8 + 32 + 32 + 8 + 1;
 
@@ -7590,7 +7590,7 @@ pub struct MaxBalanceModule {
 ```
 use anchor_lang::prelude::*;
 
-declare_id!("FMSVzD74EbSiTj2XHi8xsqcp6pigdxHL7MGHxtRLYte7");
+declare_id!("4KVbq2esECUHZZdsBiDMM3mxYt8K7rNJUdotG6uZJfRQ");
 
 const MODULE_SPACE: usize = 8 + 32 + 32 + 32 + 8 + 8 + 1;
 
@@ -7750,7 +7750,7 @@ fn is_module_authority(module: &MaxInvestorsModule, authority: Pubkey) -> bool {
 ```
 use anchor_lang::prelude::*;
 
-declare_id!("8EiBd6256x7CfFE1vqGLGBqviiCs64ubZzTVmDwjnQAw");
+declare_id!("Ee6RXC46Nb4Bo2BTQcXBHfuxLZdzbKtPmb3sGf2Egiqh");
 
 const MODULE_SPACE: usize = 8 + 32 + 32 + 8 + 1;
 
@@ -7828,7 +7828,7 @@ pub struct MaxTransferModule {
 ```
 use anchor_lang::prelude::*;
 
-declare_id!("EGJvV5cBN7et6Pdthyj6z7xuN8FN2u1wtGQsUjR69Rxb");
+declare_id!("EkgX6pGFCFT7FuNWuBAAMePy43iU9oETLDota4nTA3x8");
 
 const MODULE_SPACE: usize = 8 + 32 + 32 + 32 + 8 + 8 + 1;
 

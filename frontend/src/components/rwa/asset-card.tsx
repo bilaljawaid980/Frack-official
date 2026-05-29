@@ -25,6 +25,12 @@ interface AssetCardProps {
   className?: string;
 }
 
+function formatAssetValue(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? `$${value.toLocaleString()}`
+    : "Pending review";
+}
+
 export function AssetCard({ asset, className }: AssetCardProps) {
   const router = useRouter();
   const statusColors = {
@@ -95,7 +101,7 @@ export function AssetCard({ asset, className }: AssetCardProps) {
             <div className="p-3 rounded-xl bg-gradient-to-br from-slate-50 to-white border border-slate-200">
               <p className="text-xs text-slate-500 font-semibold mb-1">Value</p>
               <p className="font-bold text-slate-900 text-lg">
-                ${asset.underlyingValue.toLocaleString()}
+                {formatAssetValue(asset.underlyingValue)}
               </p>
             </div>
             <div className="p-3 rounded-xl bg-gradient-to-br from-slate-50 to-white border border-slate-200">

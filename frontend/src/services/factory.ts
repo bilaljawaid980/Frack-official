@@ -51,6 +51,14 @@ import type {
 import FactoryIdl from "@/idl/fracks_factory.json";
 import IrpIdl from "@/idl/fracks_irp.json";
 import IrsIdl from "@/idl/fracks_irs.json";
+import ModCountryCapIdl from "@/idl/mod_country_cap.json";
+import ModCountryRestrictIdl from "@/idl/mod_country_restrict.json";
+import ModDailyLimitIdl from "@/idl/mod_daily_limit.json";
+import ModLockupIdl from "@/idl/mod_lockup.json";
+import ModMaxBalanceIdl from "@/idl/mod_max_balance.json";
+import ModMaxInvestorsIdl from "@/idl/mod_max_investors.json";
+import ModMaxTransferIdl from "@/idl/mod_max_transfer.json";
+import ModSupplyCapIdl from "@/idl/mod_supply_cap.json";
 
 // IDL type alias
 type FactoryProgram = Program<Idl>;
@@ -313,8 +321,23 @@ export class FactoryService {
   }
 
   private getModuleProgram(moduleProgramId: PublicKey): Program<Idl> {
-    throw new Error(
-      `Compliance module initialization is unavailable because the frontend does not include an IDL for module program ${moduleProgramId.toBase58()}. Deploy without selected compliance modules or add the matching module IDL first.`,
+    const idlByProgramId: Record<string, Idl> = {
+      [MOD_MAX_INVESTORS.toBase58()]: ModMaxInvestorsIdl as unknown as Idl,
+      [MOD_COUNTRY_RESTRICT.toBase58()]: ModCountryRestrictIdl as unknown as Idl,
+      [MOD_MAX_BALANCE.toBase58()]: ModMaxBalanceIdl as unknown as Idl,
+      [MOD_MAX_TRANSFER.toBase58()]: ModMaxTransferIdl as unknown as Idl,
+      [MOD_LOCKUP.toBase58()]: ModLockupIdl as unknown as Idl,
+      [MOD_DAILY_LIMIT.toBase58()]: ModDailyLimitIdl as unknown as Idl,
+      [MOD_SUPPLY_CAP.toBase58()]: ModSupplyCapIdl as unknown as Idl,
+      [MOD_COUNTRY_CAP.toBase58()]: ModCountryCapIdl as unknown as Idl,
+    };
+    const idl = idlByProgramId[moduleProgramId.toBase58()];
+    if (!idl) {
+      throw new Error(`Unknown compliance module program: ${moduleProgramId.toBase58()}`);
+    }
+    return new Program(
+      { ...(idl as unknown as Record<string, unknown>), address: moduleProgramId.toBase58() } as Idl,
+      this.provider,
     );
   }
 
@@ -331,6 +354,8 @@ export class FactoryService {
     moduleProgramId: PublicKey,
     tokenMint: PublicKey,
     moduleState: PublicKey,
+    params: Record<string, unknown> = {},
+    decimals = 0,
   ): Promise<TransactionInstruction> {
     const admin = this.provider.wallet.publicKey;
     const program = this.getModuleProgram(moduleProgramId);
@@ -342,21 +367,56 @@ export class FactoryService {
 
     if (moduleProgramId.equals(MOD_COUNTRY_RESTRICT)) {
       return (program.methods as unknown as FactoryProgramMethods)
-        .initializeModule(tokenMint, [])
+        .initializeModule(tokenMint, this.parseCountryList(params.blocked_countries))
         .accounts(accounts)
         .instruction();
     }
 
     if (moduleProgramId.equals(MOD_LOCKUP)) {
       return (program.methods as unknown as FactoryProgramMethods)
-        .initializeModule(tokenMint, NO_LOCKUP)
+        .initializeModule(tokenMint, this.toBn(params.lockup_end, NO_LOCKUP))
         .accounts(accounts)
         .instruction();
     }
 
     if (moduleProgramId.equals(MOD_COUNTRY_CAP)) {
       return (program.methods as unknown as FactoryProgramMethods)
-        .initializeModule(tokenMint, [])
+        .initializeModule(tokenMint, this.parseCountryCaps(params.country_caps))
+        .accounts(accounts)
+        .instruction();
+    }
+
+    if (moduleProgramId.equals(MOD_DAILY_LIMIT)) {
+      return (program.methods as unknown as FactoryProgramMethods)
+        .initializeModule(tokenMint, this.toTokenAmountBn(params.daily_limit, decimals, PERMISSIVE_U64_LIMIT))
+        .accounts(accounts)
+        .instruction();
+    }
+
+    if (moduleProgramId.equals(MOD_MAX_BALANCE)) {
+      return (program.methods as unknown as FactoryProgramMethods)
+        .initializeModule(tokenMint, this.toTokenAmountBn(params.max_balance, decimals, PERMISSIVE_U64_LIMIT))
+        .accounts(accounts)
+        .instruction();
+    }
+
+    if (moduleProgramId.equals(MOD_MAX_TRANSFER)) {
+      return (program.methods as unknown as FactoryProgramMethods)
+        .initializeModule(tokenMint, this.toTokenAmountBn(params.max_amount, decimals, PERMISSIVE_U64_LIMIT))
+        .accounts(accounts)
+        .instruction();
+    }
+
+    if (moduleProgramId.equals(MOD_SUPPLY_CAP)) {
+      return (program.methods as unknown as FactoryProgramMethods)
+        .initializeModule(tokenMint, this.toTokenAmountBn(params.max_supply, decimals, PERMISSIVE_U64_LIMIT))
+        .accounts(accounts)
+        .instruction();
+    }
+
+    if (moduleProgramId.equals(MOD_MAX_INVESTORS)) {
+      return (program.methods as unknown as FactoryProgramMethods)
+        .initializeModule(tokenMint, this.toBn(params.max_investors, PERMISSIVE_U64_LIMIT))
         .accounts(accounts)
         .instruction();
     }
@@ -387,11 +447,13 @@ export class FactoryService {
       .instruction();
   }
 
-  private async ensureComplianceModulesInitialized(
+  private async buildComplianceModuleInitializationTransactions(
     moduleProgramIds: string[],
     tokenMint: PublicKey,
     complianceState: PublicKey,
-  ): Promise<void> {
+    moduleParams: Record<string, Record<string, unknown>> = {},
+    decimals = 0,
+  ): Promise<Array<{ transaction: Transaction }>> {
     const instructions: TransactionInstruction[] = [];
 
     for (const moduleProgramIdStr of moduleProgramIds) {
@@ -408,6 +470,8 @@ export class FactoryService {
             moduleProgramId,
             tokenMint,
             moduleState,
+            moduleParams[moduleProgramId.toBase58()] ?? {},
+            decimals,
           ),
         );
       }
@@ -423,9 +487,28 @@ export class FactoryService {
       }
     }
 
-    if (instructions.length > 0) {
-      await this.sendInstructionsInBatches(instructions);
+    const transactions: Array<{ transaction: Transaction }> = [];
+    let currentBatch: TransactionInstruction[] = [];
+
+    for (const instruction of instructions) {
+      const candidate = [...currentBatch, instruction];
+      if (candidate.length > 1 && !this.transactionFitsLegacyLimit(candidate)) {
+        transactions.push({
+          transaction: new Transaction().add(...currentBatch),
+        });
+        currentBatch = [instruction];
+      } else {
+        currentBatch = candidate;
+      }
     }
+
+    if (currentBatch.length > 0) {
+      transactions.push({
+        transaction: new Transaction().add(...currentBatch),
+      });
+    }
+
+    return transactions;
   }
 
   /**
@@ -608,16 +691,23 @@ export class FactoryService {
         ]),
       ).map((address) => new PublicKey(address));
 
-      const extendLutIx = AddressLookupTableProgram.extendLookupTable({
-        payer: admin,
-        authority: admin,
-        lookupTable: lutAddress,
-        addresses: lutAddresses,
-      });
+      const setupTransactions: Array<{
+        transaction: Transaction;
+        signers?: TransactionSigner[];
+      }> = [{ transaction: new Transaction().add(createLutIx) }];
 
-      await this.sendTransactionConfirmed(
-        new Transaction().add(createLutIx, extendLutIx),
-      );
+      const lutAddressChunks = this.chunkPublicKeys(lutAddresses, 20);
+      for (const addresses of lutAddressChunks) {
+        const extendLutIx = AddressLookupTableProgram.extendLookupTable({
+          payer: admin,
+          authority: admin,
+          lookupTable: lutAddress,
+          addresses,
+        });
+        setupTransactions.push({
+          transaction: new Transaction().add(extendLutIx),
+        });
+      }
 
       // ── Step 2: Create the Token-2022 mint if it does not already exist ─────────
       if (mintKeypair) {
@@ -707,18 +797,27 @@ export class FactoryService {
               SPL_TOKEN_2022,
             ),
           );
-          await this.sendTransactionConfirmed(mintTx, [mintKeypair]);
+          setupTransactions.push({
+            transaction: mintTx,
+            signers: [mintKeypair],
+          });
         }
       }
 
       // The currently deployed factory binds module state PDAs, but it does not
       // create them. Initialize them here so newly deployed tokens transfer
       // correctly instead of failing later inside the Token-2022 hook.
-      await this.ensureComplianceModulesInitialized(
-        args.complianceModules,
-        tokenMint,
-        complianceState,
+      setupTransactions.push(
+        ...(await this.buildComplianceModuleInitializationTransactions(
+          args.complianceModules,
+          tokenMint,
+          complianceState,
+          args.complianceModuleParams,
+          args.decimals,
+        )),
       );
+
+      await this.sendTransactionsConfirmedBatch(setupTransactions);
 
       // Wait for the ALT to be fully active and indexed across RPC nodes
       await new Promise((r) => setTimeout(r, 2000));
@@ -1231,6 +1330,61 @@ export class FactoryService {
     }
   }
 
+  private toBn(value: unknown, fallback: BN): BN {
+    if (value === undefined || value === null || value === "") {
+      return fallback;
+    }
+    return new BN(String(value));
+  }
+
+  private toTokenAmountBn(value: unknown, decimals: number, fallback: BN): BN {
+    if (value === undefined || value === null || value === "") {
+      return fallback;
+    }
+
+    const [wholeRaw, fractionRaw = ""] = String(value).trim().split(".");
+    const whole = wholeRaw || "0";
+    const fraction = fractionRaw.padEnd(decimals, "0").slice(0, decimals);
+    const scale = new BN(10).pow(new BN(decimals));
+    return new BN(whole).mul(scale).add(new BN(fraction || "0"));
+  }
+
+  private parseCountryList(value: unknown): number[] {
+    if (Array.isArray(value)) {
+      return value.map((item) => Number(item)).filter((item) => Number.isFinite(item));
+    }
+    return String(value ?? "")
+      .split(",")
+      .map((item) => Number(item.trim()))
+      .filter((item) => Number.isFinite(item));
+  }
+
+  private parseCountryCaps(value: unknown): Array<{ country: number; cap: BN }> {
+    if (Array.isArray(value)) {
+      return value
+        .map((entry) => {
+          const record = entry as { country?: unknown; cap?: unknown };
+          return { country: Number(record.country), cap: this.toBn(record.cap, new BN(0)) };
+        })
+        .filter((entry) => Number.isFinite(entry.country));
+    }
+    return String(value ?? "")
+      .split(",")
+      .map((entry) => {
+        const [country, cap] = entry.split(":").map((item) => item.trim());
+        return { country: Number(country), cap: this.toBn(cap, new BN(0)) };
+      })
+      .filter((entry) => Number.isFinite(entry.country));
+  }
+
+  private chunkPublicKeys(keys: PublicKey[], size: number): PublicKey[][] {
+    const chunks: PublicKey[][] = [];
+    for (let index = 0; index < keys.length; index += size) {
+      chunks.push(keys.slice(index, index + size));
+    }
+    return chunks;
+  }
+
   private getHookModuleExtraMetaCount(moduleProgramId: PublicKey): number {
     if (moduleProgramId.equals(MOD_MAX_INVESTORS)) {
       return 2;
@@ -1385,7 +1539,15 @@ export class FactoryService {
       transaction.partialSign(...signers);
     }
 
-    const signed = await this.provider.wallet.signTransaction(transaction);
+    let signed: Transaction;
+    try {
+      signed = await this.provider.wallet.signTransaction(transaction);
+    } catch (err) {
+      const message = formatTransactionError(err);
+      throw new Error(
+        `Wallet could not sign the deployment transaction. ${message}. If this happened while deploying with compliance modules, reconnect Phantom and retry; the frontend now sends lookup-table setup in smaller transactions.`,
+      );
+    }
     let signature: string;
     try {
       signature = await this.provider.connection.sendRawTransaction(
@@ -1402,6 +1564,74 @@ export class FactoryService {
       lastValidBlockHeight,
     );
     return signature;
+  }
+
+  private async sendTransactionsConfirmedBatch(
+    items: Array<{ transaction: Transaction; signers?: TransactionSigner[] }>,
+  ): Promise<string[]> {
+    if (items.length === 0) return [];
+    if (items.length === 1) {
+      return [
+        await this.sendTransactionConfirmed(
+          items[0].transaction,
+          items[0].signers ?? [],
+        ),
+      ];
+    }
+
+    const { blockhash, lastValidBlockHeight } =
+      await this.provider.connection.getLatestBlockhash("confirmed");
+    const transactions = items.map(({ transaction, signers }) => {
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = this.provider.wallet.publicKey;
+      if (signers?.length) {
+        transaction.partialSign(...signers);
+      }
+      return transaction;
+    });
+
+    const walletWithBatchSigner = this.provider.wallet as typeof this.provider.wallet & {
+      signAllTransactions?: (transactions: Transaction[]) => Promise<Transaction[]>;
+    };
+
+    let signedTransactions: Transaction[];
+    if (walletWithBatchSigner.signAllTransactions) {
+      try {
+        signedTransactions = await walletWithBatchSigner.signAllTransactions(transactions);
+      } catch (err) {
+        const message = formatTransactionError(err);
+        throw new Error(
+          `Wallet could not batch-sign the deployment setup transactions. ${message}. Reconnect Phantom and retry.`,
+        );
+      }
+    } else {
+      signedTransactions = [];
+      for (const transaction of transactions) {
+        signedTransactions.push(await this.provider.wallet.signTransaction(transaction));
+      }
+    }
+
+    const signatures: string[] = [];
+    for (const signedTransaction of signedTransactions) {
+      let signature: string;
+      try {
+        signature = await this.provider.connection.sendRawTransaction(
+          signedTransaction.serialize(),
+          { skipPreflight: false, preflightCommitment: "confirmed", maxRetries: 3 },
+        );
+      } catch (err) {
+        throw await this.buildDetailedDeploymentError(err);
+      }
+
+      await this.confirmSubmittedTransaction(
+        signature,
+        blockhash,
+        lastValidBlockHeight,
+      );
+      signatures.push(signature);
+    }
+
+    return signatures;
   }
 
   private async sendInstructionsInBatches(

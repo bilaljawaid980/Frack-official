@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("FMSVzD74EbSiTj2XHi8xsqcp6pigdxHL7MGHxtRLYte7");
+declare_id!("4KVbq2esECUHZZdsBiDMM3mxYt8K7rNJUdotG6uZJfRQ");
 
 const MODULE_SPACE: usize = 8 + 32 + 32 + 32 + 8 + 8 + 1;
 

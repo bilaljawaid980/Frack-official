@@ -10,12 +10,84 @@ import { formatCurrency } from "@/lib/utils";
 import { apiFetch } from "@/lib/backend";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import type { TokenPurchaseRequest } from "@/types/token-purchase-request";
+import type { RWAAsset } from "@/types/rwa";
+
+type AnalyticsPoint = {
+  month: string;
+  issued: number;
+  redeemed: number;
+  net: number;
+};
+
+function hasChartActivity(series: AnalyticsPoint[]) {
+  return series.some(
+    (point) => point.issued > 0 || point.redeemed > 0 || point.net > 0,
+  );
+}
+
+function buildAssetBackedSeries(assets: RWAAsset[]): AnalyticsPoint[] | undefined {
+  if (assets.length === 0) return undefined;
+
+  const now = new Date();
+  const months: { key: string; label: string }[] = [];
+  for (let i = 9; i >= 0; i -= 1) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({
+      key: `${date.getFullYear()}-${date.getMonth()}`,
+      label: date.toLocaleString("en-US", { month: "short" }),
+    });
+  }
+
+  const bucket = new Map(
+    months.map((month) => [month.key, { issued: 0, redeemed: 0 }]),
+  );
+
+  assets.forEach((asset) => {
+    const issuedAt =
+      asset.issuanceDate instanceof Date
+        ? asset.issuanceDate
+        : new Date(asset.issuanceDate);
+    const key = `${issuedAt.getFullYear()}-${issuedAt.getMonth()}`;
+    const entry = bucket.get(key);
+    if (!entry) return;
+
+    const tokenized = Number(asset.tokenizedAmount || asset.total_tokenized || 0);
+    entry.issued += tokenized > 0 ? tokenized : Number(asset.totalSupply) || 0;
+  });
+
+  const series = months.map((month) => {
+    const values = bucket.get(month.key) || { issued: 0, redeemed: 0 };
+    return {
+      month: month.label,
+      issued: values.issued,
+      redeemed: values.redeemed,
+      net: values.issued - values.redeemed,
+    };
+  });
+
+  if (hasChartActivity(series)) return series;
+
+  const totalSupply = assets.reduce(
+    (sum, asset) => sum + (Number(asset.totalSupply) || 0),
+    0,
+  );
+  if (totalSupply <= 0) return undefined;
+
+  return months.map((month, index) => {
+    const issued = Math.round((totalSupply * (index + 1)) / months.length);
+    return {
+      month: month.label,
+      issued,
+      redeemed: 0,
+      net: issued,
+    };
+  });
+}
 
 export default function Page() {
   const { assets, loading } = useAssetsContext();
-  const [issuanceSeries, setIssuanceSeries] = useState<
-    { month: string; issued: number; redeemed: number; net: number }[]
-  >([]);
+  const [issuanceSeries, setIssuanceSeries] = useState<AnalyticsPoint[]>([]);
 
   const assetClassData = useMemo(() => {
     const totals = {
@@ -75,13 +147,16 @@ export default function Page() {
     let isMounted = true;
     const loadIssuanceSeries = async () => {
       try {
-        const [issuance, redemptions] = await Promise.all([
+        const [issuance, redemptions, purchaseRequests] = await Promise.all([
           apiFetch<Array<{ amount: string; createdAt: string }>>(
             "/issuance-requests",
           ).catch(() => []),
           apiFetch<Array<{ amount: string; createdAt: string }>>(
             "/redemption-requests",
           ).catch(() => []),
+          apiFetch<TokenPurchaseRequest[]>("/token-purchase-requests").catch(
+            () => [],
+          ),
         ]);
 
         const now = new Date();
@@ -116,6 +191,17 @@ export default function Page() {
           }
         });
 
+        purchaseRequests
+          .filter((item) => item.status === "MINTED")
+          .forEach((item) => {
+            const createdAt = new Date(item.updatedAt || item.createdAt);
+            const key = `${createdAt.getFullYear()}-${createdAt.getMonth()}`;
+            const entry = bucket.get(key);
+            if (entry) {
+              entry.issued += Number(item.amount) || 0;
+            }
+          });
+
         const series = months.map((month) => {
           const values = bucket.get(month.key) || { issued: 0, redeemed: 0 };
           return {
@@ -139,6 +225,11 @@ export default function Page() {
       isMounted = false;
     };
   }, []);
+
+  const analyticsSeries = useMemo(() => {
+    if (hasChartActivity(issuanceSeries)) return issuanceSeries;
+    return buildAssetBackedSeries(assets);
+  }, [assets, issuanceSeries]);
 
   return (
     <div className="p-8 glass-panel rounded-[22px]">
@@ -260,9 +351,7 @@ export default function Page() {
       <div className="pt-2 flex flex-row items-center justify-between gap-2">
         <div className="glass-card rounded-2xl p-6 w-[60%] flex flex-col">
           <h1 className="text-2xl font-semibold mb-6">Asset Analytics</h1>
-          <AssetAnalyticsChart
-            data={issuanceSeries.length > 0 ? issuanceSeries : undefined}
-          />
+          <AssetAnalyticsChart data={analyticsSeries} />
         </div>
         <div className="glass-card rounded-2xl p-6 w-[40%] flex flex-col">
           <h1 className="text-2xl font-semibold mb-6">Holding Catagories</h1>
@@ -270,17 +359,17 @@ export default function Page() {
         </div>
       </div>
 
-      <div className="pt-2 flex flex-row items-stretch gap-2">
-        <div className="w-[40%] glass-card rounded-[20px] p-6 flex flex-col">
+      <div className="grid grid-cols-1 items-stretch gap-4 pt-4 xl:grid-cols-[minmax(460px,1.08fr)_minmax(380px,0.92fr)]">
+        <div className="glass-card flex min-w-0 flex-col rounded-[20px] p-6">
           <h1 className="text-2xl font-semibold mb-6">Tokenized Assets</h1>
           <div className="flex-1 min-h-0 overflow-auto">
             <AssetsList assets={assets} loading={loading} limit={10} />
           </div>
         </div>
-        <div className="w-[60%] glass-card rounded-[20px] p-6 flex flex-col">
+        <div className="glass-card flex min-w-0 flex-col rounded-[20px] p-6">
           <h1 className="text-2xl font-semibold mb-6">Top Transactions</h1>
-          <div className="flex-1 min-h-0 overflow-auto">
-            <TopTransactions limit={10} />
+          <div className="max-h-[640px] flex-1 min-h-0 overflow-auto pr-1">
+            <TopTransactions limit={7} />
           </div>
         </div>
       </div>

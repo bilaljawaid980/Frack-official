@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{program::invoke, system_instruction};
 use anchor_spl::token_2022::spl_token_2022;
 use anchor_spl::token_2022::Token2022;
+use anchor_spl::token_2022::spl_token_2022::extension::metadata_pointer::instruction as metadata_pointer_instruction;
 use anchor_spl::token_2022_extensions::permanent_delegate::{
     permanent_delegate_initialize, PermanentDelegateInitialize,
 };
@@ -15,15 +16,15 @@ use fracks_compliance::cpi::accounts::{
 use fracks_compliance::program::FracksCompliance;
 use fracks_ctr::cpi::accounts::{InitializeCtr, MutateCtr as CtrOwnerAccounts};
 use fracks_ctr::program::FracksCtr;
-use fracks_irp::cpi::accounts::{InitializeRegistry, UpdateRegistryOwner};
+use fracks_irp::cpi::accounts::InitializeRegistry;
 use fracks_irp::program::FracksIrp;
 use fracks_irs::cpi::accounts::{InitializeIrs, UpdateIrsOwnerState as IrsOwnerAccounts};
 use fracks_irs::program::FracksIrs;
-use fracks_tir::cpi::accounts::{AddTrustedIssuer, InitializeTir, TransferTirOwnership};
+use fracks_tir::cpi::accounts::{AddTrustedIssuer, InitializeTir};
 use fracks_tir::program::FracksTir;
 use fracks_token_hook::cpi::accounts::InitializeExtraAccountMetas;
 use fracks_token_hook::program::FracksTokenHook;
-use fracks_token::cpi::accounts::{InitializeToken, UpdateOwnerState};
+use fracks_token::cpi::accounts::{InitializeMintMetadata, InitializeToken, UpdateOwnerState};
 use fracks_token::program::FracksToken;
 
 declare_id!("6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe");
@@ -33,9 +34,11 @@ const MAX_TRUSTED_ISSUERS: usize = 16;
 const MAX_COMPLIANCE_MODULES: usize = 15;
 const FACTORY_STATE_SPACE: usize = 8 + (32 * 8) + 8 + 1;
 const TOKEN_DEPLOYMENT_SPACE: usize = 8 + 8 + 32 + 32 + (32 * 8) + 8 + 1;
-const TOKEN_2022_MINT_EXTENSIONS: [spl_token_2022::extension::ExtensionType; 2] = [
+const MAX_METADATA_SPACE: usize = 512;
+const TOKEN_2022_MINT_EXTENSIONS: [spl_token_2022::extension::ExtensionType; 3] = [
     spl_token_2022::extension::ExtensionType::TransferHook,
     spl_token_2022::extension::ExtensionType::PermanentDelegate,
+    spl_token_2022::extension::ExtensionType::MetadataPointer,
 ];
 
 #[program]
@@ -228,6 +231,22 @@ pub mod fracks_factory {
             ctx.accounts.compliance_state.key(),
         )?;
 
+        fracks_token::cpi::initialize_mint_metadata(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                InitializeMintMetadata {
+                    owner: ctx.accounts.admin.to_account_info(),
+                    token_state: ctx.accounts.token_state.to_account_info(),
+                    owner_state: ctx.accounts.owner_state.to_account_info(),
+                    token_mint_account: ctx.accounts.token_mint_account.to_account_info(),
+                    token_2022_program: ctx.accounts.token_2022_program.to_account_info(),
+                },
+            ),
+            args.token_name.clone(),
+            args.token_symbol.clone(),
+            format!("https://fracks.app/token/{}", args.token_mint),
+        )?;
+
         fracks_ctr::cpi::initialize_ctr(
             CpiContext::new(
                 ctx.accounts.ctr_program.to_account_info(),
@@ -402,52 +421,12 @@ pub mod fracks_factory {
             ),
             args.issuer,
         )?;
-        fracks_ctr::cpi::transfer_ownership(
-            CpiContext::new(
-                ctx.accounts.ctr_program.to_account_info(),
-                CtrOwnerAccounts {
-                    owner: ctx.accounts.admin.to_account_info(),
-                    ctr_state: ctx.accounts.ctr_state.to_account_info(),
-                },
-            ),
-            args.issuer,
-        )?;
-        fracks_tir::cpi::transfer_ownership(
-            CpiContext::new(
-                ctx.accounts.tir_program.to_account_info(),
-                TransferTirOwnership {
-                    owner: ctx.accounts.admin.to_account_info(),
-                    tir_state: ctx.accounts.tir_state.to_account_info(),
-                },
-            ),
-            args.issuer,
-        )?;
-        fracks_irp::cpi::transfer_registry_ownership(
-            CpiContext::new(
-                ctx.accounts.irp_program.to_account_info(),
-                UpdateRegistryOwner {
-                    owner: ctx.accounts.admin.to_account_info(),
-                    registry_state: ctx.accounts.irp_state.to_account_info(),
-                },
-            ),
-            args.issuer,
-        )?;
         fracks_irs::cpi::transfer_ownership(
             CpiContext::new(
                 ctx.accounts.irs_program.to_account_info(),
                 IrsOwnerAccounts {
                     owner: ctx.accounts.admin.to_account_info(),
                     irs_state: ctx.accounts.irs_state.to_account_info(),
-                },
-            ),
-            args.issuer,
-        )?;
-        fracks_compliance::cpi::transfer_ownership(
-            CpiContext::new(
-                ctx.accounts.compliance_program.to_account_info(),
-                ComplianceOwnerAccounts {
-                    owner: ctx.accounts.admin.to_account_info(),
-                    compliance_state: ctx.accounts.compliance_state.to_account_info(),
                 },
             ),
             args.issuer,
@@ -584,11 +563,13 @@ pub struct DeployTokenSuite<'info> {
     #[account(mut)]
     pub compliance_state: UncheckedAccount<'info>,
     /// CHECK: Token-2022 mint validated by hook extra-account-metas initialization.
+    #[account(mut)]
     pub token_mint_account: UncheckedAccount<'info>,
     #[account(mut)]
     /// CHECK: Hook-owned Token-2022 extra-account-metas PDA initialized during suite deployment.
     pub extra_account_metas: UncheckedAccount<'info>,
     pub token_program: Program<'info, FracksToken>,
+    pub token_2022_program: Program<'info, Token2022>,
     pub hook_program: Program<'info, FracksTokenHook>,
     pub irp_program: Program<'info, FracksIrp>,
     pub irs_program: Program<'info, FracksIrs>,
@@ -733,7 +714,10 @@ fn initialize_token_2022_mint<'info>(
             spl_token_2022::state::Mint,
         >(&TOKEN_2022_MINT_EXTENSIONS)
         .map_err(|_| error!(FracksFactoryError::InvalidTokenMint))?;
-    let rent_lamports = Rent::get()?.minimum_balance(mint_space);
+    let metadata_rent_space = mint_space
+        .checked_add(MAX_METADATA_SPACE)
+        .ok_or_else(|| error!(FracksFactoryError::ArithmeticOverflow))?;
+    let rent_lamports = Rent::get()?.minimum_balance(metadata_rent_space);
     invoke(
         &system_instruction::create_account(
             &payer.key(),
@@ -768,6 +752,16 @@ fn initialize_token_2022_mint<'info>(
             },
         ),
         &token_state,
+    )?;
+    invoke(
+        &metadata_pointer_instruction::initialize(
+            &token_2022_program.key(),
+            &token_mint_account.key(),
+            Some(token_state),
+            Some(token_mint_account.key()),
+        )
+        .map_err(|_| error!(FracksFactoryError::InvalidTokenMint))?,
+        &[token_mint_account.clone()],
     )?;
     anchor_spl::token_2022::initialize_mint2(
         CpiContext::new(

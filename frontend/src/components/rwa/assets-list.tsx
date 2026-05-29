@@ -47,41 +47,45 @@ export function AssetsList({ assets, loading, limit = 5 }: AssetsListProps) {
   return (
     <div className="space-y-3">
       {displayAssets.map((asset, index) => (
-        <Link key={getAssetKey(asset, index)} href={`/assets/${asset.id}`} className="block">
+        <Link
+          key={getAssetKey(asset, index)}
+          href={`/assets/${asset.id}`}
+          className="block min-w-0"
+        >
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: index * 0.1 }}
-            className="flex items-center justify-between p-4 rounded-lg border hover:bg-gray-50 transition-colors cursor-pointer"
+            className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-lg border p-4 transition-colors hover:bg-gray-50"
           >
-            <div className="flex items-center gap-3 flex-1">
-              <div className="p-2 rounded-lg bg-blue-50">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="shrink-0 rounded-lg bg-blue-50 p-2">
                 <Building2 className="h-5 w-5 text-blue-600" />
               </div>
               <div className="flex-1 min-w-0">
                 <h4 className="font-medium truncate">{asset.name}</h4>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-xs text-muted-foreground flex items-center gap-1">
-                    <MapPin className="h-3 w-3" />
-                    {asset.location}
+                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                    <MapPin className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{asset.location}</span>
                   </span>
-                  <Badge variant="outline" className="text-xs">
+                  <Badge variant="outline" className="max-w-28 truncate text-xs">
                     {asset.assetType}
                   </Badge>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-6">
-              <div className="text-right">
+            <div className="flex shrink-0 items-center gap-4">
+              <div className="w-24 text-right">
                 <p className="font-semibold text-sm">
                   {formatCurrency(asset.underlyingValue)}
                 </p>
                 <p className="text-xs text-muted-foreground">Value</p>
               </div>
 
-              <div className="text-right">
-                <div className="flex items-center gap-1">
+              <div className="w-20 text-right">
+                <div className="flex items-center justify-end gap-1">
                   <p className="font-semibold text-sm text-green-600">
                     {(
                       (asset.tokenizedAmount / asset.totalSupply) *

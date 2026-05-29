@@ -1,4 +1,4 @@
-import { Connection, PublicKey, Transaction, TransactionInstruction, VersionedTransaction } from "@solana/web3.js";
+import { Connection, PublicKey, SystemProgram, Transaction, TransactionInstruction, VersionedTransaction } from "@solana/web3.js";
 import axios from "axios";
 import {
   createAssociatedTokenAccountIdempotentInstruction,
@@ -15,7 +15,7 @@ import { TokenService } from "../services/token";
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:4000";
 const CLAIM_ACCOUNT_SIZE = 230;
 const MINT_DISCRIMINATOR = Buffer.from([51, 57, 225, 47, 182, 146, 137, 166]);
-const MOD_COUNTRY_CAP = new PublicKey("HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW");
+const MOD_COUNTRY_CAP = new PublicKey("Cv1HA7nHX8vxZvyCKXjk3gYPkqhfHFXxEsyxSXyRT3Ci");
 
 type CliArgs = {
   token?: string;
@@ -193,6 +193,11 @@ async function main() {
   const [ownerState] = tokenService.findOwnerStatePda(mint, factoryState.tokenProgramId);
   const [agentRole] = tokenService.findAgentRolePda(mint, issuer, factoryState.tokenProgramId);
   const [toFrozen] = tokenService.findFrozenWalletPda(mint, investor, factoryState.tokenProgramId);
+  const toFrozenInfo = await connection.getAccountInfo(toFrozen, "confirmed");
+  const toFrozenAccount =
+    toFrozenInfo && toFrozenInfo.owner.equals(factoryState.tokenProgramId) && toFrozenInfo.data.length > 0
+      ? toFrozen
+      : SystemProgram.programId;
 
   const irpState = sharedPreflight.registry.irpState;
   const irp = {
@@ -347,7 +352,7 @@ async function main() {
     { pubkey: new PublicKey(tokenStateData.compliance), isSigner: false, isWritable: false },
     { pubkey: factoryState.complianceProgramId, isSigner: false, isWritable: false },
     { pubkey: walletIdentity, isSigner: false, isWritable: false },
-    { pubkey: toFrozen, isSigner: false, isWritable: false },
+    { pubkey: toFrozenAccount, isSigner: false, isWritable: false },
     { pubkey: mint, isSigner: false, isWritable: true },
     { pubkey: destinationTokenAccount, isSigner: false, isWritable: true },
     { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },

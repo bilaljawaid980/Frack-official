@@ -63,10 +63,13 @@ export function formatTokenAmount(
  * @param value - Amount to format
  */
 export function formatCurrency(
-  value: number | string,
+  value: number | string | null | undefined,
   currency = "USD",
   locale = "en-US",
 ): string {
+  if (value === null || value === undefined || value === "") {
+    return "Pending review";
+  }
   const amount = typeof value === "string" ? parseFloat(value) : value;
   if (isNaN(amount)) return "$0.00";
   return new Intl.NumberFormat(locale, {

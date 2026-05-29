@@ -12,17 +12,80 @@ import {
 import {
   IssuanceForm,
   type IssuanceFormValues,
+  type UploadedLegalDocument,
 } from "@/components/rwa/issuance-form";
 import { useWallet } from "@/hooks/use-wallet";
 import { apiFetch } from "@/lib/backend";
+import {
+  getSupabaseBrowserClient,
+  LEGAL_DOCS_BUCKET,
+} from "@/lib/supabase";
 
-function serializeTrustedIssuers(
-  issuers: IssuanceFormValues["complianceRequirements"]["trustedIssuers"],
-) {
-  return issuers.map((issuer) => ({
-    ...issuer,
-    topics: issuer.topics.map((topic) => topic.toString()),
-  }));
+function sanitizePathPart(value: string) {
+  return value
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+async function uploadLegalDocuments({
+  issuerWallet,
+  symbol,
+  documents,
+}: {
+  issuerWallet: string;
+  symbol: string;
+  documents: UploadedLegalDocument[];
+}) {
+  if (documents.length === 0) return [];
+
+  const supabase = getSupabaseBrowserClient();
+  const requestFolder = [
+    sanitizePathPart(issuerWallet),
+    `${Date.now()}-${crypto.randomUUID()}`,
+  ].join("/");
+
+  return Promise.all(
+    documents.map(async (document, index) => {
+      const extension = document.file.name.includes(".")
+        ? document.file.name.split(".").pop()
+        : "bin";
+      const safeName = sanitizePathPart(
+        document.file.name.replace(/\.[^/.]+$/, ""),
+      );
+      const path = [
+        requestFolder,
+        sanitizePathPart(symbol || "asset"),
+        sanitizePathPart(document.documentType),
+        `${index + 1}-${crypto.randomUUID()}-${safeName}.${extension}`,
+      ].join("/");
+
+      const { error } = await supabase.storage
+        .from(LEGAL_DOCS_BUCKET)
+        .upload(path, document.file, {
+          contentType: document.file.type || undefined,
+          upsert: false,
+        });
+
+      if (error) throw new Error(error.message);
+
+      const { data } = supabase.storage
+        .from(LEGAL_DOCS_BUCKET)
+        .getPublicUrl(path);
+
+      return {
+        name: document.file.name,
+        size: document.file.size,
+        type: document.file.type,
+        lastModified: document.file.lastModified,
+        documentType: document.documentType,
+        bucket: LEGAL_DOCS_BUCKET,
+        path,
+        publicUrl: data.publicUrl,
+      };
+    }),
+  );
 }
 
 export default function SubmitAssetRequestPage() {
@@ -31,11 +94,36 @@ export default function SubmitAssetRequestPage() {
 
   const submitAssetRequest = async (
     data: IssuanceFormValues,
-    uploadedFiles: File[],
+    uploadedDocuments: UploadedLegalDocument[],
   ) => {
     const issuerWallet = data.assetDetails.issuerWallet || address;
     if (!issuerWallet) {
       toast.error("Connect a wallet before submitting an asset request");
+      return;
+    }
+
+    const uploadToast =
+      uploadedDocuments.length > 0
+        ? toast.loading("Uploading legal documents...")
+        : null;
+    let documents: Awaited<ReturnType<typeof uploadLegalDocuments>> = [];
+    try {
+      documents = await uploadLegalDocuments({
+        issuerWallet,
+        symbol: data.assetDetails.symbol,
+        documents: uploadedDocuments,
+      });
+      if (uploadToast) {
+        toast.success("Documents uploaded", { id: uploadToast });
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Document upload failed";
+      if (uploadToast) {
+        toast.error(message, { id: uploadToast });
+      } else {
+        toast.error(message);
+      }
       return;
     }
 
@@ -51,23 +139,13 @@ export default function SubmitAssetRequestPage() {
         assetType: data.assetDetails.assetType,
         currency: data.assetDetails.currency,
         location: data.assetDetails.location,
-        underlyingValue: data.assetDetails.underlyingValue,
-        totalSupply: data.assetDetails.totalSupply,
-        decimals: data.tokenDetails.decimals,
-        initialPrice: data.tokenDetails.initialPrice,
-        claimTopics: data.complianceRequirements.claimTopics,
-        complianceModules: data.complianceRequirements.selectedModules,
-        trustedIssuers: serializeTrustedIssuers(
-          data.complianceRequirements.trustedIssuers,
-        ),
-        documents: uploadedFiles.map((file) => ({
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          lastModified: file.lastModified,
-        })),
+        documents,
         metadata: {
           submittedFrom: "issuer/submit-request",
+          documentFolder:
+            documents.length > 0
+              ? documents[0].path.split("/").slice(0, 2).join("/")
+              : null,
         },
       }),
     });

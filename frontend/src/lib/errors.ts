@@ -176,6 +176,12 @@ const COMPLIANCE_RAW_ERRORS: Record<number, Omit<DecodedError, "code">> = {
     message: "Missing module support account.",
     userMessage: "A required compliance module support account is missing.",
   },
+  6054: {
+    name: "ComplianceCheckFailed",
+    message: "Compliance check failed.",
+    userMessage:
+      "This investor or mint does not satisfy the token's configured compliance modules.",
+  },
 };
 
 const IRS_RAW_ERRORS: Record<number, Omit<DecodedError, "code">> = {
@@ -724,6 +730,23 @@ function extractAnchorErrorName(err: unknown): string | null {
   return msg.match(/Error Code:\s*([A-Za-z0-9_]+)/i)?.[1] ?? null;
 }
 
+function extractErrorText(err: unknown): string {
+  const message =
+    typeof err === "object" && err !== null && "message" in err
+      ? String((err as { message: unknown }).message)
+      : typeof err === "string"
+      ? err
+      : "";
+
+  const maybeLogs =
+    typeof err === "object" && err !== null && "logs" in err
+      ? (err as { logs?: unknown }).logs
+      : null;
+  const logs = Array.isArray(maybeLogs) ? maybeLogs.map(String).join("\n") : "";
+
+  return [message, logs].filter(Boolean).join("\n");
+}
+
 function lookupErrorCode(
   code: number
 ): Omit<DecodedError, "code"> | null {
@@ -753,13 +776,24 @@ function lookupErrorCode(
  * Returns null if the error cannot be decoded as a known program error.
  */
 export function parseAnchorError(err: unknown): DecodedError | null {
-  const name = extractAnchorErrorName(err);
+  const text = extractErrorText(err);
+  const name = text.match(/Error Code:\s*([A-Za-z0-9_]+)/i)?.[1] ?? extractAnchorErrorName(err);
   if (name && ERROR_NAME_USER_MESSAGES[name]) {
     return {
       code: -1,
       name,
       message: name,
       userMessage: ERROR_NAME_USER_MESSAGES[name],
+    };
+  }
+
+  if (name === "MaxSupplyExceeded") {
+    return {
+      code: 6002,
+      name,
+      message: "Max supply exceeded.",
+      userMessage:
+        "This mint would exceed the configured supply cap. The token was likely deployed with a supply cap that was not scaled by mint decimals.",
     };
   }
 

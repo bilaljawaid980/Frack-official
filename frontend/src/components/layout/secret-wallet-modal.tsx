@@ -49,24 +49,6 @@ export function SecretWalletModal() {
         source: "config",
       }),
       makeEntry({
-        label: "KYC Issuer",
-        address: ROLE_WALLETS.kycIssuer,
-        role: "kyc_issuer",
-        source: "config",
-      }),
-      makeEntry({
-        label: "Fund Real Estate",
-        address: ROLE_WALLETS.fundRealEstate,
-        role: "fund_issuer",
-        source: "config",
-      }),
-      makeEntry({
-        label: "Fund Stocks",
-        address: ROLE_WALLETS.fundStocks,
-        role: "fund_issuer",
-        source: "config",
-      }),
-      makeEntry({
         label: "Identity Registry",
         address: TREX_CONTRACTS.identityRegistry,
         role: "contract",

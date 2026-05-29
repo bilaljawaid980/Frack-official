@@ -60,13 +60,13 @@ model AssetRequest {
   assetType       String   @map("asset_type")
   currency        String   @default("USD")
   location        String?
-  underlyingValue Float    @map("underlying_value")
-  totalSupply     Int      @map("total_supply")
-  decimals        Int      @default(6)
-  initialPrice    Float    @map("initial_price")
-  claimTopics     String[] @map("claim_topics")
+  underlyingValue Float?   @map("underlying_value")
+  totalSupply     Int?     @map("total_supply")
+  decimals        Int?     @default(6)
+  initialPrice    Float?   @map("initial_price")
+  claimTopics     String[] @default([]) @map("claim_topics")
   trustedIssuers  Json?    @map("trusted_issuers")
-  complianceModules String[] @map("compliance_modules")
+  complianceModules String[] @default([]) @map("compliance_modules")
   documents       Json?
   metadata        Json?
   reviewedAt      DateTime? @map("reviewed_at")

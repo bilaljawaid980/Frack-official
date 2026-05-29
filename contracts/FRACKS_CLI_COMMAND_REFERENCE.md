@@ -39,7 +39,7 @@ Program address: `B15EFQKwnfbNHXHhPVvVcw18PaBeTDsRLNRno3QS8Yna`
 
 ## fracks_factory
 
-Program address: `3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M`
+Program address: `6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe`
 
 | Instruction | Script | Args | Accounts | Default mode |
 | --- | --- | --- | --- | --- |
@@ -143,7 +143,7 @@ Program address: `CQwdsA97gSiPMUzNXjS22AUu6HmvzMK2XZVqhswYEHLi`
 
 ## mod_country_cap
 
-Program address: `HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW`
+Program address: `Cv1HA7nHX8vxZvyCKXjk3gYPkqhfHFXxEsyxSXyRT3Ci`
 
 | Instruction | Script | Args | Accounts | Default mode |
 | --- | --- | --- | --- | --- |
@@ -157,7 +157,7 @@ Program address: `HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW`
 
 ## mod_country_restrict
 
-Program address: `6JcKpK45GvhwaPRZoEfLFCNos2eCxCr3N3tGzzaC1ECQ`
+Program address: `BCGKsDTyncA4EbHzxGVmEi3pheotJiaxCwYvHGxERiZ7`
 
 | Instruction | Script | Args | Accounts | Default mode |
 | --- | --- | --- | --- | --- |
@@ -169,7 +169,7 @@ Program address: `6JcKpK45GvhwaPRZoEfLFCNos2eCxCr3N3tGzzaC1ECQ`
 
 ## mod_daily_limit
 
-Program address: `EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9`
+Program address: `FYJ1K8cWUsDmbxNpgaBaEmm3RpvvfpxBBWg2MLm4x8Sq`
 
 | Instruction | Script | Args | Accounts | Default mode |
 | --- | --- | --- | --- | --- |
@@ -183,7 +183,7 @@ Program address: `EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9`
 
 ## mod_lockup
 
-Program address: `GqsAXZggWEwVF9EFHHXiAKiKBkcrpzQp3SK7NPZWAfR5`
+Program address: `6XqxWPwZQrfTo2ZJeT7wBhJaXd1eKjB2kx5ZrP1CLwa9`
 
 | Instruction | Script | Args | Accounts | Default mode |
 | --- | --- | --- | --- | --- |
@@ -195,7 +195,7 @@ Program address: `GqsAXZggWEwVF9EFHHXiAKiKBkcrpzQp3SK7NPZWAfR5`
 
 ## mod_max_balance
 
-Program address: `8r9euzP3dFg8d3sA6fh3Ur73cMbvEAbj5UbigHVEXimZ`
+Program address: `9BjLakhcX1ms34VjRwUgMZQAgdbsMM8C1gSPqrJTyCpH`
 
 | Instruction | Script | Args | Accounts | Default mode |
 | --- | --- | --- | --- | --- |
@@ -207,7 +207,7 @@ Program address: `8r9euzP3dFg8d3sA6fh3Ur73cMbvEAbj5UbigHVEXimZ`
 
 ## mod_max_investors
 
-Program address: `FMSVzD74EbSiTj2XHi8xsqcp6pigdxHL7MGHxtRLYte7`
+Program address: `4KVbq2esECUHZZdsBiDMM3mxYt8K7rNJUdotG6uZJfRQ`
 
 | Instruction | Script | Args | Accounts | Default mode |
 | --- | --- | --- | --- | --- |
@@ -220,7 +220,7 @@ Program address: `FMSVzD74EbSiTj2XHi8xsqcp6pigdxHL7MGHxtRLYte7`
 
 ## mod_max_transfer
 
-Program address: `8EiBd6256x7CfFE1vqGLGBqviiCs64ubZzTVmDwjnQAw`
+Program address: `Ee6RXC46Nb4Bo2BTQcXBHfuxLZdzbKtPmb3sGf2Egiqh`
 
 | Instruction | Script | Args | Accounts | Default mode |
 | --- | --- | --- | --- | --- |
@@ -232,7 +232,7 @@ Program address: `8EiBd6256x7CfFE1vqGLGBqviiCs64ubZzTVmDwjnQAw`
 
 ## mod_supply_cap
 
-Program address: `EGJvV5cBN7et6Pdthyj6z7xuN8FN2u1wtGQsUjR69Rxb`
+Program address: `EkgX6pGFCFT7FuNWuBAAMePy43iU9oETLDota4nTA3x8`
 
 | Instruction | Script | Args | Accounts | Default mode |
 | --- | --- | --- | --- | --- |

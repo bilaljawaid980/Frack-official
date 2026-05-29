@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { PublicKey } from "@solana/web3.js";
-import { ArrowLeft, FileText, Shield } from "lucide-react";
+import { AlertTriangle, ArrowLeft, FileText, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,16 +17,19 @@ import {
   fetchFactoryStateAccount,
   type FactoryStateAccount,
 } from "@/lib/solana";
+import { getKycApplicationByWallet } from "@/lib/kyc-api";
 import { IdentityService } from "@/services/identity";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { RWAAsset } from "@/types/rwa";
-
-type TrustedIssuerMetadata = {
-  label?: string;
-  walletAddress?: string;
-  topics?: Array<string | number>;
-};
+import type { TokenPurchaseRequest } from "@/types/token-purchase-request";
+import {
+  getBlockedCountries,
+  getRequiredClaimTopics,
+  getTrustedIssuers,
+  isInvestorCountryBlocked,
+} from "@/lib/asset-compliance";
+import { getCountryName } from "@/lib/utils";
 
 type LiveProvider = {
   walletAddress: string;
@@ -34,29 +37,18 @@ type LiveProvider = {
   isActive: boolean;
 };
 
-function getTrustedIssuers(asset: RWAAsset): TrustedIssuerMetadata[] {
-  const trustedIssuers = asset.metadata?.trustedIssuers;
-  return Array.isArray(trustedIssuers) ? trustedIssuers : [];
-}
+type KycProfileFields = {
+  fullName?: string | null;
+  email?: string | null;
+  nationality?: string | null;
+  country?: string | null;
+  idDocumentUrl?: string | null;
+  proofOfAddressUrl?: string | null;
+};
 
 function topicStrings(topics: unknown): string[] {
   if (!Array.isArray(topics)) return [];
   return topics.map((topic) => String(topic));
-}
-
-function getRequiredClaimTopics(asset: RWAAsset) {
-  const metadataTopics = topicStrings(asset.metadata?.claimTopics);
-  if (metadataTopics.length > 0) return [...new Set(metadataTopics)];
-
-  const fromIssuers = getTrustedIssuers(asset).flatMap((issuer) =>
-    topicStrings(issuer.topics),
-  );
-  if (fromIssuers.length > 0) return [...new Set(fromIssuers)];
-
-  return [
-    ...(asset.kycRequired ? ["1"] : []),
-    ...(asset.amlRequired ? ["2"] : []),
-  ];
 }
 
 function getProviderForTopic(asset: RWAAsset, topic: "1" | "2") {
@@ -108,6 +100,31 @@ function parseIssuerEntry(data: Buffer) {
 function parseFidOwner(data: Buffer) {
   if (data.length < 40) return null;
   return new PublicKey(data.subarray(8, 40)).toBase58();
+}
+
+function nonEmpty(value?: string | null) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function hasKycProfileFields(profile: KycProfileFields | null | undefined) {
+  return Boolean(
+    profile &&
+      (nonEmpty(profile.fullName) ||
+        nonEmpty(profile.email) ||
+        nonEmpty(profile.nationality) ||
+        nonEmpty(profile.country) ||
+        nonEmpty(profile.idDocumentUrl) ||
+        nonEmpty(profile.proofOfAddressUrl)),
+  );
+}
+
+async function fetchPreviousKycProfile(walletAddress: string) {
+  const requests = await apiFetch<TokenPurchaseRequest[]>(
+    `/token-purchase-requests?investorWallet=${walletAddress}`,
+  );
+  return (
+    requests.find((request) => hasKycProfileFields(request)) ?? null
+  );
 }
 
 async function fetchLiveProviders(
@@ -175,6 +192,9 @@ function RequestFormContent() {
   const [submitting, setSubmitting] = useState(false);
   const [factoryState, setFactoryState] = useState<FactoryStateAccount | null>(null);
   const [liveProviders, setLiveProviders] = useState<LiveProvider[] | null>(null);
+  const [kycAutofilled, setKycAutofilled] = useState(false);
+  const [investorCountry, setInvestorCountry] = useState<number | null>(null);
+  const [identityLoading, setIdentityLoading] = useState(false);
   const [formData, setFormData] = useState({
     amount: "",
     fullName: "",
@@ -219,9 +239,104 @@ function RequestFormContent() {
     loadLiveProviders();
   }, [asset, factoryState]);
 
+  useEffect(() => {
+    const loadExistingIdentityData = async () => {
+      if (!walletAddress) {
+        setKycAutofilled(false);
+        setInvestorCountry(null);
+        setIdentityLoading(false);
+        return;
+      }
+
+      if (!anchorProvider) {
+        setIdentityLoading(true);
+        return;
+      }
+
+      setIdentityLoading(true);
+      try {
+        const [existingKyc, previousRequest, investorFid] = await Promise.all([
+          getKycApplicationByWallet(walletAddress),
+          fetchPreviousKycProfile(walletAddress).catch(() => null),
+          new IdentityService(anchorProvider).fetchFid(new PublicKey(walletAddress)),
+        ]);
+        const profile = hasKycProfileFields(existingKyc) ? existingKyc : previousRequest;
+
+        setInvestorCountry(
+          investorFid && !investorFid.isIssuer ? Number(investorFid.country) : null,
+        );
+
+        setFormData((current) => {
+          const next = { ...current };
+
+          if (profile) {
+            next.fullName = nonEmpty(current.fullName)
+              ? current.fullName
+              : profile.fullName || "";
+            next.email = nonEmpty(current.email)
+              ? current.email
+              : profile.email || "";
+            next.nationality = nonEmpty(current.nationality)
+              ? current.nationality
+              : profile.nationality || "";
+            next.country = nonEmpty(current.country)
+              ? current.country
+              : profile.country || "";
+            next.idDocumentUrl = nonEmpty(current.idDocumentUrl)
+              ? current.idDocumentUrl
+              : profile.idDocumentUrl || "";
+            next.proofOfAddressUrl = nonEmpty(current.proofOfAddressUrl)
+              ? current.proofOfAddressUrl
+              : profile.proofOfAddressUrl || "";
+          }
+
+          if (investorFid && !investorFid.isIssuer) {
+            next.country = String(investorFid.country);
+          }
+
+          return next;
+        });
+
+        setKycAutofilled(hasKycProfileFields(profile));
+      } catch (err) {
+        console.error("Failed to load previous KYC data for purchase request", err);
+        setKycAutofilled(false);
+      } finally {
+        setIdentityLoading(false);
+      }
+    };
+
+    loadExistingIdentityData();
+  }, [walletAddress, anchorProvider]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
+
+  const kycFieldsLocked =
+    kycAutofilled &&
+    nonEmpty(formData.fullName) &&
+    nonEmpty(formData.email) &&
+    nonEmpty(formData.nationality) &&
+    nonEmpty(formData.country) &&
+    nonEmpty(formData.idDocumentUrl) &&
+    nonEmpty(formData.proofOfAddressUrl);
+
+  const effectiveCountry = useMemo(() => {
+    if (investorCountry !== null) return investorCountry;
+    const parsedCountry = Number(formData.country);
+    return Number.isFinite(parsedCountry) ? parsedCountry : null;
+  }, [formData.country, investorCountry]);
+
+  const blockedCountries = useMemo(
+    () => (asset ? getBlockedCountries(asset) : []),
+    [asset],
+  );
+
+  const countryRestricted = useMemo(
+    () => (asset ? isInvestorCountryBlocked(asset, effectiveCountry) : false),
+    [asset, effectiveCountry],
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -232,6 +347,11 @@ function RequestFormContent() {
     
     if (!asset) {
       toast.error("Asset details not found.");
+      return;
+    }
+
+    if (countryRestricted) {
+      toast.error("This wallet is restricted from this asset by token compliance rules.");
       return;
     }
 
@@ -334,6 +454,56 @@ function RequestFormContent() {
     );
   }
 
+  if (identityLoading) {
+    return (
+      <div className="p-8 glass-panel rounded-[22px] flex flex-col items-center justify-center min-h-[50vh] text-center space-y-4">
+        <Shield className="h-16 w-16 text-slate-300" />
+        <h2 className="text-2xl font-bold text-slate-700">Checking Compliance</h2>
+        <p className="text-slate-500">
+          Reading your wallet FID country before opening the request form.
+        </p>
+      </div>
+    );
+  }
+
+  if (countryRestricted && effectiveCountry !== null) {
+    return (
+      <div className="p-8 glass-panel rounded-[22px] w-full max-w-4xl mx-auto">
+        <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-4">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Asset
+        </Button>
+        <Card className="border-red-200 bg-red-50/80 shadow-sm">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-red-100 p-3">
+                <AlertTriangle className="h-6 w-6 text-red-700" />
+              </div>
+              <div>
+                <CardTitle className="text-red-900">Purchase Restricted</CardTitle>
+                <CardDescription className="text-red-700">
+                  This wallet cannot request tokens for {asset.name}.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm text-red-800">
+            <p>
+              Sorry, your investor country code {effectiveCountry} ({getCountryName(effectiveCountry)}) is blocked by this asset&apos;s compliance configuration.
+            </p>
+            <div className="rounded-xl border border-red-200 bg-white/70 p-4">
+              <p className="font-semibold text-red-900">Blocked country codes</p>
+              <p className="mt-1 font-mono">{blockedCountries.join(", ")}</p>
+            </div>
+            <p>
+              KYC approval cannot override a token-level country restriction. Contact the issuer if you believe the identity country on your FID is incorrect.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="p-8 glass-panel rounded-[22px] w-full max-w-5xl mx-auto">
       <div className="mb-8">
@@ -380,7 +550,9 @@ function RequestFormContent() {
           <CardHeader>
             <CardTitle className="text-lg">KYC Information</CardTitle>
             <CardDescription>
-              Your details will be securely sent to the appointed KYC provider for verification.
+              {kycAutofilled
+                ? "Previous KYC details for this wallet were loaded automatically."
+                : "Your details will be securely sent to the appointed KYC provider for verification."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -394,6 +566,7 @@ function RequestFormContent() {
                   required
                   value={formData.fullName}
                   onChange={handleChange}
+                  readOnly={kycFieldsLocked}
                   className="bg-white"
                 />
               </div>
@@ -407,6 +580,7 @@ function RequestFormContent() {
                   required
                   value={formData.email}
                   onChange={handleChange}
+                  readOnly={kycFieldsLocked}
                   className="bg-white"
                 />
               </div>
@@ -419,6 +593,7 @@ function RequestFormContent() {
                   required
                   value={formData.nationality}
                   onChange={handleChange}
+                  readOnly={kycFieldsLocked}
                   className="bg-white"
                 />
               </div>
@@ -431,6 +606,7 @@ function RequestFormContent() {
                   required
                   value={formData.country}
                   onChange={handleChange}
+                  readOnly={kycFieldsLocked}
                   className="bg-white"
                 />
               </div>
@@ -443,6 +619,7 @@ function RequestFormContent() {
                   required
                   value={formData.idDocumentUrl}
                   onChange={handleChange}
+                  readOnly={kycFieldsLocked}
                   className="bg-white"
                 />
               </div>
@@ -455,6 +632,7 @@ function RequestFormContent() {
                   required
                   value={formData.proofOfAddressUrl}
                   onChange={handleChange}
+                  readOnly={kycFieldsLocked}
                   className="bg-white"
                 />
               </div>

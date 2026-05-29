@@ -26,9 +26,9 @@ declare_id!("4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m");
 
 const FRACKS_TOKEN_PROGRAM_ID: Pubkey = pubkey!("92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s");
 const FRACKS_COMPLIANCE_PROGRAM_ID: Pubkey = pubkey!("FhMXw2VmYYksR4VcjQCUNWYrhzba1rmfiU1EDvaTsxHj");
-const MOD_MAX_INVESTORS_PROGRAM_ID: Pubkey = pubkey!("FMSVzD74EbSiTj2XHi8xsqcp6pigdxHL7MGHxtRLYte7");
-const MOD_DAILY_LIMIT_PROGRAM_ID: Pubkey = pubkey!("EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9");
-const MOD_COUNTRY_CAP_PROGRAM_ID: Pubkey = pubkey!("HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW");
+const MOD_MAX_INVESTORS_PROGRAM_ID: Pubkey = pubkey!("4KVbq2esECUHZZdsBiDMM3mxYt8K7rNJUdotG6uZJfRQ");
+const MOD_DAILY_LIMIT_PROGRAM_ID: Pubkey = pubkey!("FYJ1K8cWUsDmbxNpgaBaEmm3RpvvfpxBBWg2MLm4x8Sq");
+const MOD_COUNTRY_CAP_PROGRAM_ID: Pubkey = pubkey!("Cv1HA7nHX8vxZvyCKXjk3gYPkqhfHFXxEsyxSXyRT3Ci");
 const TRANSFER_APPROVAL_SPACE: usize = 8 + (32 * 6) + (8 * 3) + (2 * 2) + 1 + 1 + 1 + 1;
 const BASE_EXTRA_METAS: usize = 5;
 const MAX_MODULE_EXTRA_METAS: usize = 4;

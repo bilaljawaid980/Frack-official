@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { PublicKey } from "@solana/web3.js";
+import { useConnection } from "@solana/wallet-adapter-react";
 import { motion } from "framer-motion";
 import {
   Shield,
@@ -23,6 +25,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -39,16 +42,58 @@ import { useWallet } from "@/hooks/use-wallet";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import { usePermissionsContext } from "@/contexts/permissions-context";
+import { useAnchorProvider } from "@/hooks/useAnchorProvider";
+import { ComplianceService } from "@/services/compliance";
 import type { RWAAsset } from "@/types/rwa";
+import {
+  getComplianceRuleRows,
+  getModuleParams,
+  getRequiredClaimTopics,
+} from "@/lib/asset-compliance";
+import { MOD_SUPPLY_CAP } from "@/lib/constants";
+
+type SupplyCapSnapshot = {
+  currentSupply?: string;
+  currentCap?: string;
+  source?: "on-chain" | "indexed";
+};
+
+function formatRawTokenAmount(value: bigint | string | number | undefined, decimals: number) {
+  if (value === undefined || value === null || value === "") return "Not set";
+  const raw = typeof value === "bigint" ? value : BigInt(String(value));
+  const scale = BigInt(10) ** BigInt(decimals);
+  const whole = raw / scale;
+  const fraction = raw % scale;
+  if (decimals === 0 || fraction === BigInt(0)) return whole.toLocaleString();
+  const fractionText = fraction.toString().padStart(decimals, "0").replace(/0+$/, "");
+  return `${whole.toLocaleString()}.${fractionText}`;
+}
+
+function claimTopicLabel(topic: string) {
+  if (topic === "1") return "KYC Required";
+  if (topic === "2") return "AML Required";
+  return `Claim Topic ${topic}`;
+}
 
 export default function CompliancePage() {
   const { address, connectWallet, isConnecting } = useWallet();
-  const { permissions, loading: permissionsLoading } = usePermissionsContext();
+  const { connection } = useConnection();
+  const anchorProvider = useAnchorProvider();
+  const {
+    permissions,
+    canSeeCompliance,
+    loading: permissionsLoading,
+  } = usePermissionsContext();
   const { assets, updateCompliance, loading } = useAssetsContext();
   const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [selectedJurisdiction, setSelectedJurisdiction] =
     useState<string>("all");
+  const [supplyCapInputs, setSupplyCapInputs] = useState<Record<string, string>>({});
+  const [updatingSupplyCap, setUpdatingSupplyCap] = useState<string | null>(null);
+  const [supplySnapshots, setSupplySnapshots] = useState<
+    Record<string, SupplyCapSnapshot>
+  >({});
 
   const complianceStats = {
     total: assets.length,
@@ -70,6 +115,78 @@ export default function CompliancePage() {
     return true;
   });
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadLiveSupplyData = async () => {
+      const service = anchorProvider ? new ComplianceService(anchorProvider) : null;
+      const entries = await Promise.all(
+        assets.map(async (asset) => {
+          const decimals = Number(asset.metadata?.decimals ?? 6);
+          const snapshot: SupplyCapSnapshot = {};
+          try {
+            const mint = new PublicKey(asset.tokenContractAddress);
+            const supply = await connection.getTokenSupply(mint, "confirmed");
+            snapshot.currentSupply = formatRawTokenAmount(
+              supply.value.amount,
+              supply.value.decimals,
+            );
+
+            if (service) {
+              try {
+                const state = (await service.fetchModuleState(
+                  "supply_cap",
+                  MOD_SUPPLY_CAP,
+                  mint,
+                )) as { maxSupply?: bigint; totalSupply?: bigint };
+                if (state.maxSupply !== undefined) {
+                  snapshot.currentCap = formatRawTokenAmount(state.maxSupply, decimals);
+                  snapshot.source = "on-chain";
+                }
+                if (state.totalSupply !== undefined) {
+                  snapshot.currentSupply = formatRawTokenAmount(
+                    state.totalSupply,
+                    decimals,
+                  );
+                }
+              } catch {
+                const indexedCap = getModuleParams(
+                  asset,
+                  MOD_SUPPLY_CAP.toBase58(),
+                ).max_supply;
+                if (indexedCap !== undefined) {
+                  snapshot.currentCap = String(indexedCap);
+                  snapshot.source = "indexed";
+                }
+              }
+            } else {
+              const indexedCap = getModuleParams(asset, MOD_SUPPLY_CAP.toBase58()).max_supply;
+              if (indexedCap !== undefined) {
+                snapshot.currentCap = String(indexedCap);
+                snapshot.source = "indexed";
+              }
+            }
+          } catch {
+            const indexedCap = getModuleParams(asset, MOD_SUPPLY_CAP.toBase58()).max_supply;
+            if (indexedCap !== undefined) {
+              snapshot.currentCap = String(indexedCap);
+              snapshot.source = "indexed";
+            }
+          }
+          return [asset.id, snapshot] as const;
+        }),
+      );
+
+      if (!cancelled) {
+        setSupplySnapshots(Object.fromEntries(entries));
+      }
+    };
+
+    void loadLiveSupplyData();
+    return () => {
+      cancelled = true;
+    };
+  }, [anchorProvider, assets, connection]);
+
   const handleComplianceUpdate = async (
     assetId: string,
     status: RWAAsset["complianceStatus"],
@@ -83,6 +200,46 @@ export default function CompliancePage() {
       toast.success(`Compliance status updated to ${status}`);
     } catch (error) {
       toast.error("Failed to update compliance status");
+    }
+  };
+
+  const handleSupplyCapUpdate = async (asset: RWAAsset) => {
+    const value = supplyCapInputs[asset.id]?.trim();
+    if (!value) {
+      toast.error("Enter a readable supply cap amount first.");
+      return;
+    }
+    if (!anchorProvider) {
+      toast.error("Connect the compliance module owner wallet first.");
+      return;
+    }
+
+    setUpdatingSupplyCap(asset.id);
+    const loadingToast = toast.loading("Updating Supply Cap...");
+    try {
+      const decimals = Number(asset.metadata?.decimals ?? 6);
+      const service = new ComplianceService(anchorProvider);
+      const sig = await service.setSupplyCap(
+        new PublicKey(asset.tokenContractAddress),
+        value,
+        decimals,
+      );
+      setSupplySnapshots((current) => ({
+        ...current,
+        [asset.id]: {
+          ...(current[asset.id] ?? {}),
+          currentCap: value,
+          source: "on-chain",
+        },
+      }));
+      toast.success(`Supply Cap updated. Tx: ${sig.slice(0, 10)}...`, {
+        id: loadingToast,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Update failed";
+      toast.error(message, { id: loadingToast });
+    } finally {
+      setUpdatingSupplyCap(null);
     }
   };
 
@@ -102,7 +259,7 @@ export default function CompliancePage() {
     );
   }
 
-  if (!permissionsLoading && !permissions.isComplianceOwner) {
+  if (!permissionsLoading && !canSeeCompliance) {
     return (
       <div className="space-y-6 p-8 glass-panel rounded-[22px]">
         <Alert variant="destructive">
@@ -467,6 +624,11 @@ export default function CompliancePage() {
               ) : (
                 <div className="space-y-4">
                   {filteredAssets.map((asset, index) => (
+                    (() => {
+                      const requiredTopics = getRequiredClaimTopics(asset);
+                      const ruleRows = getComplianceRuleRows(asset);
+                      const supplySnapshot = supplySnapshots[asset.id] ?? {};
+                      return (
                     <motion.div
                       key={asset.id}
                       initial={{ opacity: 0, y: 20 }}
@@ -494,44 +656,93 @@ export default function CompliancePage() {
                           <ComplianceBadge status={asset.complianceStatus} />
                           <div className="text-right">
                             <p className="text-sm font-medium">
-                              {asset.tokenizedAmount.toLocaleString()} tokens
+                              {supplySnapshot.currentSupply ??
+                                (typeof asset.tokenizedAmount === "number" &&
+                                Number.isFinite(asset.tokenizedAmount)
+                                  ? asset.tokenizedAmount.toLocaleString()
+                                  : "Pending review")}{" "}
+                              tokens
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              {(
-                                (asset.tokenizedAmount / asset.totalSupply) *
-                                100
-                              ).toFixed(1)}
-                              % tokenized
+                              Cap: {supplySnapshot.currentCap ?? "Not set"}
+                              {supplySnapshot.source === "indexed"
+                                ? " (indexed)"
+                                : ""}
                             </p>
                           </div>
                         </div>
                       </div>
 
                       {/* Compliance Actions */}
-                      <div className="flex items-center justify-between border-t pt-4">
+                      <div className="grid gap-4 border-t pt-4 lg:grid-cols-[1fr_auto]">
                         <div className="space-y-1">
                           <p className="text-sm font-medium">
                             Compliance Requirements
                           </p>
-                          <div className="flex items-center gap-2">
-                            {asset.kycRequired && (
-                              <Badge variant="secondary" className="text-xs">
-                                KYC Required
+                          <div className="flex flex-wrap items-center gap-2">
+                            {requiredTopics.length === 0 ? (
+                              <Badge variant="outline" className="text-xs">
+                                No claim topics indexed
                               </Badge>
+                            ) : (
+                              requiredTopics.map((topic) => (
+                                <Badge
+                                  key={topic}
+                                  variant="secondary"
+                                  className="text-xs"
+                                >
+                                  {claimTopicLabel(topic)}
+                                </Badge>
+                              ))
                             )}
-                            {asset.amlRequired && (
-                              <Badge variant="secondary" className="text-xs">
-                                AML Required
-                              </Badge>
-                            )}
-                            {asset.accreditedInvestorsOnly && (
-                              <Badge variant="secondary" className="text-xs">
-                                Accredited Only
-                              </Badge>
+                          </div>
+                          <div className="mt-2 grid gap-2 md:grid-cols-2">
+                            {ruleRows.length === 0 ? (
+                              <p className="text-xs text-muted-foreground">
+                                No compliance modules indexed for this asset.
+                              </p>
+                            ) : (
+                              ruleRows.map((row) => (
+                                <div
+                                  key={`${asset.id}-${row.id}`}
+                                  className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2"
+                                >
+                                  <div className="text-xs font-semibold text-slate-700">
+                                    {row.label}
+                                  </div>
+                                  <div className="text-xs text-slate-500">
+                                    {row.value}
+                                  </div>
+                                </div>
+                              ))
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              min="0"
+                              step="any"
+                              placeholder="Supply cap"
+                              value={supplyCapInputs[asset.id] ?? ""}
+                              onChange={(event) =>
+                                setSupplyCapInputs((current) => ({
+                                  ...current,
+                                  [asset.id]: event.target.value,
+                                }))
+                              }
+                              className="h-9 w-32 bg-white"
+                            />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={updatingSupplyCap === asset.id}
+                              onClick={() => handleSupplyCapUpdate(asset)}
+                            >
+                              Update Supply Cap
+                            </Button>
+                          </div>
                           <Button
                             size="sm"
                             variant="outline"
@@ -559,6 +770,8 @@ export default function CompliancePage() {
                         </div>
                       </div>
                     </motion.div>
+                      );
+                    })()
                   ))}
                 </div>
               )}

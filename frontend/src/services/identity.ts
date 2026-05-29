@@ -6,16 +6,12 @@
 
 import { AnchorProvider, Idl, Program, BN } from "@coral-xyz/anchor";
 import {
-  Ed25519Program,
-  Keypair,
   PublicKey,
   SYSVAR_INSTRUCTIONS_PUBKEY,
   SystemProgram,
   Transaction,
   TransactionInstruction,
 } from "@solana/web3.js";
-import bs58 from "bs58";
-import nacl from "tweetnacl";
 import {
   FID_PROGRAM_ID,
   IRP_PROGRAM_ID,
@@ -36,11 +32,6 @@ import {
   fetchFactoryStateAccount,
   type FactoryStateAccount,
 } from "@/lib/solana";
-import { tryDirectPhantomClaimSign } from "@/lib/claim-sign-debug";
-import {
-  detectClaimSignerMode,
-  signClaimWithBackendProviderWallet,
-} from "@/lib/claim-signer";
 
 type IrpProgram = Program<Idl>;
 type IrsProgram = Program<Idl>;
@@ -126,20 +117,6 @@ function isClaimDiscriminatorMismatch(error: unknown): boolean {
     message.includes("Account discriminator did not match") ||
     message.includes("Error Number: 3002")
   );
-}
-
-function getStoredLocalClaimSigner(owner: PublicKey): Keypair | null {
-  const storageKey = `fracks:claim-signer:${owner.toBase58()}`;
-  const existing =
-    typeof window !== "undefined" ? window.localStorage.getItem(storageKey) : null;
-  if (existing) {
-    try {
-      return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(existing)));
-    } catch {
-      return null;
-    }
-  }
-  return null;
 }
 
 function parseFidOwner(data: Buffer): PublicKey | null {
@@ -1048,256 +1025,38 @@ export class IdentityService {
       ids.fid,
     );
     const expiresAt = BigInt(Math.floor(Date.now() / 1000) + 365 * 24 * 60 * 60);
-    // Match the legacy successful claim path: when no explicit claim payload is
-    // supplied, data_hash is sha256("") and the ed25519 message is then
-    // sha256(issuer_fid || holder_fid || topic_le || data_hash || expires_at_le).
+    // Match the claim payload convention: when no explicit claim payload is
+    // supplied, data_hash is sha256(""). The updated FID program records a
+    // placeholder signature and relies on the provider wallet's transaction signature.
     const dataHash = await this.sha256Bytes(new TextEncoder().encode(""));
-    const message = await this.claimMessage(issuerFid, targetFid, topic, dataHash, expiresAt);
     const refreshedIssuerFidAccount = await this.fetchFid(issuerOwner);
     if (!refreshedIssuerFidAccount?.isIssuer) {
       throw new Error("Connected wallet must have an issuer FID to issue claims.");
     }
-    let claimSigner = new PublicKey(refreshedIssuerFidAccount.signerKey);
-    const localSigner = getStoredLocalClaimSigner(issuerOwner);
-    const signerMode = detectClaimSignerMode({
-      onChainSignerKey: claimSigner,
-      connectedWallet: issuerOwner,
-      localSigner,
-    });
-    const selectedSignerPublicKey =
-      signerMode === "wallet-backed"
-        ? issuerOwner
-        : signerMode === "browser-local"
-          ? localSigner?.publicKey ?? null
-          : null;
-    const signerMatchesOnChainBeforeAddClaim = Boolean(
-      selectedSignerPublicKey && selectedSignerPublicKey.equals(claimSigner),
-    );
-    let signature: Uint8Array | null = null;
-    let walletSignError: unknown = null;
-    const messageHex = Buffer.from(message).toString("hex");
-    const looksLikeTransaction =
-      message.length > 64 ||
-      messageHex.startsWith("01") ||
-      messageHex.startsWith("80") ||
-      messageHex.startsWith("0200");
+    const claimSigner = new PublicKey(refreshedIssuerFidAccount.signerKey);
+    if (!claimSigner.equals(issuerOwner)) {
+      throw new Error(
+        `Provider FID signer key must equal the connected provider wallet for the updated Phantom-only claim flow. ` +
+        `On-chain signer key: ${claimSigner.toBase58()}. ` +
+        `Connected wallet: ${issuerOwner.toBase58()}. ` +
+        `Restore the provider FID signer key to the provider wallet in Identity Manager, then issue the claim again.`,
+      );
+    }
+    const signature = new Uint8Array(64);
 
     try {
-      console.info("[CLAIM SIGN MESSAGE DEBUG]", {
+      console.info("[CLAIM ISSUE DEBUG]", {
         walletAdapterName: debugMeta?.walletAdapterName ?? null,
         connectedWallet: issuerOwner.toBase58(),
         providerFid: issuerFid.toBase58(),
         providerSignerKey: claimSigner.toBase58(),
-        signerMode,
-        selectedSignerPublicKey: selectedSignerPublicKey?.toBase58() ?? null,
-        signerMatchesOnChainBeforeAddClaim,
-        signMessageAvailable: typeof signMessage === "function",
-        signerKeyEqualsConnectedWallet: claimSigner.equals(issuerOwner),
-        messageLength: message.length,
-        messageHex,
-        messageBase64: Buffer.from(message).toString("base64"),
-        messageBase58: bs58.encode(message),
-        first8BytesHex: Buffer.from(message.subarray(0, 8)).toString("hex"),
-        messageLooksLikeTransaction: looksLikeTransaction,
+        signingMode: "phantom-transaction-only",
         dataHashHex: Buffer.from(dataHash).toString("hex"),
         dataHashBase64: Buffer.from(dataHash).toString("base64"),
       });
     } catch {
       // ignore logging failures
     }
-
-    if (!selectedSignerPublicKey) {
-      throw new Error(
-        `Current provider signer is not available. ` +
-        `On-chain issuer FID signer key: ${claimSigner.toBase58()}. ` +
-        `Connected wallet: ${issuerOwner.toBase58()}. ` +
-        `For this deployed FID program, the provider signer key must equal the provider wallet or a browser-local copy of that same keypair.`,
-      );
-    }
-
-    if (!signerMatchesOnChainBeforeAddClaim) {
-      throw new Error(
-        `Refusing to send AddClaim because the selected signer does not match the current on-chain issuer FID signer. ` +
-        `providerFid=${issuerFid.toBase58()} ` +
-        `onChainProviderSignerKey=${claimSigner.toBase58()} ` +
-        `selectedSignerPublicKey=${selectedSignerPublicKey.toBase58()} ` +
-        `signerMode=${signerMode}`,
-      );
-    }
-
-    if (signerMode === "wallet-backed" && signMessage) {
-      try {
-        signature = await signMessage(message);
-      } catch (error) {
-        walletSignError = error;
-        try {
-          console.warn("[CLAIM SIGN MESSAGE DEBUG]", {
-            walletAdapterName: debugMeta?.walletAdapterName ?? null,
-            connectedWallet: issuerOwner.toBase58(),
-            providerFid: issuerFid.toBase58(),
-            providerSignerKey: claimSigner.toBase58(),
-            signerMode,
-            signMessageAvailable: typeof signMessage === "function",
-            signerKeyEqualsConnectedWallet: claimSigner.equals(issuerOwner),
-            messageLength: message.length,
-            messageHex,
-            messageBase64: Buffer.from(message).toString("base64"),
-            messageBase58: bs58.encode(message),
-            first8BytesHex: Buffer.from(message.subarray(0, 8)).toString("hex"),
-            messageLooksLikeTransaction: looksLikeTransaction,
-            signMessageErrorRawMessage:
-              error instanceof Error ? error.message : String(error),
-          });
-        } catch {
-          // ignore logging failures
-        }
-        signature = null;
-      }
-    }
-
-    if (!signature) {
-      if (signerMode === "wallet-backed") {
-        const walletErrorMessage =
-          walletSignError instanceof Error
-            ? walletSignError.message
-            : walletSignError
-              ? String(walletSignError)
-              : "";
-        const shouldTryDirectPhantom =
-          (debugMeta?.walletAdapterName ?? "").toLowerCase().includes("phantom") &&
-          walletErrorMessage.includes("You cannot sign solana transactions using sign message");
-
-        if (shouldTryDirectPhantom) {
-          try {
-            const directSignature = await tryDirectPhantomClaimSign(message);
-            if (directSignature) {
-              console.info("[CLAIM SIGN MESSAGE DEBUG]", {
-                walletAdapterName: debugMeta?.walletAdapterName ?? null,
-                connectedWallet: issuerOwner.toBase58(),
-                providerFid: issuerFid.toBase58(),
-                providerSignerKey: claimSigner.toBase58(),
-                signerMode,
-                signMessageAvailable: typeof signMessage === "function",
-                signerKeyEqualsConnectedWallet: claimSigner.equals(issuerOwner),
-                messageLength: message.length,
-                messageHex,
-                messageBase64: Buffer.from(message).toString("base64"),
-                messageBase58: bs58.encode(message),
-                first8BytesHex: Buffer.from(message.subarray(0, 8)).toString("hex"),
-                messageLooksLikeTransaction: looksLikeTransaction,
-                directPhantomFallback: true,
-              });
-              signature = directSignature;
-            }
-          } catch (directError) {
-            walletSignError = directError;
-            try {
-              console.warn("[CLAIM SIGN MESSAGE DEBUG]", {
-                walletAdapterName: debugMeta?.walletAdapterName ?? null,
-                connectedWallet: issuerOwner.toBase58(),
-                providerFid: issuerFid.toBase58(),
-                providerSignerKey: claimSigner.toBase58(),
-                signerMode,
-                signMessageAvailable: typeof signMessage === "function",
-                signerKeyEqualsConnectedWallet: claimSigner.equals(issuerOwner),
-                messageLength: message.length,
-                messageHex,
-                messageBase64: Buffer.from(message).toString("base64"),
-                messageBase58: bs58.encode(message),
-                first8BytesHex: Buffer.from(message.subarray(0, 8)).toString("hex"),
-                messageLooksLikeTransaction: looksLikeTransaction,
-                directPhantomFallback: true,
-                signMessageErrorRawMessage:
-                  directError instanceof Error ? directError.message : String(directError),
-              });
-            } catch {
-              // ignore logging failures
-            }
-          }
-        }
-      }
-
-      if (!signature && signerMode === "wallet-backed") {
-        const backendSignature = await signClaimWithBackendProviderWallet({
-          providerWallet: issuerOwner.toBase58(),
-          providerFid: issuerFid.toBase58(),
-          targetWallet: targetWallet.toBase58(),
-          targetFid: targetFid.toBase58(),
-          topic: topic.toString(),
-          expiresAt: expiresAt.toString(),
-          dataHash,
-          message,
-        });
-        if (backendSignature.signerPublicKey !== claimSigner.toBase58()) {
-          throw new Error(
-            `Backend provider signer returned ${backendSignature.signerPublicKey}, but the on-chain issuer FID signer key is ${claimSigner.toBase58()}. ` +
-            `For this deployed FID program, backend signing must use the same provider wallet keypair.`,
-          );
-        }
-        if (!Buffer.from(backendSignature.message).equals(Buffer.from(message))) {
-          throw new Error(
-            "Backend provider signer returned a different claim message than the frontend constructed.",
-          );
-        }
-        signature = backendSignature.signature;
-      }
-
-      if (!signature && signerMode === "wallet-backed") {
-        const detail =
-          walletSignError instanceof Error
-            ? walletSignError.message
-            : walletSignError
-              ? String(walletSignError)
-              : signMessage
-                ? "Wallet message signing returned no signature."
-                : "No signMessage function was provided by the wallet adapter.";
-        throw new Error(
-          "The issuer FID signer key is set to the connected wallet, but wallet message signing did not succeed. " +
-          "Use a wallet with signMessage support, or configure the backend claim signer with the same provider wallet keypair. " +
-          `Wallet error: ${detail} ` +
-          "This flow will not use a different delegated signer key for this deployed FID program.",
-        );
-      }
-
-      if (!signature && signerMode === "browser-local") {
-        if (!localSigner) {
-          throw new Error(
-            `This browser/profile does not hold the provider's current local claim signer. ` +
-            `On-chain issuer FID signer key: ${claimSigner.toBase58()}. ` +
-            `Local stored signer key: none. ` +
-            `Use the original browser/profile that holds the current signer, or explicitly rotate the signer key in Identity Manager only if you intend to invalidate existing claims signed under the current key.`,
-          );
-        }
-        if (!claimSigner.equals(localSigner.publicKey)) {
-          throw new Error(
-            `This browser/profile does not hold the provider's current local claim signer. ` +
-            `On-chain issuer FID signer key: ${claimSigner.toBase58()}. ` +
-            `Local stored signer key: ${localSigner.publicKey.toBase58()}. ` +
-            `Use the original browser/profile that holds the current signer, or explicitly rotate the signer key in Identity Manager only if you intend to invalidate existing claims signed under the current key.`,
-          );
-        }
-        signature = nacl.sign.detached(message, localSigner.secretKey);
-      }
-
-      if (!signature && signerMode === "unavailable") {
-        throw new Error(
-          `Current provider signer is not available. ` +
-          `On-chain issuer FID signer key: ${claimSigner.toBase58()}. ` +
-          `Connected wallet: ${issuerOwner.toBase58()}. ` +
-          `For this deployed FID program, the signer key must remain aligned with the provider wallet keypair.`,
-        );
-      }
-    }
-
-    if (!signature) {
-      throw new Error("Claim signature was not produced for the selected signer mode.");
-    }
-
-    const ed25519Ix = Ed25519Program.createInstructionWithPublicKey({
-      publicKey: claimSigner.toBytes(),
-      message,
-      signature,
-    });
 
     // Debug logging describing the AddClaim call and args
     try {
@@ -1384,7 +1143,7 @@ export class IdentityService {
         console.info("[ADD CLAIM DEBUG] instructionDataHex", Buffer.from(addClaimIx.data ?? []).toString("hex"));
       } catch {}
 
-      const tx = new Transaction().add(ed25519Ix, addClaimIx);
+      const tx = new Transaction().add(addClaimIx);
       return await this.provider.sendAndConfirm(tx, [], {
         commitment: "confirmed",
       });

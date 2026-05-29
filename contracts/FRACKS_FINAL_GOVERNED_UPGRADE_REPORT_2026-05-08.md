@@ -53,7 +53,7 @@ Control check:
 
 ## Governed Upgrade Artifacts
 
-- program to upgrade: `3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M`
+- program to upgrade: `6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe`
 - program name: `fracks_factory`
 - upgrade buffer: `AghYNVsNAuHTMQJEYYPUs7rfNqGiUeaPe5uq7uxoMh42`
 - buffer write signature: `wSLGYozdsiQKp4SRj1WaLhjGk4ERqn2H3zaMwMNiq41M5ShxM`
@@ -98,7 +98,7 @@ Build and tests:
 - vault PDA:
   - https://explorer.solana.com/address/CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z?cluster=testnet
 - factory program:
-  - https://explorer.solana.com/address/3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M?cluster=testnet
+  - https://explorer.solana.com/address/6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe?cluster=testnet
 - buffer:
   - https://explorer.solana.com/address/AghYNVsNAuHTMQJEYYPUs7rfNqGiUeaPe5uq7uxoMh42?cluster=testnet
 - proposal:

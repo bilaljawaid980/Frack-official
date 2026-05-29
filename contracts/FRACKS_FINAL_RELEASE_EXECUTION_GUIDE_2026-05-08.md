@@ -11,7 +11,7 @@ This guide documents the exact remaining steps to complete the factory governed 
 - multisig: `8jLbfuXMGrzS9zzMnwwdfaJrDXyHWeBTvtnaJgaFedmm`
 - vault PDA: `CftzQNMAZhuf3KBw8eR5DtPfaRLdakcBxqRt9paAJe9z`
 - threshold: `2-of-3`
-- factory program: `3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M`
+- factory program: `6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe`
 - staged buffer: `AghYNVsNAuHTMQJEYYPUs7rfNqGiUeaPe5uq7uxoMh42`
 - proposal PDA: `3jUe3dcJnu2z2F1VP9TUutvFrnQHsfShRs1WfpKVF5gB`
 - vault transaction PDA: `2nVwSoxecJR6CBqjfANjTp5D8i79FmZiHvBoLq4CH3jJ`
@@ -51,7 +51,7 @@ squads-multisig-cli vault-transaction-execute \
 ## Step 3: Verify Factory Program Authority
 
 ```bash
-solana program show 3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M \
+solana program show 6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe \
   --url https://api.testnet.solana.com \
   --output json
 ```

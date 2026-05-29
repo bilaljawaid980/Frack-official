@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("EGJvV5cBN7et6Pdthyj6z7xuN8FN2u1wtGQsUjR69Rxb");
+declare_id!("EkgX6pGFCFT7FuNWuBAAMePy43iU9oETLDota4nTA3x8");
 
 const MODULE_SPACE: usize = 8 + 32 + 32 + 32 + 8 + 8 + 1;
 
@@ -28,6 +28,15 @@ pub mod mod_supply_cap {
         hook_authority: Pubkey,
     ) -> Result<()> {
         ctx.accounts.module_state.hook_authority = hook_authority;
+        Ok(())
+    }
+
+    pub fn set_max_supply(ctx: Context<UpdateModuleOwner>, max_supply: u64) -> Result<()> {
+        require!(
+            max_supply >= ctx.accounts.module_state.total_supply,
+            ModSupplyCapError::MaxSupplyBelowCurrent
+        );
+        ctx.accounts.module_state.max_supply = max_supply;
         Ok(())
     }
 
@@ -128,6 +137,8 @@ pub enum ModSupplyCapError {
     MaxSupplyExceeded = 6002,
     #[msg("Arithmetic overflow.")]
     ArithmeticOverflow = 6003,
+    #[msg("New max supply cannot be lower than the already minted supply.")]
+    MaxSupplyBelowCurrent = 6004,
 }
 
 fn is_module_authority(module: &SupplyCapModule, authority: Pubkey) -> bool {

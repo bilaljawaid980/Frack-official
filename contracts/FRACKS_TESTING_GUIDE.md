@@ -244,7 +244,7 @@ That means:
 
 Programs confirmed on testnet from the 2026-05-07 pass:
 
-- `fracks_factory`: `3Vd81SWhR97nafQjsb43NGuP2L3RiCVcyzprXJ2yFs5M`
+- `fracks_factory`: `6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe`
 - `fracks_token`: `Gr9Y5q2aHtQEpYHgqme3hctqQ2sNRGF1ZVx9cQvMDjBn`
 - `fracks_token_hook`: `CQwdsA97gSiPMUzNXjS22AUu6HmvzMK2XZVqhswYEHLi`
 - `fracks_fid`: `7Y6WJtDmRMcRYgENfKATsGnQTQJ2wAQfF3LhoBt3KbBH`
@@ -253,14 +253,14 @@ Programs confirmed on testnet from the 2026-05-07 pass:
 - `fracks_tir`: `Am5W7oEe8NCU4jdLP8qyUT3gjUPCDsvTSxGhdCQp1ETS`
 - `fracks_ctr`: `B15EFQKwnfbNHXHhPVvVcw18PaBeTDsRLNRno3QS8Yna`
 - `fracks_compliance`: `9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d`
-- `mod_max_investors`: `FMSVzD74EbSiTj2XHi8xsqcp6pigdxHL7MGHxtRLYte7`
-- `mod_country_restrict`: `6JcKpK45GvhwaPRZoEfLFCNos2eCxCr3N3tGzzaC1ECQ`
-- `mod_max_balance`: `8r9euzP3dFg8d3sA6fh3Ur73cMbvEAbj5UbigHVEXimZ`
-- `mod_max_transfer`: `8EiBd6256x7CfFE1vqGLGBqviiCs64ubZzTVmDwjnQAw`
-- `mod_lockup`: `GqsAXZggWEwVF9EFHHXiAKiKBkcrpzQp3SK7NPZWAfR5`
-- `mod_daily_limit`: `EmCSJJLnshcnC7jLHmcHKN3XbMjnHY9mZDMYF1Xppig9`
-- `mod_supply_cap`: `EGJvV5cBN7et6Pdthyj6z7xuN8FN2u1wtGQsUjR69Rxb`
-- `mod_country_cap`: `HgJQy5kxbmVGHJs68U1axyWsyWTqkPme8YEhv1QU72sW`
+- `mod_max_investors`: `4KVbq2esECUHZZdsBiDMM3mxYt8K7rNJUdotG6uZJfRQ`
+- `mod_country_restrict`: `BCGKsDTyncA4EbHzxGVmEi3pheotJiaxCwYvHGxERiZ7`
+- `mod_max_balance`: `9BjLakhcX1ms34VjRwUgMZQAgdbsMM8C1gSPqrJTyCpH`
+- `mod_max_transfer`: `Ee6RXC46Nb4Bo2BTQcXBHfuxLZdzbKtPmb3sGf2Egiqh`
+- `mod_lockup`: `6XqxWPwZQrfTo2ZJeT7wBhJaXd1eKjB2kx5ZrP1CLwa9`
+- `mod_daily_limit`: `FYJ1K8cWUsDmbxNpgaBaEmm3RpvvfpxBBWg2MLm4x8Sq`
+- `mod_supply_cap`: `EkgX6pGFCFT7FuNWuBAAMePy43iU9oETLDota4nTA3x8`
+- `mod_country_cap`: `Cv1HA7nHX8vxZvyCKXjk3gYPkqhfHFXxEsyxSXyRT3Ci`
 
 ## Mainnet Readiness Gate
 

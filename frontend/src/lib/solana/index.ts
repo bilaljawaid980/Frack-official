@@ -18,23 +18,42 @@ import tirIdl from '@/idl/fracks_tir.json';
 import ctrIdl from '@/idl/fracks_ctr.json';
 import complianceIdl from '@/idl/fracks_compliance.json';
 import fidIdl from '@/idl/fracks_fid.json';
-import { RPC_URL } from '@/lib/constants';
+import {
+  COMPLIANCE_PROGRAM_ID,
+  CTR_PROGRAM_ID,
+  FACTORY_PROGRAM_ID,
+  FID_PROGRAM_ID,
+  IRP_PROGRAM_ID,
+  IRS_PROGRAM_ID,
+  MOD_COUNTRY_CAP,
+  MOD_COUNTRY_RESTRICT,
+  MOD_DAILY_LIMIT,
+  MOD_LOCKUP,
+  MOD_MAX_BALANCE,
+  MOD_MAX_INVESTORS,
+  MOD_MAX_TRANSFER,
+  MOD_SUPPLY_CAP,
+  RPC_URL,
+  TIR_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_HOOK_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+} from '@/lib/constants';
 
 // 1) Program constants (verified from ERC-3436/programs/*/src/lib.rs declare_id! macros)
 export const PROGRAM_IDS = {
-  factory: new PublicKey(process.env.NEXT_PUBLIC_FACTORY_PROGRAM_ID || '6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe'),
-  token: new PublicKey(process.env.NEXT_PUBLIC_TOKEN_PROGRAM_ID || '92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s'),
-  tokenHook: new PublicKey(process.env.NEXT_PUBLIC_TOKEN_HOOK_PROGRAM_ID || '4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m'),
-  irp: new PublicKey(process.env.NEXT_PUBLIC_IRP_PROGRAM_ID || 'C8jtErJYtuu7pSZczfSm1JvDmv254Nmmw1KLX6rBdY8o'),
-  irs: new PublicKey(process.env.NEXT_PUBLIC_IRS_PROGRAM_ID || 'GSLErK4bEfF6ZozTWfjYikWfnBitMYrdbbgfXubJBgVJ'),
-  tir: new PublicKey(process.env.NEXT_PUBLIC_TIR_PROGRAM_ID || '8KDYYPx74w6ZLKZgcvVWrj1mCv1gcULdTh2jbxcJwGMJ'),
-  ctr: new PublicKey(process.env.NEXT_PUBLIC_CTR_PROGRAM_ID || '12rCF9fuSth8T3o6sfpfWdGyaDEQ1jNsxe1ZvKH7q2tS'),
-  compliance: new PublicKey(process.env.NEXT_PUBLIC_COMPLIANCE_PROGRAM_ID || 'FhMXw2VmYYksR4VcjQCUNWYrhzba1rmfiU1EDvaTsxHj'),
-  fid: new PublicKey(process.env.NEXT_PUBLIC_FID_PROGRAM_ID || 'EoENMXgL9GZBEVfjhn5KU4SkfjZeyoTEdd8NHAcMQsEB'),
+  factory: FACTORY_PROGRAM_ID,
+  token: TOKEN_PROGRAM_ID,
+  tokenHook: TOKEN_HOOK_PROGRAM_ID,
+  irp: IRP_PROGRAM_ID,
+  irs: IRS_PROGRAM_ID,
+  tir: TIR_PROGRAM_ID,
+  ctr: CTR_PROGRAM_ID,
+  compliance: COMPLIANCE_PROGRAM_ID,
+  fid: FID_PROGRAM_ID,
 } as const;
 
 export const PROGRAM_ID = PROGRAM_IDS.token;
-export const TOKEN_2022_PROGRAM_ID = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
 
 export const connection = new Connection(
   RPC_URL,
@@ -1022,10 +1041,26 @@ export interface DeployTokenSuiteArgsArg {
   trustedIssuers: TrustedIssuerInputArg[];
   complianceModules: PublicKey[];
   sharedIrs?: PublicKey | null;
-  pricePerToken: bigint | number;
-  priceDecimals: number;
-  paymentMint?: PublicKey | null;
   salt: Buffer | Uint8Array;
+}
+
+const MODULE_STATE_SEEDS: Record<string, string> = {
+  [MOD_MAX_INVESTORS.toBase58()]: 'mod_max_investors',
+  [MOD_COUNTRY_RESTRICT.toBase58()]: 'mod_country',
+  [MOD_MAX_BALANCE.toBase58()]: 'mod_max_balance',
+  [MOD_MAX_TRANSFER.toBase58()]: 'mod_max_transfer',
+  [MOD_LOCKUP.toBase58()]: 'mod_lockup',
+  [MOD_DAILY_LIMIT.toBase58()]: 'mod_daily_limit',
+  [MOD_SUPPLY_CAP.toBase58()]: 'mod_supply_cap',
+  [MOD_COUNTRY_CAP.toBase58()]: 'mod_country_cap',
+};
+
+export function deriveComplianceModuleStatePDA(moduleProgramId: PublicKey, tokenMint: PublicKey): [PublicKey, number] {
+  const seed = MODULE_STATE_SEEDS[moduleProgramId.toBase58()];
+  if (!seed) {
+    throw new Error(`Unknown compliance module program: ${moduleProgramId.toBase58()}`);
+  }
+  return PublicKey.findProgramAddressSync([Buffer.from(seed), tokenMint.toBuffer()], moduleProgramId);
 }
 
 function encodeProgramIdsArg(arg: ProgramIdsArg): Buffer {
@@ -1058,9 +1093,6 @@ function encodeDeployTokenSuiteArgsArg(arg: DeployTokenSuiteArgsArg): Buffer {
     ...arg.trustedIssuers.map(encodeTrustedIssuerInput),
     encodeVecPubkey(arg.complianceModules),
     encodeOptionPubkey(arg.sharedIrs),
-    encodeU64(arg.pricePerToken),
-    encodeU8(arg.priceDecimals),
-    encodeOptionPubkey(arg.paymentMint),
     salt,
   ]);
 }

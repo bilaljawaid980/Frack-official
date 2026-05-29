@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Building2, CheckCircle, Clock, TrendingUp } from "lucide-react";
+import {
+  Building2,
+  CheckCircle,
+  Clock,
+  ExternalLink,
+  FileText,
+  TrendingUp,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -70,15 +77,25 @@ type AssetRequest = {
   assetType: string;
   currency: string;
   location?: string | null;
-  underlyingValue: number;
-  totalSupply: number;
-  decimals: number;
-  initialPrice: number;
-  claimTopics: string[];
+  underlyingValue?: number | null;
+  totalSupply?: number | null;
+  decimals?: number | null;
+  initialPrice?: number | null;
+  claimTopics?: string[] | null;
   trustedIssuers?: unknown;
-  complianceModules: string[];
+  complianceModules?: string[] | null;
   documents?: unknown;
   createdAt: string;
+};
+
+type RequestDocument = {
+  name: string;
+  size?: number;
+  type?: string;
+  documentType?: string;
+  bucket?: string;
+  path?: string;
+  publicUrl?: string;
 };
 
 function parseMetadata(metadata: IndexedAsset["metadata"]) {
@@ -97,6 +114,46 @@ function stringValue(value: unknown, fallback = "") {
 
 function numberValue(value: unknown, fallback = 0) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function formatDocumentType(value?: string) {
+  if (!value) return "Document";
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatFileSize(size?: number) {
+  if (!size || !Number.isFinite(size)) return "";
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function parseRequestDocuments(value: unknown): RequestDocument[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const record = entry as Record<string, unknown>;
+      return {
+        name: String(record.name || "Document"),
+        size:
+          typeof record.size === "number" && Number.isFinite(record.size)
+            ? record.size
+            : undefined,
+        type: typeof record.type === "string" ? record.type : undefined,
+        documentType:
+          typeof record.documentType === "string"
+            ? record.documentType
+            : undefined,
+        bucket: typeof record.bucket === "string" ? record.bucket : undefined,
+        path: typeof record.path === "string" ? record.path : undefined,
+        publicUrl:
+          typeof record.publicUrl === "string" ? record.publicUrl : undefined,
+      };
+    })
+    .filter(Boolean) as RequestDocument[];
 }
 
 function mapAsset(asset: IndexedAsset): IssuanceAsset {
@@ -278,21 +335,25 @@ export default function IssuancePage() {
         symbol: selectedRequest.symbol,
         description: selectedRequest.description || "",
         assetType: selectedRequest.assetType as IssuanceFormValues["assetDetails"]["assetType"],
-        underlyingValue: selectedRequest.underlyingValue,
-        totalSupply: selectedRequest.totalSupply,
+        underlyingValue: selectedRequest.underlyingValue ?? 100000,
+        totalSupply: selectedRequest.totalSupply ?? 1000000,
         location: selectedRequest.location || "",
         currency: selectedRequest.currency,
         issuerWallet: selectedRequest.issuerWallet,
         isin: selectedRequest.referenceId || selectedRequest.symbol,
       },
       complianceRequirements: {
-        claimTopics: selectedRequest.claimTopics,
+        claimTopics:
+          selectedRequest.claimTopics && selectedRequest.claimTopics.length > 0
+            ? selectedRequest.claimTopics
+            : ["1"],
         trustedIssuers,
         selectedModules: selectedRequest.complianceModules || [],
+        moduleParams: {},
       },
       tokenDetails: {
-        decimals: selectedRequest.decimals,
-        initialPrice: selectedRequest.initialPrice,
+        decimals: selectedRequest.decimals ?? 6,
+        initialPrice: selectedRequest.initialPrice ?? 1,
       },
       documents: [],
     };
@@ -394,7 +455,9 @@ export default function IssuancePage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {pendingRequests.map((request) => (
+                  {pendingRequests.map((request) => {
+                    const documents = parseRequestDocuments(request.documents);
+                    return (
                     <motion.div
                       key={request.id}
                       initial={{ opacity: 0, y: 10 }}
@@ -414,7 +477,9 @@ export default function IssuancePage() {
                             <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                               <span className="flex items-center gap-1">
                                 <TrendingUp className="h-3.5 w-3.5" />
-                                {formatCurrency(request.underlyingValue)}
+                                {request.underlyingValue != null
+                                  ? formatCurrency(request.underlyingValue)
+                                  : "Admin valuation pending"}
                               </span>
                               <span>
                                 Issuer: {request.issuerWallet.slice(0, 6)}...
@@ -447,8 +512,52 @@ export default function IssuancePage() {
                           &quot;{request.description}&quot;
                         </div>
                       )}
+                      <div className="mt-4 border-t pt-4">
+                        <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900">
+                          <FileText className="h-4 w-4 text-[#172E7F]" />
+                          Uploaded Documents
+                        </div>
+                        {documents.length === 0 ? (
+                          <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                            No documents uploaded with this request.
+                          </div>
+                        ) : (
+                          <div className="grid gap-2 md:grid-cols-2">
+                            {documents.map((document) => (
+                              <div
+                                key={document.path || document.name}
+                                className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3"
+                              >
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-medium text-slate-900">
+                                    {document.name}
+                                  </div>
+                                  <div className="text-xs text-slate-500">
+                                    {formatDocumentType(document.documentType)}
+                                    {document.size
+                                      ? ` - ${formatFileSize(document.size)}`
+                                      : ""}
+                                  </div>
+                                </div>
+                                {document.publicUrl ? (
+                                  <a
+                                    href={document.publicUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-[#172E7F] hover:bg-slate-100"
+                                    title="Open document"
+                                  >
+                                    <ExternalLink className="h-4 w-4" />
+                                  </a>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </motion.div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>

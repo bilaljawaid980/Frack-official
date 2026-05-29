@@ -15,9 +15,21 @@ import { toast } from 'sonner';
 interface IssueMoreTokensProps {
   assetId: number;
   assetName: string;
-  currentTokenized: number;
-  underlyingValue: number;
+  currentTokenized: number | null;
+  underlyingValue: number | null;
   onSuccess?: () => void;
+}
+
+function formatOptionalNumber(value: number | null) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value.toLocaleString()
+    : "Pending review";
+}
+
+function formatOptionalCurrency(value: number | null) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? `$${value.toLocaleString()}`
+    : "Pending review";
 }
 
 export function IssueMoreTokens({
@@ -135,7 +147,9 @@ export function IssueMoreTokens({
           </div>
           <div>
             <p className="text-sm font-medium">Current Tokenized</p>
-            <p className="text-2xl font-bold">{currentTokenized.toLocaleString()}</p>
+            <p className="text-2xl font-bold">
+              {formatOptionalNumber(currentTokenized)}
+            </p>
           </div>
           <div>
             <p className="text-sm font-medium">Asset Name</p>
@@ -143,7 +157,7 @@ export function IssueMoreTokens({
           </div>
           <div>
             <p className="text-sm font-medium">Underlying Value</p>
-            <p className="text-lg">${underlyingValue.toLocaleString()}</p>
+            <p className="text-lg">{formatOptionalCurrency(underlyingValue)}</p>
           </div>
         </div>
 

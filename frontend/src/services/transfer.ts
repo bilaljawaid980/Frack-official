@@ -612,6 +612,17 @@ export class TransferService {
       [SEED_WALLET_IDENTITY, irsState.toBuffer(), to.toBuffer()],
       ids.irs
     );
+    const [fromWalletIdentityInfo, toWalletIdentityInfo] =
+      await this.connection.getMultipleAccountsInfo(
+        [fromWalletIdentity, toWalletIdentity],
+        "confirmed"
+      );
+    const fromIdentity = fromWalletIdentityInfo
+      ? parseWalletIdentity(fromWalletIdentityInfo.data)
+      : null;
+    const toIdentity = toWalletIdentityInfo
+      ? parseWalletIdentity(toWalletIdentityInfo.data)
+      : null;
     const [fromFrozen] = PublicKey.findProgramAddressSync(
       [Buffer.from("frozen"), mint.toBuffer(), from.toBuffer()],
       ids.token
@@ -625,7 +636,16 @@ export class TransferService {
       ids.token
     );
     const approvalRemainingAccounts =
-      await this.getTransferApprovalRemainingAccounts(from, to, mint, tirState, complianceState, ids);
+      await this.getTransferApprovalRemainingAccounts(
+        from,
+        to,
+        mint,
+        tirState,
+        complianceState,
+        ids,
+        fromIdentity?.country ?? null,
+        toIdentity?.country ?? null
+      );
 
     const approveIx = await tokenProgram.methods
       .transfer(
@@ -679,6 +699,8 @@ export class TransferService {
       transferApproval,
       complianceState,
       from,
+      fromIdentity?.country ?? null,
+      toIdentity?.country ?? null,
       ids
     );
 
@@ -920,6 +942,8 @@ export class TransferService {
     transferApproval: PublicKey,
     complianceState: PublicKey,
     fromWallet: PublicKey,
+    fromCountry: number | null,
+    toCountry: number | null,
     ids: TransferProgramIds
   ): Promise<void> {
     const complianceProgram = new Program(
@@ -971,6 +995,23 @@ export class TransferService {
           isSigner: false,
           isWritable: true,
         });
+      }
+
+      if (info.owner.equals(MOD_COUNTRY_CAP)) {
+        for (const country of [fromCountry, toCountry]) {
+          if (country === null) continue;
+          const countryBytes = Buffer.alloc(2);
+          countryBytes.writeUInt16LE(country);
+          const [countryCount] = PublicKey.findProgramAddressSync(
+            [Buffer.from("country_count"), moduleAccount.toBuffer(), countryBytes],
+            MOD_COUNTRY_CAP
+          );
+          appended.push({
+            pubkey: countryCount,
+            isSigner: false,
+            isWritable: true,
+          });
+        }
       }
     });
 
@@ -1308,7 +1349,9 @@ export class TransferService {
     mint: PublicKey,
     tirState: PublicKey,
     complianceState: PublicKey,
-    ids: TransferProgramIds
+    ids: TransferProgramIds,
+    senderCountry: number | null,
+    recipientCountry: number | null
   ): Promise<RemainingAccount[]> {
     const approvalRemainingAccounts: RemainingAccount[] = [];
     const approvalSeen = new Set<string>();
@@ -1462,6 +1505,18 @@ export class TransferService {
             MOD_DAILY_LIMIT
           );
           pushApproval(dailyUsage, true);
+        }
+        if (moduleInfo.owner.equals(MOD_COUNTRY_CAP)) {
+          for (const country of [senderCountry, recipientCountry]) {
+            if (country === null) continue;
+            const countryBytes = Buffer.alloc(2);
+            countryBytes.writeUInt16LE(country);
+            const [countryCount] = PublicKey.findProgramAddressSync(
+              [Buffer.from("country_count"), moduleAccount.toBuffer(), countryBytes],
+              MOD_COUNTRY_CAP
+            );
+            pushApproval(countryCount, true);
+          }
         }
       }
     } catch (error) {

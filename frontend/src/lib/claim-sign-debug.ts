@@ -191,11 +191,13 @@ export async function tryDirectPhantomClaimSign(message: Uint8Array): Promise<Ui
   const variants = buildClaimSignVariants(message);
   let lastError: unknown = null;
   for (const variant of variants) {
-    try {
-      const result = await phantomProvider.signMessage(variant.bytes, "hex");
-      return getProviderResultSignature(result);
-    } catch (error) {
-      lastError = error;
+    for (const display of [undefined, "utf8", "hex"] as const) {
+      try {
+        const result = await phantomProvider.signMessage(variant.bytes, display);
+        return getProviderResultSignature(result);
+      } catch (error) {
+        lastError = error;
+      }
     }
   }
 

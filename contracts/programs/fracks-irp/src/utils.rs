@@ -1,15 +1,26 @@
 use anchor_lang::prelude::*;
 
 use crate::{
-    ClaimAccountView, FidAccountView, FracksIrpError, IdentityRegistryStorageStateView,
-    IssuerEntryView, WalletIdentityView,
+    ClaimAccountView, FracksIrpError, IdentityRegistryStorageStateView, IssuerEntryView,
+    WalletIdentityView,
 };
+
+const CLAIM_ACCOUNT_DISCRIMINATOR: [u8; 8] = [113, 109, 47, 96, 242, 219, 61, 165];
+const ISSUER_ENTRY_DISCRIMINATOR: [u8; 8] = [11, 211, 245, 253, 249, 156, 104, 93];
 
 pub fn deserialize_view<T: AnchorDeserialize>(account: &AccountInfo) -> Result<T> {
     let data = account.try_borrow_data()?;
     require!(data.len() >= 8, FracksIrpError::InvalidRegistryReference);
     let mut slice: &[u8] = &data[8..];
     T::deserialize(&mut slice).map_err(|_| error!(FracksIrpError::InvalidRegistryReference))
+}
+
+fn has_account_discriminator(account: &AccountInfo, discriminator: &[u8; 8]) -> Result<bool> {
+    let data = account.try_borrow_data()?;
+    if data.len() < 8 {
+        return Ok(false);
+    }
+    Ok(data[..8] == discriminator[..])
 }
 
 pub fn find_wallet_identity<'info>(
@@ -45,6 +56,11 @@ pub fn verify_claim_for_topic(
     now: i64,
 ) -> Result<bool> {
     for account in remaining_accounts {
+        if account.owner != &fracks_fid::id()
+            || !has_account_discriminator(account, &CLAIM_ACCOUNT_DISCRIMINATOR)?
+        {
+            continue;
+        }
         let claim = match deserialize_view::<ClaimAccountView>(account) {
             Ok(claim) => claim,
             Err(_) => continue,
@@ -74,11 +90,12 @@ pub fn verify_claim_for_topic(
         if !issuer_entry.is_active || !issuer_entry.allowed_topics.contains(&topic) {
             continue;
         }
-        let issuer_fid = find_issuer_fid(remaining_accounts, &claim.issuer_fid)?;
-        if !issuer_fid.is_issuer {
-            continue;
-        }
-        if claim.signer_key == issuer_fid.signer_key {
+        let expected_issuer_fid = Pubkey::find_program_address(
+            &[b"fid", claim.signer_key.as_ref()],
+            &fracks_fid::id(),
+        )
+        .0;
+        if claim.issuer_fid == expected_issuer_fid {
             return Ok(true);
         }
     }
@@ -92,6 +109,11 @@ fn find_issuer_entry(
     issuer_fid: &Pubkey,
 ) -> Result<IssuerEntryView> {
     for account in accounts {
+        if account.owner != &fracks_tir::id()
+            || !has_account_discriminator(account, &ISSUER_ENTRY_DISCRIMINATOR)?
+        {
+            continue;
+        }
         if let Ok(entry) = deserialize_view::<IssuerEntryView>(account) {
             let expected_entry = Pubkey::find_program_address(
                 &[b"issuer_entry", tir_state.as_ref(), issuer_fid.as_ref()],
@@ -107,25 +129,6 @@ fn find_issuer_entry(
     err!(FracksIrpError::TrustedIssuerNotFound)
 }
 
-fn find_issuer_fid(accounts: &[AccountInfo], issuer_fid: &Pubkey) -> Result<FidAccountView> {
-    for account in accounts {
-        if account.key() != *issuer_fid {
-            continue;
-        }
-        if let Ok(fid) = deserialize_view::<FidAccountView>(account) {
-            let expected_fid = Pubkey::find_program_address(
-                &[b"fid", fid.owner.as_ref()],
-                &fracks_fid::id(),
-            )
-            .0;
-            if account.key() == expected_fid {
-                return Ok(fid);
-            }
-        }
-    }
-
-    err!(FracksIrpError::IssuerFidNotFound)
-}
 pub fn ensure_bound_registry(irs_state: &IdentityRegistryStorageStateView, irp: &Pubkey) -> Result<()> {
     require!(
         irs_state.bound_registries.contains(irp),
