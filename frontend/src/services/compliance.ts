@@ -191,7 +191,7 @@ export class ComplianceService {
         return {
           owner: raw.owner.toBase58(),
           tokenMint: raw.tokenMint.toBase58(),
-          blockedCountries: raw.blockedCountries as number[],
+          allowedCountries: raw.allowedCountries as number[],
           bump: raw.bump,
         };
       }

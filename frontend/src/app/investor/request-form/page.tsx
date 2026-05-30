@@ -24,10 +24,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { RWAAsset } from "@/types/rwa";
 import type { TokenPurchaseRequest } from "@/types/token-purchase-request";
 import {
-  getBlockedCountries,
+  getAllowedCountries,
   getRequiredClaimTopics,
   getTrustedIssuers,
-  isInvestorCountryBlocked,
+  isInvestorCountryAllowed,
 } from "@/lib/asset-compliance";
 import { getCountryName } from "@/lib/utils";
 
@@ -375,13 +375,13 @@ function RequestFormContent() {
     return Number.isFinite(parsedCountry) ? parsedCountry : null;
   }, [formData.country, investorCountry]);
 
-  const blockedCountries = useMemo(
-    () => (asset ? getBlockedCountries(asset) : []),
+  const allowedCountries = useMemo(
+    () => (asset ? getAllowedCountries(asset) : []),
     [asset],
   );
 
-  const countryRestricted = useMemo(
-    () => (asset ? isInvestorCountryBlocked(asset, effectiveCountry) : false),
+  const countryAllowed = useMemo(
+    () => (asset ? isInvestorCountryAllowed(asset, effectiveCountry) : false),
     [asset, effectiveCountry],
   );
 
@@ -402,8 +402,8 @@ function RequestFormContent() {
       return;
     }
 
-    if (countryRestricted) {
-      toast.error("This wallet is restricted from this asset by token compliance rules.");
+    if (!countryAllowed) {
+      toast.error("This wallet country is not allowed by token compliance rules.");
       return;
     }
 
@@ -546,7 +546,7 @@ function RequestFormContent() {
           <CardContent className="space-y-5">
             <p className="text-sm leading-6 text-amber-900">
               This token uses identity compliance. Your FID country is checked
-              against the token&apos;s country restriction rules before a purchase
+              against the token&apos;s country allowlist before a purchase
               request can be submitted.
             </p>
             <div className="grid gap-3 rounded-xl border border-amber-200 bg-white/80 p-4 sm:grid-cols-[1fr_auto] sm:items-end">
@@ -586,13 +586,13 @@ function RequestFormContent() {
                 )}
               </Button>
             </div>
-            {blockedCountries.length > 0 ? (
+            {allowedCountries.length > 0 ? (
               <div className="rounded-xl border border-slate-200 bg-white/70 p-4 text-sm">
                 <p className="font-semibold text-slate-900">
-                  Current blocked country codes for this token
+                  Current allowed country codes for this token
                 </p>
                 <p className="mt-1 font-mono text-slate-700">
-                  {blockedCountries.join(", ")}
+                  {allowedCountries.join(", ")}
                 </p>
               </div>
             ) : null}
@@ -602,7 +602,7 @@ function RequestFormContent() {
     );
   }
 
-  if (countryRestricted && effectiveCountry !== null) {
+  if (!countryAllowed && effectiveCountry !== null) {
     return (
       <div className="p-8 glass-panel rounded-[22px] w-full max-w-4xl mx-auto">
         <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-4">
@@ -625,14 +625,16 @@ function RequestFormContent() {
           </CardHeader>
           <CardContent className="space-y-4 text-sm text-red-800">
             <p>
-              Sorry, your investor country code {effectiveCountry} ({getCountryName(effectiveCountry)}) is blocked by this asset&apos;s compliance configuration.
+              Sorry, your investor country code {effectiveCountry} ({getCountryName(effectiveCountry)}) is not in this asset&apos;s allowed country configuration.
             </p>
             <div className="rounded-xl border border-red-200 bg-white/70 p-4">
-              <p className="font-semibold text-red-900">Blocked country codes</p>
-              <p className="mt-1 font-mono">{blockedCountries.join(", ")}</p>
+              <p className="font-semibold text-red-900">Allowed country codes</p>
+              <p className="mt-1 font-mono">
+                {allowedCountries.length > 0 ? allowedCountries.join(", ") : "No countries allowed"}
+              </p>
             </div>
             <p>
-              KYC approval cannot override a token-level country restriction. Contact the issuer if you believe the identity country on your FID is incorrect.
+              KYC approval cannot override a token-level country allowlist. Contact the issuer if you believe the identity country on your FID is incorrect.
             </p>
           </CardContent>
         </Card>

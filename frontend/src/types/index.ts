@@ -322,12 +322,12 @@ export interface MaxInvestorsModule {
 }
 
 /**
- * On-chain CountryRestrictModule account (mod_country_restrict program).
+ * On-chain country allowlist module account (mod_country_restrict program).
  */
 export interface CountryRestrictModule {
   owner: string;
   tokenMint: string;
-  blockedCountries: number[];
+  allowedCountries: number[];
   bump: number;
 }
 

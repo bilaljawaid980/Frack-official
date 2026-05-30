@@ -12,13 +12,13 @@ pub mod mod_country_restrict {
     pub fn initialize_module(
         ctx: Context<InitializeModule>,
         token_mint: Pubkey,
-        blocked_countries: Vec<u16>,
+        allowed_countries: Vec<u16>,
     ) -> Result<()> {
-        require!(blocked_countries.len() <= MAX_COUNTRIES, ModCountryRestrictError::TooManyCountries);
+        require!(allowed_countries.len() <= MAX_COUNTRIES, ModCountryRestrictError::TooManyCountries);
         let module = &mut ctx.accounts.module_state;
         module.owner = ctx.accounts.owner.key();
         module.token_mint = token_mint;
-        module.blocked_countries = blocked_countries;
+        module.allowed_countries = allowed_countries;
         module.bump = ctx.bumps.module_state;
         Ok(())
     }
@@ -28,8 +28,8 @@ pub mod mod_country_restrict {
         from_country: u16,
         to_country: u16,
     ) -> Result<bool> {
-        Ok(!ctx.accounts.module_state.blocked_countries.contains(&from_country)
-            && !ctx.accounts.module_state.blocked_countries.contains(&to_country))
+        Ok(ctx.accounts.module_state.allowed_countries.contains(&from_country)
+            && ctx.accounts.module_state.allowed_countries.contains(&to_country))
     }
 
     pub fn transferred(_ctx: Context<ReadModule>) -> Result<()> {
@@ -46,7 +46,7 @@ pub mod mod_country_restrict {
 }
 
 #[derive(Accounts)]
-#[instruction(token_mint: Pubkey, blocked_countries: Vec<u16>)]
+#[instruction(token_mint: Pubkey, allowed_countries: Vec<u16>)]
 pub struct InitializeModule<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -74,7 +74,7 @@ pub struct ReadModule<'info> {
 pub struct CountryRestrictModule {
     pub owner: Pubkey,
     pub token_mint: Pubkey,
-    pub blocked_countries: Vec<u16>,
+    pub allowed_countries: Vec<u16>,
     pub bump: u8,
 }
 

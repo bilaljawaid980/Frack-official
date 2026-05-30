@@ -126,8 +126,8 @@ pub mod fracks_compliance {
 
             if is_account_type(module_info, "CountryRestrictModule")? {
                 let module = deserialize_view::<CountryRestrictModuleView>(module_info)?;
-                if module.blocked_countries.contains(&from_country)
-                    || module.blocked_countries.contains(&to_country)
+                if !module.allowed_countries.contains(&from_country)
+                    || !module.allowed_countries.contains(&to_country)
                 {
                     return Ok(false);
                 }
@@ -368,7 +368,7 @@ pub mod fracks_compliance {
             if is_account_type(module_info, "CountryRestrictModule")? {
                 let module = deserialize_view::<CountryRestrictModuleView>(module_info)?;
                 require!(
-                    !module.blocked_countries.contains(&_to_country),
+                    module.allowed_countries.contains(&_to_country),
                     FracksComplianceError::ComplianceCheckFailed
                 );
                 continue;
@@ -690,7 +690,7 @@ pub struct MaxInvestorsModuleView {
 pub struct CountryRestrictModuleView {
     pub owner: Pubkey,
     pub token_mint: Pubkey,
-    pub blocked_countries: Vec<u16>,
+    pub allowed_countries: Vec<u16>,
     pub bump: u8,
 }
 

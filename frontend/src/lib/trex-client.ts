@@ -829,7 +829,7 @@ export class TrexClient {
   }
 
   async setAllowedCountries(_countries?: string[]): Promise<string> {
-    throw new Error('MIGRATED: country restrictions now enforced via compliance modules.');
+    throw new Error('MIGRATED: country allowlists now enforced via compliance modules.');
   }
 
   async isVerified(wallet: string): Promise<IsVerifiedResponse> {

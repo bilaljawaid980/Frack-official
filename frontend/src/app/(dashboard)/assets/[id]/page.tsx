@@ -31,7 +31,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAssetsContext } from "@/contexts/assets-context";
 import { formatCurrency, getCountryName } from "@/lib/utils";
 import {
-  getBlockedCountries,
+  getAllowedCountries,
   getComplianceRuleRows,
   getRequiredClaimTopics,
   getTrustedIssuers,
@@ -142,7 +142,7 @@ export default function AssetDetailPage({
   const requiredClaimTopics = getRequiredClaimTopics(asset);
   const trustedIssuers = getTrustedIssuers(asset);
   const complianceRows = getComplianceRuleRows(asset);
-  const blockedCountries = getBlockedCountries(asset);
+  const allowedCountries = getAllowedCountries(asset);
 
   return (
     <div className="p-8 glass-panel rounded-[22px]">
@@ -362,16 +362,16 @@ export default function AssetDetailPage({
                   </p>
                 </div>
                 <div className="rounded-xl border border-slate-200 p-4">
-                  <p className="text-sm font-semibold text-slate-900">Restricted Countries</p>
+                  <p className="text-sm font-semibold text-slate-900">Allowed Countries</p>
                   <p className="mt-2 text-2xl font-bold text-[#172E7F]">
-                    {blockedCountries.length}
+                    {allowedCountries.length}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    {blockedCountries.length > 0
-                      ? blockedCountries
+                    {allowedCountries.length > 0
+                      ? allowedCountries
                           .map((code) => `${code} ${getCountryName(code)}`)
                           .join(", ")
-                      : "No blocked countries indexed"}
+                      : "No allowed countries indexed"}
                   </p>
                 </div>
               </div>

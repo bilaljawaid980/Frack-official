@@ -66,7 +66,7 @@ const COMMON_COUNTRIES = [
  * Compliance Rules Manager
  *
  * Manages compliance rules for token transfers:
- * - Country restrictions (whitelist)
+ * - Country allowlist
  * - Per-address transfer limits
  */
 export function ComplianceRulesManager({
@@ -75,9 +75,9 @@ export function ComplianceRulesManager({
   const { address } = useWallet();
   const [loading, setLoading] = useState(false);
 
-  // Country restrictions state
+  // Country allowlist state
   const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
-  const [allCountriesAllowed, setAllCountriesAllowed] = useState(true);
+  const [allCountriesAllowed, setAllCountriesAllowed] = useState(false);
 
   // Transfer limit state
   const [limitAddress, setLimitAddress] = useState("");
@@ -100,7 +100,7 @@ export function ComplianceRulesManager({
 
     try {
       setLoading(true);
-      toast.loading("Updating country restrictions...");
+      toast.loading("Updating country allowlist...");
 
       const countries = allCountriesAllowed ? [] : selectedCountries;
       await apiFetch("/compliance-rules/countries", {
@@ -112,11 +112,11 @@ export function ComplianceRulesManager({
       });
 
       toast.dismiss();
-      toast.success("Country restrictions updated", {
+      toast.success("Country allowlist updated", {
         description: `${
           allCountriesAllowed
-            ? "All countries allowed"
-            : `${selectedCountries.length} countries whitelisted`
+            ? "No countries allowed"
+            : `${selectedCountries.length} countries allowed`
         }`,
       });
 
@@ -124,12 +124,12 @@ export function ComplianceRulesManager({
       setCountryReason("");
     } catch (error: any) {
       toast.dismiss();
-      console.error("Set country restrictions failed:", error);
+      console.error("Set country allowlist failed:", error);
 
       if (error.message?.includes("Unauthorized")) {
         toast.error("Unauthorized", {
           description:
-            "Only the compliance contract owner can set country restrictions",
+            "Only the compliance contract owner can set country allowlists",
         });
       } else {
         toast.error("Failed to update restrictions", {
@@ -241,7 +241,7 @@ export function ComplianceRulesManager({
             Compliance Rules
           </CardTitle>
           <CardDescription className="text-slate-600">
-            Configure country restrictions and per-address transfer limits
+            Configure country allowlists and per-address transfer limits
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -251,7 +251,7 @@ export function ComplianceRulesManager({
                 value="countries"
                 className="rounded-lg data-[state=active]:bg-gradient-to-tr data-[state=active]:from-[#172E7F] data-[state=active]:to-[#2A5FA6] data-[state=active]:text-white transition-all py-1.5 text-sm"
               >
-                Country Restrictions
+                Country Allowed
               </TabsTrigger>
               <TabsTrigger
                 value="limits"
@@ -261,14 +261,13 @@ export function ComplianceRulesManager({
               </TabsTrigger>
             </TabsList>
 
-            {/* Country Restrictions Tab */}
+            {/* Country Allowed Tab */}
             <TabsContent value="countries" className="space-y-4">
               <Alert className="border-slate-200/70 bg-slate-50/80">
                 <Globe className="h-4 w-4" />
                 <AlertDescription>
-                  Whitelist countries that are allowed to hold and transfer
-                  tokens. If no countries are selected, all countries are
-                  allowed.
+                  Add countries that are allowed to hold and transfer tokens.
+                  If no countries are selected, all countries are blocked.
                 </AlertDescription>
               </Alert>
 
@@ -281,7 +280,7 @@ export function ComplianceRulesManager({
                       onChange={(e) => setAllCountriesAllowed(e.target.checked)}
                       className="w-4 h-4"
                     />
-                    Allow all countries (no restrictions)
+                    Empty allowlist (block all countries)
                   </Label>
                 </div>
 
@@ -362,14 +361,14 @@ export function ComplianceRulesManager({
                       ) : (
                         <>
                           <Globe className="mr-2 h-4 w-4" />
-                          Apply Country Restrictions
+                          Apply Country Allowed
                         </>
                       )}
                     </Button>
                   </DialogTrigger>
                     <DialogContent className="rounded-2xl border-slate-200/70">
                       <DialogHeader>
-                        <DialogTitle>Confirm Country Restrictions</DialogTitle>
+                        <DialogTitle>Confirm Country Allowed</DialogTitle>
                     <DialogDescription>
                       This will update the compliance contract to enforce
                       country-based transfer restrictions.
@@ -391,8 +390,8 @@ export function ComplianceRulesManager({
                       <Alert className="bg-green-50/80 border-green-200/70">
                         <CheckCircle2 className="h-4 w-4 text-green-500" />
                           <AlertDescription>
-                            <strong>All countries allowed</strong> - No
-                            restrictions will be enforced
+                            <strong>No countries allowed</strong> - The empty
+                            allowlist blocks every country
                           </AlertDescription>
                         </Alert>
                       ) : (
@@ -400,7 +399,7 @@ export function ComplianceRulesManager({
                           <Alert className="bg-blue-50/80 border-blue-200/70">
                             <Info className="h-4 w-4 text-blue-500" />
                             <AlertDescription>
-                              <strong>Whitelist mode:</strong> Only{" "}
+                              <strong>Allowlist mode:</strong> Only{" "}
                               {selectedCountries.length} countries will be
                               allowed
                             </AlertDescription>
@@ -419,7 +418,7 @@ export function ComplianceRulesManager({
                       <Alert variant="destructive" className="border-red-200/70 bg-red-50/80">
                         <AlertTriangle className="h-4 w-4" />
                         <AlertDescription>
-                          <strong>Warning:</strong> Users from restricted
+                          <strong>Warning:</strong> Users outside the allowed
                           countries will not be able to receive or transfer
                           tokens.
                         </AlertDescription>

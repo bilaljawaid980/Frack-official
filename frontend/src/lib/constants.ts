@@ -180,16 +180,16 @@ export const COMPLIANCE_MODULES: ComplianceModuleDefinition[] = [
   },
   {
     id: "country_restrict",
-    name: "Country Restriction",
+    name: "Country Allowed",
     programId: MOD_COUNTRY_RESTRICT,
-    description: "Blocks transfers to or from wallets in restricted countries.",
+    description: "Allows transfers and minting only for the configured countries.",
     fields: [
       {
-        key: "blocked_countries",
-        label: "Blocked Countries",
+        key: "allowed_countries",
+        label: "Allowed Countries",
         type: "countries",
         required: true,
-        description: "ISO 3166-1 numeric country codes to block.",
+        description: "ISO 3166-1 numeric country codes that are allowed.",
       },
     ],
   },

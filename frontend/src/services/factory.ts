@@ -367,7 +367,7 @@ export class FactoryService {
 
     if (moduleProgramId.equals(MOD_COUNTRY_RESTRICT)) {
       return (program.methods as unknown as FactoryProgramMethods)
-        .initializeModule(tokenMint, this.parseCountryList(params.blocked_countries))
+        .initializeModule(tokenMint, this.parseCountryList(params.allowed_countries))
         .accounts(accounts)
         .instruction();
     }

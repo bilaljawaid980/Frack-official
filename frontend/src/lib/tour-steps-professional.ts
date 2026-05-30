@@ -190,8 +190,8 @@ export const professionalTourSteps: TourStep[] = [
   {
     id: 'compliance-intro',
     title: 'Compliance Rules',
-    content: 'Set who can trade your tokens (KYC, country restrictions, investor limits).',
-    detailedContent: 'FRACKS enforces rules at smart contract level. Configure KYC requirements, geographic restrictions, and transfer limits.',
+    content: 'Set who can trade your tokens (KYC, country allowlists, investor limits).',
+    detailedContent: 'FRACKS enforces rules at smart contract level. Configure KYC requirements, geographic allowlists, and transfer limits.',
     expertTip: 'Compliance rules are immutable post-deployment. Plan carefully. Use Trusted Issuers Registry for KYC providers.',
     target: () => document.querySelector('[data-tour="compliance"]') || document.body,
     placement: 'auto',
@@ -211,9 +211,9 @@ export const professionalTourSteps: TourStep[] = [
 
   {
     id: 'country-restrictions',
-    title: 'Country Restrictions',
-    content: 'Block or allow specific countries based on regulations.',
-    detailedContent: 'Example: US securities laws require registration or exemption. You might restrict US investors or comply with Reg D, Reg S.',
+    title: 'Country Allowed',
+    content: 'Allow only specific investor countries based on regulations.',
+    detailedContent: 'Example: US securities laws require registration or exemption. You might allow specific investor countries for a Reg D or Reg S offering.',
     expertTip: 'Consult legal counsel. Each country has different securities laws. FRACKS enforces at transfer time.',
     target: () => document.querySelector('[data-tour="countries"]') || document.querySelector('select[multiple]'),
     placement: 'bottom',
@@ -340,7 +340,7 @@ export const professionalTourSteps: TourStep[] = [
     title: 'Transfer Tokens',
     content: 'Click "Transfer" to send tokens to verified investors.',
     detailedContent: 'Transfers are validated against compliance rules. Recipient must pass KYC, country checks, and transfer limits.',
-    expertTip: 'Failed transfers show specific reason: KYC not verified, country blocked, limit exceeded, etc.',
+    expertTip: 'Failed transfers show specific reason: KYC not verified, country not allowed, limit exceeded, etc.',
     target: '[data-tour="nav-transfer"]',
     placement: 'bottom',
     skippable: true,

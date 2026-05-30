@@ -1117,14 +1117,19 @@ export class TokenService {
           hasDiscriminator(moduleInfo.data, COUNTRY_RESTRICT_DISCRIMINATOR)
         ) {
           const count = moduleInfo.data.readUInt32LE(72);
+          let countryAllowed = false;
           for (let item = 0; item < count; item += 1) {
             const offset = 76 + item * 2;
             if (moduleInfo.data.length < offset + 2) break;
             if (moduleInfo.data.readUInt16LE(offset) === recipientCountry) {
-              throw new Error(
-                `Country restricted: investor country ${recipientCountry} is blocked by Country Restrict module ${moduleAccount.toBase58()}. KYC claims cannot override token compliance rules.`,
-              );
+              countryAllowed = true;
+              break;
             }
+          }
+          if (!countryAllowed) {
+            throw new Error(
+              `Country not allowed: investor country ${recipientCountry} is not listed in Country Allowed module ${moduleAccount.toBase58()}. KYC claims cannot override token compliance rules.`,
+            );
           }
           continue;
         }
@@ -1198,7 +1203,7 @@ export class TokenService {
         err instanceof Error &&
         (err.message.includes("Supply cap") ||
           err.message.includes("Max supply") ||
-          err.message.includes("Country restricted") ||
+          err.message.includes("Country not allowed") ||
           err.message.includes("Max balance") ||
           err.message.includes("Max transfer") ||
           err.message.includes("Lockup active"))

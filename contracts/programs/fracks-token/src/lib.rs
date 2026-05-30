@@ -2681,8 +2681,8 @@ fn evaluate_compliance<'info>(
         if matches_account_discriminator(module_info, "CountryRestrictModule")? {
             let module = deserialize_local::<CountryRestrictModuleView>(module_info)?;
             require!(
-                !module.blocked_countries.contains(&from_country)
-                    && !module.blocked_countries.contains(&to_country),
+                module.allowed_countries.contains(&from_country)
+                    && module.allowed_countries.contains(&to_country),
                 FracksTokenError::ComplianceCheckFailed
             );
             continue;

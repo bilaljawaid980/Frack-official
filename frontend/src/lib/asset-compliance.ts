@@ -121,16 +121,24 @@ export function getModuleParams(asset: RWAAsset, moduleProgramId: string) {
   return asRecord(getComplianceModuleParams(asset)[moduleProgramId]);
 }
 
-export function getBlockedCountries(asset: RWAAsset): number[] {
+export function hasCountryAllowedModule(asset: RWAAsset): boolean {
   const params = getModuleParams(asset, MOD_COUNTRY_RESTRICT.toBase58());
-  return parseNumberList(params.blocked_countries);
+  return Object.prototype.hasOwnProperty.call(params, "allowed_countries");
 }
 
-export function isInvestorCountryBlocked(asset: RWAAsset, country?: number | null) {
+export function getAllowedCountries(asset: RWAAsset): number[] {
+  const params = getModuleParams(asset, MOD_COUNTRY_RESTRICT.toBase58());
+  return parseNumberList(params.allowed_countries);
+}
+
+export function isInvestorCountryAllowed(asset: RWAAsset, country?: number | null) {
+  if (!hasCountryAllowedModule(asset)) {
+    return true;
+  }
   if (country === null || country === undefined || !Number.isFinite(country)) {
     return false;
   }
-  return getBlockedCountries(asset).includes(Math.trunc(country));
+  return getAllowedCountries(asset).includes(Math.trunc(country));
 }
 
 export function getComplianceRuleRows(asset: RWAAsset): ComplianceRuleRow[] {
@@ -142,13 +150,13 @@ export function getComplianceRuleRows(asset: RWAAsset): ComplianceRuleRow[] {
     if (!definition) return [];
 
     if (moduleProgramId === MOD_COUNTRY_RESTRICT.toBase58()) {
-      const countries = parseNumberList(params.blocked_countries);
+      const countries = parseNumberList(params.allowed_countries);
       return [
         {
           id: definition.id,
           label: definition.name,
           description: definition.description,
-          value: countries.length > 0 ? countries.join(", ") : "None",
+          value: countries.length > 0 ? countries.join(", ") : "No countries allowed",
         },
       ];
     }
