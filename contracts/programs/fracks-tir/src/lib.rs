@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("8KDYYPx74w6ZLKZgcvVWrj1mCv1gcULdTh2jbxcJwGMJ");
+declare_id!("9bgANehpsEDdgyo5DwpY36wmnPdpCihSiAP9TLoBBf4L");
 
 const MAX_TOPICS_PER_ISSUER: usize = 20;
 const MAX_LABEL_LENGTH: usize = 64;

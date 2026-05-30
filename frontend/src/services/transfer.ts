@@ -912,7 +912,7 @@ export class TransferService {
       }
 
       throw new Error(
-        "Transaction was submitted but confirmation is delayed on testnet. Check history/explorer, then retry only if it does not appear."
+        "Transaction was submitted but confirmation is delayed on devnet. Check history/explorer, then retry only if it does not appear."
       );
     }
   }

@@ -27,7 +27,7 @@ use fracks_token_hook::program::FracksTokenHook;
 use fracks_token::cpi::accounts::{InitializeMintMetadata, InitializeToken, UpdateOwnerState};
 use fracks_token::program::FracksToken;
 
-declare_id!("6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe");
+declare_id!("FtrzQ1hhjL7vbEPAxLBeLgrmomanSVj9UpV6LLJ5TYFS");
 
 const MAX_CLAIM_TOPICS: usize = 20;
 const MAX_TRUSTED_ISSUERS: usize = 16;

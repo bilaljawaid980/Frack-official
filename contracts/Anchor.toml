@@ -42,6 +42,25 @@ mod_max_investors = "4KVbq2esECUHZZdsBiDMM3mxYt8K7rNJUdotG6uZJfRQ"
 mod_max_transfer = "Ee6RXC46Nb4Bo2BTQcXBHfuxLZdzbKtPmb3sGf2Egiqh"
 mod_supply_cap = "EkgX6pGFCFT7FuNWuBAAMePy43iU9oETLDota4nTA3x8"
 
+[programs.devnet]
+fracks_compliance = "HnJiNrmDeVFZksgEXaQwyVqHXQLRcyqXEksbYhkiPFFV"
+fracks_ctr = "8MuWrtbZ1zPzrDhSKPjDd78SMQAMtBuprPnc1Zam1Gig"
+fracks_factory = "FtrzQ1hhjL7vbEPAxLBeLgrmomanSVj9UpV6LLJ5TYFS"
+fracks_fid = "Fb2roXDWjEaZwWJvxAWJTCRsK4Hy4V64MuCwoGXWMUtW"
+fracks_irp = "HQqgbvfmSzY1yEyhVbyhYqSsbVrRmjUnPmm2nE4ZwRvZ"
+fracks_irs = "CnAZUQ9jFm2eLGA8d8ek1gpLwGc6xZqvnbyJ9s7swbWc"
+fracks_tir = "9bgANehpsEDdgyo5DwpY36wmnPdpCihSiAP9TLoBBf4L"
+fracks_token = "6Naj8HsuNdUJQyyzmPssm1mZRDF7F5VMQ91n9QyMoyGj"
+fracks_token_hook = "9JrgWtW4UrQoC3tVQRxWBBEQPjDJ2QFDzAVAvSzGtPJ5"
+mod_country_cap = "EcLffdKdSsCpNczazKsSeRw7FCN6vVjKAEMH5CZGBndr"
+mod_country_restrict = "4ChDAU375yPJXZLG5XqtbbKdirAr3xHU5vnhppUjgu2d"
+mod_daily_limit = "5dfHskP5MijaDY2gYsE44CPAuomt1vWgbPdGi62cquoT"
+mod_lockup = "EvDVqTUjs3ZsAUfPQdyVskYCzoPTbWybF5tcBtWYfAuz"
+mod_max_balance = "HEjNS1GC9nffSdXbi6aQ9WNQBNFyJQBGUshyrSeLpE9j"
+mod_max_investors = "2zfQv7RxmL5BAgXXFagZXBNby4Q41YGH6hnSJAcsXQeU"
+mod_max_transfer = "4gJbGvgnBhJ91gByKNo7eEVmCbsUkK5opyeo3M1VEJsy"
+mod_supply_cap = "6tfb66btx776wdsPS5EHDTwWnvPSLJQje7gFQ4EDGxGc"
+
 [registry]
 url = "https://api.apr.dev"
 

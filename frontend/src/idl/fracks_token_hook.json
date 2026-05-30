@@ -1,5 +1,5 @@
 {
-  "address": "4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m",
+  "address": "9JrgWtW4UrQoC3tVQRxWBBEQPjDJ2QFDzAVAvSzGtPJ5",
   "metadata": {
     "name": "fracks_token_hook",
     "version": "0.1.0",
@@ -289,6 +289,72 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "refresh_extra_account_metas",
+      "discriminator": [
+        237,
+        164,
+        193,
+        76,
+        205,
+        209,
+        59,
+        17
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_state"
+        },
+        {
+          "name": "compliance_state"
+        },
+        {
+          "name": "token_mint_account"
+        },
+        {
+          "name": "extra_account_metas",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  116,
+                  114,
+                  97,
+                  45,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_mint_account"
+              }
+            ]
+          }
         }
       ],
       "args": []

@@ -9,6 +9,10 @@ export function getSupabaseBrowserClient() {
   if (!supabaseUrl || !supabasePublishableKey) {
     throw new Error("Supabase storage is not configured.");
   }
-
-  return createClient(supabaseUrl, supabasePublishableKey);
+  let client = createClient(supabaseUrl, supabasePublishableKey);
+  if (typeof window === "undefined") {
+    throw new Error("Supabase browser client cannot be used on the server.");
+  }
+  console.log("Supabase browser client initialized.", client);
+  return client;
 }

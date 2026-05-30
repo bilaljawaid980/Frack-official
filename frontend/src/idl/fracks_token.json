@@ -1,5 +1,5 @@
 {
-  "address": "92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s",
+  "address": "6Naj8HsuNdUJQyyzmPssm1mZRDF7F5VMQ91n9QyMoyGj",
   "metadata": {
     "name": "fracks_token",
     "version": "0.1.0",
@@ -205,6 +205,105 @@
       ]
     },
     {
+      "name": "deposit_subscription",
+      "discriminator": [
+        89,
+        22,
+        105,
+        147,
+        181,
+        95,
+        21,
+        54
+      ],
+      "accounts": [
+        {
+          "name": "investor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "issuer",
+          "writable": true
+        },
+        {
+          "name": "offering_terms"
+        },
+        {
+          "name": "token_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "subscription_escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  117,
+                  98,
+                  115,
+                  99,
+                  114,
+                  105,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              },
+              {
+                "kind": "account",
+                "path": "investor"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "finalize_recovery",
       "discriminator": [
         180,
@@ -277,7 +376,7 @@
         },
         {
           "name": "irs_program",
-          "address": "GSLErK4bEfF6ZozTWfjYikWfnBitMYrdbbgfXubJBgVJ"
+          "address": "CnAZUQ9jFm2eLGA8d8ek1gpLwGc6xZqvnbyJ9s7swbWc"
         }
       ],
       "args": [
@@ -428,11 +527,11 @@
         },
         {
           "name": "controller_program",
-          "address": "92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s"
+          "address": "6Naj8HsuNdUJQyyzmPssm1mZRDF7F5VMQ91n9QyMoyGj"
         },
         {
           "name": "hook_program",
-          "address": "4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m"
+          "address": "9JrgWtW4UrQoC3tVQRxWBBEQPjDJ2QFDzAVAvSzGtPJ5"
         },
         {
           "name": "transfer_approval",
@@ -661,6 +760,98 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "initialize_mint_metadata",
+      "discriminator": [
+        210,
+        88,
+        76,
+        142,
+        253,
+        135,
+        134,
+        177
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  119,
+                  110,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner_state.token_mint",
+                "account": "OwnerState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_mint_account",
+          "writable": true
+        },
+        {
+          "name": "token_2022_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "symbol",
+          "type": "string"
+        },
+        {
+          "name": "uri",
+          "type": "string"
+        }
+      ]
     },
     {
       "name": "initialize_token",
@@ -943,6 +1134,110 @@
       "args": []
     },
     {
+      "name": "purchase_mint",
+      "discriminator": [
+        109,
+        178,
+        124,
+        55,
+        14,
+        8,
+        141,
+        36
+      ],
+      "accounts": [
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "issuer",
+          "writable": true
+        },
+        {
+          "name": "offering_terms"
+        },
+        {
+          "name": "token_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "irp_state"
+        },
+        {
+          "name": "irs_state"
+        },
+        {
+          "name": "tir_state"
+        },
+        {
+          "name": "ctr_state"
+        },
+        {
+          "name": "compliance_state"
+        },
+        {
+          "name": "compliance_program"
+        },
+        {
+          "name": "wallet_identity"
+        },
+        {
+          "name": "to_frozen"
+        },
+        {
+          "name": "token_mint_account",
+          "writable": true
+        },
+        {
+          "name": "destination_token_account",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "to_balance_after",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "recovery",
       "discriminator": [
         248,
@@ -1026,7 +1321,7 @@
         },
         {
           "name": "irs_program",
-          "address": "GSLErK4bEfF6ZozTWfjYikWfnBitMYrdbbgfXubJBgVJ"
+          "address": "CnAZUQ9jFm2eLGA8d8ek1gpLwGc6xZqvnbyJ9s7swbWc"
         },
         {
           "name": "token_mint_account",
@@ -1045,11 +1340,11 @@
         },
         {
           "name": "controller_program",
-          "address": "92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s"
+          "address": "6Naj8HsuNdUJQyyzmPssm1mZRDF7F5VMQ91n9QyMoyGj"
         },
         {
           "name": "hook_program",
-          "address": "4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m"
+          "address": "9JrgWtW4UrQoC3tVQRxWBBEQPjDJ2QFDzAVAvSzGtPJ5"
         },
         {
           "name": "transfer_approval",
@@ -1334,6 +1629,140 @@
       ]
     },
     {
+      "name": "settle_subscription_mint",
+      "discriminator": [
+        36,
+        157,
+        21,
+        78,
+        31,
+        26,
+        216,
+        58
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "issuer",
+          "writable": true
+        },
+        {
+          "name": "token_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_state"
+        },
+        {
+          "name": "agent_role"
+        },
+        {
+          "name": "subscription_escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  117,
+                  98,
+                  115,
+                  99,
+                  114,
+                  105,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_state.token_mint",
+                "account": "TokenState"
+              },
+              {
+                "kind": "account",
+                "path": "subscription_escrow.investor",
+                "account": "SubscriptionEscrow"
+              }
+            ]
+          }
+        },
+        {
+          "name": "irp_state"
+        },
+        {
+          "name": "irs_state"
+        },
+        {
+          "name": "tir_state"
+        },
+        {
+          "name": "ctr_state"
+        },
+        {
+          "name": "compliance_state"
+        },
+        {
+          "name": "compliance_program"
+        },
+        {
+          "name": "wallet_identity"
+        },
+        {
+          "name": "to_frozen"
+        },
+        {
+          "name": "token_mint_account",
+          "writable": true
+        },
+        {
+          "name": "destination_token_account",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "to_balance_after",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "transfer",
       "discriminator": [
         163,
@@ -1374,11 +1803,11 @@
         },
         {
           "name": "controller_program",
-          "address": "92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s"
+          "address": "6Naj8HsuNdUJQyyzmPssm1mZRDF7F5VMQ91n9QyMoyGj"
         },
         {
           "name": "hook_program",
-          "address": "4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m"
+          "address": "9JrgWtW4UrQoC3tVQRxWBBEQPjDJ2QFDzAVAvSzGtPJ5"
         },
         {
           "name": "transfer_approval",
@@ -1833,6 +2262,19 @@
       ]
     },
     {
+      "name": "SubscriptionEscrow",
+      "discriminator": [
+        217,
+        226,
+        84,
+        165,
+        70,
+        11,
+        88,
+        7
+      ]
+    },
+    {
       "name": "TokenState",
       "discriminator": [
         218,
@@ -1913,6 +2355,32 @@
       ]
     },
     {
+      "name": "SubscriptionDeposited",
+      "discriminator": [
+        193,
+        61,
+        132,
+        74,
+        12,
+        65,
+        42,
+        145
+      ]
+    },
+    {
+      "name": "SubscriptionSettled",
+      "discriminator": [
+        146,
+        48,
+        250,
+        127,
+        131,
+        180,
+        247,
+        174
+      ]
+    },
+    {
       "name": "TokenPaused",
       "discriminator": [
         126,
@@ -1975,6 +2443,19 @@
         54,
         64,
         24
+      ]
+    },
+    {
+      "name": "TokensPurchased",
+      "discriminator": [
+        214,
+        119,
+        105,
+        186,
+        114,
+        205,
+        228,
+        181
       ]
     },
     {
@@ -2127,6 +2608,51 @@
       "code": 12039,
       "name": "MissingTransferApproval",
       "msg": "FRACKS transfer approval is missing or invalid."
+    },
+    {
+      "code": 12040,
+      "name": "InvalidOfferingTerms",
+      "msg": "Offering terms account is missing or invalid."
+    },
+    {
+      "code": 12041,
+      "name": "OfferingInactive",
+      "msg": "Offering is not active."
+    },
+    {
+      "code": 12042,
+      "name": "UnsupportedPaymentMint",
+      "msg": "Only SOL-denominated token purchases are currently supported."
+    },
+    {
+      "code": 12043,
+      "name": "PaymentAmountOverflow",
+      "msg": "Payment amount overflow."
+    },
+    {
+      "code": 12044,
+      "name": "PaymentRequired",
+      "msg": "A positive token amount and SOL payment are required."
+    },
+    {
+      "code": 12045,
+      "name": "InvalidIssuer",
+      "msg": "Issuer wallet does not match this token offering."
+    },
+    {
+      "code": 12046,
+      "name": "InsufficientPaymentBalance",
+      "msg": "Buyer has insufficient SOL to pay the token purchase price."
+    },
+    {
+      "code": 12047,
+      "name": "InvalidSubscriptionEscrow",
+      "msg": "Subscription escrow is missing or invalid."
+    },
+    {
+      "code": 12048,
+      "name": "SubscriptionAlreadySettled",
+      "msg": "Subscription escrow has already been settled."
     }
   ],
   "types": [
@@ -2323,6 +2849,106 @@
       }
     },
     {
+      "name": "SubscriptionDeposited",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "investor",
+            "type": "pubkey"
+          },
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "paid_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SubscriptionEscrow",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "investor",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "paid_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "settled",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SubscriptionSettled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "investor",
+            "type": "pubkey"
+          },
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "paid_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "settled_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "TokenPaused",
       "type": {
         "kind": "struct",
@@ -2466,6 +3092,34 @@
           {
             "name": "by_agent",
             "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokensPurchased",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "paid_lamports",
+            "type": "u64"
           },
           {
             "name": "timestamp",

@@ -12,22 +12,11 @@ import {
 import {
   IssuanceForm,
   type IssuanceFormValues,
+  type StoredLegalDocument,
   type UploadedLegalDocument,
 } from "@/components/rwa/issuance-form";
 import { useWallet } from "@/hooks/use-wallet";
 import { apiFetch } from "@/lib/backend";
-import {
-  getSupabaseBrowserClient,
-  LEGAL_DOCS_BUCKET,
-} from "@/lib/supabase";
-
-function sanitizePathPart(value: string) {
-  return value
-    .trim()
-    .replace(/[^a-zA-Z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
-}
 
 async function uploadLegalDocuments({
   issuerWallet,
@@ -40,52 +29,24 @@ async function uploadLegalDocuments({
 }) {
   if (documents.length === 0) return [];
 
-  const supabase = getSupabaseBrowserClient();
-  const requestFolder = [
-    sanitizePathPart(issuerWallet),
-    `${Date.now()}-${crypto.randomUUID()}`,
-  ].join("/");
+  const formData = new FormData();
+  formData.append("issuerWallet", issuerWallet);
+  formData.append("symbol", symbol);
+  for (const document of documents) {
+    formData.append("files", document.file);
+    formData.append("documentTypes", document.documentType);
+  }
 
-  return Promise.all(
-    documents.map(async (document, index) => {
-      const extension = document.file.name.includes(".")
-        ? document.file.name.split(".").pop()
-        : "bin";
-      const safeName = sanitizePathPart(
-        document.file.name.replace(/\.[^/.]+$/, ""),
-      );
-      const path = [
-        requestFolder,
-        sanitizePathPart(symbol || "asset"),
-        sanitizePathPart(document.documentType),
-        `${index + 1}-${crypto.randomUUID()}-${safeName}.${extension}`,
-      ].join("/");
+  const response = await fetch("/api/legal-docs/upload", {
+    method: "POST",
+    body: formData,
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.success === false) {
+    throw new Error(payload?.error || "Document upload failed.");
+  }
 
-      const { error } = await supabase.storage
-        .from(LEGAL_DOCS_BUCKET)
-        .upload(path, document.file, {
-          contentType: document.file.type || undefined,
-          upsert: false,
-        });
-
-      if (error) throw new Error(error.message);
-
-      const { data } = supabase.storage
-        .from(LEGAL_DOCS_BUCKET)
-        .getPublicUrl(path);
-
-      return {
-        name: document.file.name,
-        size: document.file.size,
-        type: document.file.type,
-        lastModified: document.file.lastModified,
-        documentType: document.documentType,
-        bucket: LEGAL_DOCS_BUCKET,
-        path,
-        publicUrl: data.publicUrl,
-      };
-    }),
-  );
+  return payload.data || [];
 }
 
 export default function SubmitAssetRequestPage() {
@@ -94,7 +55,8 @@ export default function SubmitAssetRequestPage() {
 
   const submitAssetRequest = async (
     data: IssuanceFormValues,
-    uploadedDocuments: UploadedLegalDocument[],
+    _uploadedDocuments: UploadedLegalDocument[],
+    documents: StoredLegalDocument[],
   ) => {
     const issuerWallet = data.assetDetails.issuerWallet || address;
     if (!issuerWallet) {
@@ -102,28 +64,8 @@ export default function SubmitAssetRequestPage() {
       return;
     }
 
-    const uploadToast =
-      uploadedDocuments.length > 0
-        ? toast.loading("Uploading legal documents...")
-        : null;
-    let documents: Awaited<ReturnType<typeof uploadLegalDocuments>> = [];
-    try {
-      documents = await uploadLegalDocuments({
-        issuerWallet,
-        symbol: data.assetDetails.symbol,
-        documents: uploadedDocuments,
-      });
-      if (uploadToast) {
-        toast.success("Documents uploaded", { id: uploadToast });
-      }
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Document upload failed";
-      if (uploadToast) {
-        toast.error(message, { id: uploadToast });
-      } else {
-        toast.error(message);
-      }
+    if (documents.length === 0) {
+      toast.error("Upload legal documents before submitting the request.");
       return;
     }
 
@@ -142,16 +84,31 @@ export default function SubmitAssetRequestPage() {
         documents,
         metadata: {
           submittedFrom: "issuer/submit-request",
-          documentFolder:
-            documents.length > 0
-              ? documents[0].path.split("/").slice(0, 2).join("/")
-              : null,
+          documentFolder: documents[0]?.path
+            ? documents[0].path.split("/").slice(0, 2).join("/")
+            : null,
         },
       }),
     });
 
     toast.success("Asset tokenization request submitted");
     router.push("/issuer");
+  };
+
+  const uploadAssetDocuments = async (
+    data: IssuanceFormValues,
+    uploadedDocuments: UploadedLegalDocument[],
+  ) => {
+    const issuerWallet = data.assetDetails.issuerWallet || address;
+    if (!issuerWallet) {
+      throw new Error("Connect a wallet before uploading legal documents.");
+    }
+
+    return uploadLegalDocuments({
+      issuerWallet,
+      symbol: data.assetDetails.symbol,
+      documents: uploadedDocuments,
+    });
   };
 
   return (
@@ -167,6 +124,7 @@ export default function SubmitAssetRequestPage() {
         <CardContent>
           <IssuanceForm
             isApplicationMode
+            onUploadDocuments={uploadAssetDocuments}
             onSubmitOverride={submitAssetRequest}
             submitLabel="Submit Tokenization Request"
           />

@@ -106,6 +106,21 @@ function mapIndexedAsset(asset: {
     : asset.createdAt
       ? new Date(asset.createdAt)
       : new Date();
+  const documents = Array.isArray(rawMetadata.documents)
+    ? rawMetadata.documents
+        .map((entry: unknown, index: number) => {
+          if (!entry || typeof entry !== "object") return null;
+          const record = entry as Record<string, unknown>;
+          return {
+            id: String(record.path || record.publicUrl || `${asset.id}-${index}`),
+            name: String(record.name || "Document"),
+            url: String(record.publicUrl || ""),
+            hash: String(record.path || ""),
+            uploadedAt: issuedAt,
+          };
+        })
+        .filter(Boolean)
+    : [];
 
   return {
     id: asset.id,
@@ -135,7 +150,7 @@ function mapIndexedAsset(asset: {
     accreditedInvestorsOnly: false,
     issuanceDate: issuedAt,
     lastUpdated: asset.updatedAt ? new Date(asset.updatedAt) : issuedAt,
-    documents: [],
+    documents: documents as RWAAsset["documents"],
     contractAddress: asset.tokenContract,
     tokenContractAddress: asset.tokenContract,
     chainId: process.env.NEXT_PUBLIC_SOLANA_CLUSTER || "mainnet-beta",

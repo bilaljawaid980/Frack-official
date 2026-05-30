@@ -248,7 +248,7 @@ async function main() {
     process.env.NEXT_PUBLIC_SOLANA_RPC_URL1 ??
     process.env.NEXT_PUBLIC_SOLANA_RPC_URL ??
     process.env.SOLANA_RPC_URL1 ??
-    "https://api.testnet.solana.com";
+    "https://devnet.helius-rpc.com/?api-key=f2852f85-8a60-4eaf-bbe7-009aa1b9e41f/";
   const factory = new PublicKey(
     arg("factory") ??
       process.env.NEXT_PUBLIC_FACTORY_PROGRAM_ID ??

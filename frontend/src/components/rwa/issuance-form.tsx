@@ -15,12 +15,13 @@ import {
   FileText, 
   Upload, 
   ChevronLeft, 
-  ChevronRight, 
-  CheckCircle, 
+  ChevronRight,
+  CheckCircle,
   AlertCircle,
   DollarSign,
   Building2,
-  Info
+  Info,
+  ExternalLink
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 import { useWallet } from "@/hooks/use-wallet";
 import { toast } from "sonner";
@@ -132,6 +134,16 @@ export type UploadedLegalDocument = {
   documentType: string;
 };
 
+export type StoredLegalDocument = {
+  name: string;
+  size?: number;
+  type?: string;
+  documentType?: string;
+  bucket?: string;
+  path?: string;
+  publicUrl?: string;
+};
+
 const DOCUMENT_TYPE_OPTIONS = [
   { value: "asset_document", label: "Asset Document" },
   { value: "title_deed", label: "Title Deed / Ownership Proof" },
@@ -142,30 +154,61 @@ const DOCUMENT_TYPE_OPTIONS = [
   { value: "other", label: "Other Legal Document" },
 ];
 
+function formatDocumentType(value?: string) {
+  if (!value) return "Document";
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatFileSize(size?: number) {
+  if (!size || !Number.isFinite(size)) return "";
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function IssuanceForm({
   onSubmitOverride,
+  onUploadDocuments,
   isApplicationMode = false,
   onDeployed,
   initialValues,
   deploymentRequestId,
   submitLabel,
+  existingDocuments = [],
+  documentsReadOnly = false,
+  requireDocumentApproval = false,
 }: {
   onSubmitOverride?: (
     data: IssuanceFormValues,
     uploadedDocuments: UploadedLegalDocument[],
+    storedDocuments: StoredLegalDocument[],
   ) => Promise<void>;
+  onUploadDocuments?: (
+    data: IssuanceFormValues,
+    uploadedDocuments: UploadedLegalDocument[],
+  ) => Promise<StoredLegalDocument[]>;
   isApplicationMode?: boolean;
   onDeployed?: () => Promise<void> | void;
   initialValues?: Partial<IssuanceFormValues>;
   deploymentRequestId?: string;
   submitLabel?: string;
+  existingDocuments?: StoredLegalDocument[];
+  documentsReadOnly?: boolean;
+  requireDocumentApproval?: boolean;
 } = {}) {
   const { address } = useWallet();
   const router = useRouter();
   const [uploadedDocuments, setUploadedDocuments] = useState<
     UploadedLegalDocument[]
   >([]);
+  const [storedUploadedDocuments, setStoredUploadedDocuments] = useState<
+    StoredLegalDocument[]
+  >([]);
+  const [uploadingDocuments, setUploadingDocuments] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
+  const [documentsApproved, setDocumentsApproved] = useState(false);
   const isVerified = true;
   const hasOnchainId = true;
   const identityLoading = false;
@@ -251,6 +294,18 @@ export function IssuanceForm({
     });
   }, [form, initialValues]);
 
+  useEffect(() => {
+    if (existingDocuments.length === 0) return;
+    form.setValue("documents", existingDocuments);
+  }, [existingDocuments, form]);
+
+  useEffect(() => {
+    setCurrentStep(1);
+    setUploadedDocuments([]);
+    setStoredUploadedDocuments([]);
+    setDocumentsApproved(false);
+  }, [deploymentRequestId, isApplicationMode]);
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     const validFiles = files.filter((file) => {
@@ -266,6 +321,7 @@ export function IssuanceForm({
       })),
     ];
     setUploadedDocuments(nextDocuments);
+    setStoredUploadedDocuments([]);
     form.setValue(
       "documents",
       nextDocuments.map((document) => document.file),
@@ -278,6 +334,7 @@ export function IssuanceForm({
       (_, i: number) => i !== index,
     );
     setUploadedDocuments(nextDocuments);
+    setStoredUploadedDocuments([]);
     form.setValue(
       "documents",
       nextDocuments.map((document) => document.file),
@@ -289,6 +346,41 @@ export function IssuanceForm({
       i === index ? { ...document, documentType } : document,
     );
     setUploadedDocuments(nextDocuments);
+    setStoredUploadedDocuments([]);
+  };
+
+  const uploadSelectedDocuments = async () => {
+    if (!onUploadDocuments) return;
+    if (uploadedDocuments.length === 0) {
+      toast.error("Attach at least one legal document before uploading.");
+      return;
+    }
+
+    const fieldsToValidate = isApplicationMode
+      ? [...getStepFields(1), "documents"]
+      : ["documents"];
+    const isValid = await form.trigger(fieldsToValidate);
+    if (!isValid) return;
+
+    setUploadingDocuments(true);
+    try {
+      const documents = await onUploadDocuments(
+        form.getValues(),
+        uploadedDocuments,
+      );
+      if (documents.length === 0) {
+        throw new Error("No documents were uploaded.");
+      }
+      setStoredUploadedDocuments(documents);
+      form.setValue("documents", documents);
+      toast.success("Documents uploaded. You can now submit the request.");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Document upload failed.";
+      toast.error(message);
+    } finally {
+      setUploadingDocuments(false);
+    }
   };
 
   const onSubmit = async (data: IssuanceFormValues) => {
@@ -297,8 +389,37 @@ export function IssuanceForm({
       return;
     }
 
+    if (isApplicationMode && uploadedDocuments.length === 0) {
+      toast.error("Upload at least one legal document before submitting.");
+      setCurrentStep(finalStep);
+      return;
+    }
+
+    if (
+      isApplicationMode &&
+      onUploadDocuments &&
+      storedUploadedDocuments.length === 0
+    ) {
+      toast.error("Upload the selected legal documents before submitting.");
+      setCurrentStep(finalStep);
+      return;
+    }
+
+    if (requireDocumentApproval) {
+      if (existingDocuments.length === 0) {
+        toast.error("No issuer documents are attached to this request.");
+        setCurrentStep(finalStep);
+        return;
+      }
+      if (!documentsApproved) {
+        toast.error("Review and approve the issuer documents before deployment.");
+        setCurrentStep(finalStep);
+        return;
+      }
+    }
+
     if (onSubmitOverride) {
-      await onSubmitOverride(data, uploadedDocuments);
+      await onSubmitOverride(data, uploadedDocuments, storedUploadedDocuments);
       return;
     }
 
@@ -381,6 +502,14 @@ export function IssuanceForm({
                 })),
                 complianceModules: data.complianceRequirements.selectedModules,
                 complianceModuleParams: data.complianceRequirements.moduleParams,
+                documents: existingDocuments,
+                documentsApproved: requireDocumentApproval
+                  ? {
+                      approved: documentsApproved,
+                      approvedBy: address || null,
+                      approvedAt: new Date().toISOString(),
+                    }
+                  : null,
                 txHash: sig,
                 salt,
               },
@@ -1312,28 +1441,84 @@ export function IssuanceForm({
               {/* Document Summary */}
               <div className="p-5 border border-slate-200 rounded-2xl space-y-4">
                 <div className="flex items-center justify-between">
-                  <FormLabel className="text-sm font-bold text-slate-900">Prospectus & Legal Docs</FormLabel>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 text-[#172E7F]"
-                    onClick={() => document.getElementById("document-upload")?.click()}
-                  >
-                    <Upload className="h-3.5 w-3.5 mr-2" /> Upload
-                  </Button>
+                  <div>
+                    <FormLabel className="text-sm font-bold text-slate-900">
+                      {documentsReadOnly ? "Issuer Legal Docs" : "Prospectus & Legal Docs"}
+                    </FormLabel>
+                    {documentsReadOnly ? (
+                      <p className="mt-1 text-xs text-slate-500">
+                        These files were uploaded by the issuer with the tokenization request.
+                      </p>
+                    ) : null}
+                  </div>
+                  {!documentsReadOnly && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-[#172E7F]"
+                      onClick={() => document.getElementById("document-upload")?.click()}
+                    >
+                      <Upload className="h-3.5 w-3.5 mr-2" /> Add Files
+                    </Button>
+                  )}
                 </div>
-                
-                <Input
-                  type="file"
-                  multiple
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  id="document-upload"
-                />
 
-                {uploadedDocuments.length === 0 ? (
+                {!documentsReadOnly && (
+                  <Input
+                    type="file"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    id="document-upload"
+                  />
+                )}
+
+                {documentsReadOnly ? (
+                  existingDocuments.length === 0 ? (
+                    <div className="py-8 text-center bg-slate-50/50 border border-dashed border-slate-200 rounded-xl">
+                      <p className="text-xs text-slate-500">
+                        No issuer documents are attached to this request.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-2">
+                      {existingDocuments.map((document, index) => (
+                        <div
+                          key={document.path || `${document.name}-${index}`}
+                          className="flex flex-col gap-3 p-3 bg-white border border-slate-100 rounded-xl shadow-sm md:flex-row md:items-center md:justify-between"
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600">
+                              <FileText className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="truncate text-xs font-semibold text-slate-800">
+                                {document.name}
+                              </div>
+                              <div className="text-[11px] text-slate-500">
+                                {formatDocumentType(document.documentType)}
+                                {document.size ? ` - ${formatFileSize(document.size)}` : ""}
+                              </div>
+                            </div>
+                          </div>
+                          {document.publicUrl ? (
+                            <a
+                              href={document.publicUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex h-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-[#172E7F] hover:bg-slate-50"
+                            >
+                              <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                              Open
+                            </a>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                ) : uploadedDocuments.length === 0 ? (
                   <div className="py-8 text-center bg-slate-50/50 border border-dashed border-slate-200 rounded-xl">
                     <p className="text-xs text-slate-500">
                       No documents attached. You can add asset documents,
@@ -1390,6 +1575,68 @@ export function IssuanceForm({
                     ))}
                   </div>
                 )}
+
+                {isApplicationMode && !documentsReadOnly && onUploadDocuments && (
+                  <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">
+                        Upload documents before submitting
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Add files first, upload them to secure storage, then submit
+                        the tokenization request.
+                      </p>
+                      {storedUploadedDocuments.length > 0 ? (
+                        <p className="mt-2 text-xs font-semibold text-emerald-700">
+                          {storedUploadedDocuments.length} document
+                          {storedUploadedDocuments.length === 1 ? "" : "s"} uploaded.
+                        </p>
+                      ) : null}
+                    </div>
+                    <Button
+                      type="button"
+                      variant={storedUploadedDocuments.length > 0 ? "outline" : "default"}
+                      className="h-10 shrink-0"
+                      disabled={uploadingDocuments || uploadedDocuments.length === 0}
+                      onClick={() => void uploadSelectedDocuments()}
+                    >
+                      {uploadingDocuments ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : storedUploadedDocuments.length > 0 ? (
+                        <>
+                          <CheckCircle className="mr-2 h-4 w-4" />
+                          Re-upload Documents
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="mr-2 h-4 w-4" />
+                          Upload Documents
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+
+                {requireDocumentApproval && (
+                  <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
+                    <Checkbox
+                      id="issuer-documents-approved"
+                      checked={documentsApproved}
+                      onCheckedChange={(value) => setDocumentsApproved(value === true)}
+                      className="mt-0.5"
+                    />
+                    <Label
+                      htmlFor="issuer-documents-approved"
+                      className="cursor-pointer text-sm leading-5 text-emerald-900"
+                    >
+                      I have reviewed the issuer-uploaded legal documents and approve
+                      using them for this token deployment.
+                    </Label>
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
@@ -1401,7 +1648,7 @@ export function IssuanceForm({
               variant="outline"
               className="h-11 px-6 border-slate-200 text-slate-600 hover:bg-slate-50"
               onClick={prevStep}
-              disabled={currentStep === 1 || deploying}
+              disabled={currentStep === 1 || deploying || uploadingDocuments}
             >
               <ChevronLeft className="h-4 w-4 mr-2" />
               Back
@@ -1412,6 +1659,7 @@ export function IssuanceForm({
                 type="button" 
                 className="h-11 px-8 bg-gradient-to-r from-[#172E7F] to-[#2A5FA6] text-white hover:shadow-lg transition-all"
                 onClick={() => void nextStep()}
+                disabled={uploadingDocuments}
               >
                 Continue
                 <ChevronRight className="h-4 w-4 ml-2" />
@@ -1420,7 +1668,14 @@ export function IssuanceForm({
               <Button 
                 type="submit" 
                 className="h-11 px-10 bg-gradient-to-r from-[#172E7F] to-[#2A5FA6] text-white hover:shadow-lg transition-all"
-                disabled={deploying || (!isPlatformAdmin && !isApplicationMode)}
+                disabled={
+                  deploying ||
+                  uploadingDocuments ||
+                  (!isPlatformAdmin && !isApplicationMode) ||
+                  (isApplicationMode &&
+                    Boolean(onUploadDocuments) &&
+                    storedUploadedDocuments.length === 0)
+                }
               >
                 {deploying ? (
                   <>

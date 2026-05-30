@@ -7,6 +7,7 @@ import {
   Building2,
   CheckCircle,
   Clock,
+  Download,
   ExternalLink,
   FileText,
   TrendingUp,
@@ -24,12 +25,14 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   IssuanceForm,
+  type StoredLegalDocument,
   type IssuanceFormValues,
 } from "@/components/rwa/issuance-form";
 import { ConnectWalletCard } from "@/components/wallet/connect-wallet-card";
 import { useWallet } from "@/hooks/use-wallet";
 import { formatCurrency } from "@/lib/utils";
 import { apiFetch } from "@/lib/backend";
+import { downloadDocuments } from "@/lib/document-download";
 
 type IndexedAsset = {
   id: string;
@@ -88,15 +91,7 @@ type AssetRequest = {
   createdAt: string;
 };
 
-type RequestDocument = {
-  name: string;
-  size?: number;
-  type?: string;
-  documentType?: string;
-  bucket?: string;
-  path?: string;
-  publicUrl?: string;
-};
+type RequestDocument = StoredLegalDocument;
 
 function parseMetadata(metadata: IndexedAsset["metadata"]) {
   if (!metadata) return {};
@@ -310,6 +305,27 @@ export default function IssuancePage() {
     }
   };
 
+  const handleDownloadDocuments = async (request: AssetRequest) => {
+    const documents = parseRequestDocuments(request.documents);
+    const toastId = toast.loading(
+      documents.length > 1 ? "Preparing legal documents ZIP..." : "Downloading legal document...",
+    );
+
+    try {
+      await downloadDocuments(documents, `${request.symbol}-legal-docs`);
+      toast.success("Document download started.", { id: toastId });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to download documents";
+      toast.error(message, { id: toastId });
+    }
+  };
+
+  const selectedRequestDocuments = useMemo(
+    () => (selectedRequest ? parseRequestDocuments(selectedRequest.documents) : []),
+    [selectedRequest],
+  );
+
   const selectedRequestValues = useMemo<Partial<IssuanceFormValues> | undefined>(() => {
     if (!selectedRequest) return undefined;
     const trustedIssuers = Array.isArray(selectedRequest.trustedIssuers)
@@ -355,7 +371,7 @@ export default function IssuancePage() {
         decimals: selectedRequest.decimals ?? 6,
         initialPrice: selectedRequest.initialPrice ?? 1,
       },
-      documents: [],
+      documents: parseRequestDocuments(selectedRequest.documents),
     };
   }, [selectedRequest]);
 
@@ -424,6 +440,9 @@ export default function IssuancePage() {
             }}
             initialValues={selectedRequestValues}
             deploymentRequestId={selectedRequest?.id}
+            existingDocuments={selectedRequestDocuments}
+            documentsReadOnly={!!selectedRequest}
+            requireDocumentApproval={!!selectedRequest}
           />
         </TabsContent>
 
@@ -513,9 +532,23 @@ export default function IssuancePage() {
                         </div>
                       )}
                       <div className="mt-4 border-t pt-4">
-                        <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900">
-                          <FileText className="h-4 w-4 text-[#172E7F]" />
-                          Uploaded Documents
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                            <FileText className="h-4 w-4 text-[#172E7F]" />
+                            Uploaded Documents
+                          </div>
+                          {documents.length > 0 ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 text-xs"
+                              onClick={() => void handleDownloadDocuments(request)}
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                              {documents.length > 1 ? "Download ZIP" : "Download"}
+                            </Button>
+                          ) : null}
                         </div>
                         {documents.length === 0 ? (
                           <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">

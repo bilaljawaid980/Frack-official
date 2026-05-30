@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { PublicKey } from "@solana/web3.js";
-import { AlertTriangle, ArrowLeft, FileText, Shield } from "lucide-react";
+import { AlertTriangle, ArrowLeft, FileText, Loader2, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -194,7 +194,10 @@ function RequestFormContent() {
   const [liveProviders, setLiveProviders] = useState<LiveProvider[] | null>(null);
   const [kycAutofilled, setKycAutofilled] = useState(false);
   const [investorCountry, setInvestorCountry] = useState<number | null>(null);
+  const [investorFidRegistered, setInvestorFidRegistered] = useState<boolean | null>(null);
   const [identityLoading, setIdentityLoading] = useState(false);
+  const [registeringFid, setRegisteringFid] = useState(false);
+  const [fidCountryCode, setFidCountryCode] = useState("840");
   const [formData, setFormData] = useState({
     amount: "",
     fullName: "",
@@ -244,6 +247,7 @@ function RequestFormContent() {
       if (!walletAddress) {
         setKycAutofilled(false);
         setInvestorCountry(null);
+        setInvestorFidRegistered(null);
         setIdentityLoading(false);
         return;
       }
@@ -262,9 +266,13 @@ function RequestFormContent() {
         ]);
         const profile = hasKycProfileFields(existingKyc) ? existingKyc : previousRequest;
 
+        setInvestorFidRegistered(Boolean(investorFid && !investorFid.isIssuer));
         setInvestorCountry(
           investorFid && !investorFid.isIssuer ? Number(investorFid.country) : null,
         );
+        if (investorFid && !investorFid.isIssuer) {
+          setFidCountryCode(String(investorFid.country));
+        }
 
         setFormData((current) => {
           const next = { ...current };
@@ -301,6 +309,8 @@ function RequestFormContent() {
       } catch (err) {
         console.error("Failed to load previous KYC data for purchase request", err);
         setKycAutofilled(false);
+        setInvestorCountry(null);
+        setInvestorFidRegistered(false);
       } finally {
         setIdentityLoading(false);
       }
@@ -311,6 +321,43 @@ function RequestFormContent() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleCreateInvestorFid = async () => {
+    if (!anchorProvider || !walletAddress) {
+      toast.error("Connect the investor wallet before creating a FID.");
+      return;
+    }
+
+    const countryCode = Number(fidCountryCode);
+    if (!Number.isInteger(countryCode) || countryCode < 1 || countryCode > 999) {
+      toast.error("Enter a valid numeric country code between 1 and 999.");
+      return;
+    }
+
+    setRegisteringFid(true);
+    const loadingToast = toast.loading("Creating investor FID...");
+    try {
+      const service = new IdentityService(anchorProvider);
+      await service.ensureOwnFid(countryCode, false);
+      const fid = await service.fetchFid(new PublicKey(walletAddress));
+      setInvestorFidRegistered(Boolean(fid && !fid.isIssuer));
+      setInvestorCountry(fid && !fid.isIssuer ? Number(fid.country) : countryCode);
+      setFormData((current) => ({
+        ...current,
+        country: String(fid && !fid.isIssuer ? fid.country : countryCode),
+      }));
+      toast.success("Investor FID created. You can now request tokens.", {
+        id: loadingToast,
+      });
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to create investor FID.",
+        { id: loadingToast },
+      );
+    } finally {
+      setRegisteringFid(false);
+    }
   };
 
   const kycFieldsLocked =
@@ -350,6 +397,11 @@ function RequestFormContent() {
       return;
     }
 
+    if (investorFidRegistered === false) {
+      toast.error("Create your investor FID before requesting tokens.");
+      return;
+    }
+
     if (countryRestricted) {
       toast.error("This wallet is restricted from this asset by token compliance rules.");
       return;
@@ -379,6 +431,13 @@ function RequestFormContent() {
             new PublicKey(walletAddress),
           )
         : null;
+      if (!investorFid || investorFid.isIssuer) {
+        setInvestorFidRegistered(false);
+        toast.error("Create your investor FID before requesting tokens.", {
+          id: loadingToast,
+        });
+        return;
+      }
 
       const payload = {
         assetId: asset.id,
@@ -388,7 +447,7 @@ function RequestFormContent() {
         kycProvider,
         amlProvider,
         requiredClaimTopics,
-        investorFidRegistered: Boolean(investorFid),
+        investorFidRegistered: true,
         documents: [
           {
             type: "ID_DOCUMENT",
@@ -408,12 +467,9 @@ function RequestFormContent() {
         body: JSON.stringify(payload),
       });
 
-      toast.success(
-        investorFid
-          ? "Request submitted successfully! The provider will review it shortly."
-          : "Request submitted. Register your FID to send it for provider review.",
-        { id: loadingToast },
-      );
+      toast.success("Request submitted successfully! The provider will review it shortly.", {
+        id: loadingToast,
+      });
       router.push(`/investor/${walletAddress}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -462,6 +518,86 @@ function RequestFormContent() {
         <p className="text-slate-500">
           Reading your wallet FID country before opening the request form.
         </p>
+      </div>
+    );
+  }
+
+  if (investorFidRegistered === false) {
+    return (
+      <div className="p-8 glass-panel rounded-[22px] w-full max-w-4xl mx-auto">
+        <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-4">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Asset
+        </Button>
+        <Card className="border-amber-200 bg-amber-50/80 shadow-sm">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-amber-100 p-3">
+                <Shield className="h-6 w-6 text-amber-700" />
+              </div>
+              <div>
+                <CardTitle className="text-amber-950">Investor FID Required</CardTitle>
+                <CardDescription className="text-amber-800">
+                  Create your on-chain investor FID before requesting {asset.name} tokens.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <p className="text-sm leading-6 text-amber-900">
+              This token uses identity compliance. Your FID country is checked
+              against the token&apos;s country restriction rules before a purchase
+              request can be submitted.
+            </p>
+            <div className="grid gap-3 rounded-xl border border-amber-200 bg-white/80 p-4 sm:grid-cols-[1fr_auto] sm:items-end">
+              <div className="space-y-2">
+                <Label htmlFor="request-fid-country-code">Investor country code</Label>
+                <Input
+                  id="request-fid-country-code"
+                  inputMode="numeric"
+                  min={1}
+                  max={999}
+                  onChange={(event) => {
+                    const value = event.target.value.replace(/\D/g, "");
+                    setFidCountryCode(value.slice(0, 3));
+                  }}
+                  placeholder="840"
+                  type="text"
+                  value={fidCountryCode}
+                  className="bg-white"
+                />
+                <p className="text-xs text-slate-500">
+                  Use numeric ISO country code, for example 840 for United States.
+                </p>
+              </div>
+              <Button
+                type="button"
+                disabled={registeringFid}
+                onClick={handleCreateInvestorFid}
+                className="bg-gradient-to-tr from-[#172E7F] to-[#2A5FA6] text-white"
+              >
+                {registeringFid ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  "Create Investor FID"
+                )}
+              </Button>
+            </div>
+            {blockedCountries.length > 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-white/70 p-4 text-sm">
+                <p className="font-semibold text-slate-900">
+                  Current blocked country codes for this token
+                </p>
+                <p className="mt-1 font-mono text-slate-700">
+                  {blockedCountries.join(", ")}
+                </p>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
       </div>
     );
   }

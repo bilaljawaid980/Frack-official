@@ -14,7 +14,7 @@ const getAbsoluteRpcUrl = (rpcUrl?: string) => {
     rpcUrl ||
     process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
     process.env.NEXT_PUBLIC_RPC_URL ||
-    'https://api.testnet.solana.com';
+    'https://devnet.helius-rpc.com/?api-key=f2852f85-8a60-4eaf-bbe7-009aa1b9e41f';
   if (url.startsWith('http') || url.startsWith('ws')) return url;
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
   return `${baseUrl.replace(/\/$/, '')}/${url.replace(/^\//, '')}`;
@@ -28,7 +28,7 @@ export const ZIGCHAIN_TESTNET: ZigChainConfig = {
   chainId:
     process.env.NEXT_PUBLIC_SOLANA_NETWORK ||
     process.env.NEXT_PUBLIC_SOLANA_CLUSTER ||
-    'testnet',
+    'devnet',
   prefix: 'solana',
   gasPrice: '0',
   restEndpoint:
@@ -70,32 +70,32 @@ export const TREX_CONTRACTS = {
   identityRegistry:
     process.env.NEXT_PUBLIC_IRP_PROGRAM_ID ||
     process.env.NEXT_PUBLIC_FRACKS_IRP ||
-    'C8jtErJYtuu7pSZczfSm1JvDmv254Nmmw1KLX6rBdY8o',
+    'HQqgbvfmSzY1yEyhVbyhYqSsbVrRmjUnPmm2nE4ZwRvZ',
   trustedIssuers:
     process.env.NEXT_PUBLIC_TIR_PROGRAM_ID ||
     process.env.NEXT_PUBLIC_FRACKS_TIR ||
-    '8KDYYPx74w6ZLKZgcvVWrj1mCv1gcULdTh2jbxcJwGMJ',
+    '9bgANehpsEDdgyo5DwpY36wmnPdpCihSiAP9TLoBBf4L',
   claimTopics:
     process.env.NEXT_PUBLIC_CTR_PROGRAM_ID ||
     process.env.NEXT_PUBLIC_FRACKS_CTR ||
-    '12rCF9fuSth8T3o6sfpfWdGyaDEQ1jNsxe1ZvKH7q2tS',
+    '8MuWrtbZ1zPzrDhSKPjDd78SMQAMtBuprPnc1Zam1Gig',
   compliance:
     process.env.NEXT_PUBLIC_COMPLIANCE_PROGRAM_ID ||
     process.env.NEXT_PUBLIC_FRACKS_COMPLIANCE ||
-    'FhMXw2VmYYksR4VcjQCUNWYrhzba1rmfiU1EDvaTsxHj',
+    'HnJiNrmDeVFZksgEXaQwyVqHXQLRcyqXEksbYhkiPFFV',
 
   onchainIdCodeId: 0,
 
   factory:
     process.env.NEXT_PUBLIC_FACTORY_PROGRAM_ID ||
     process.env.NEXT_PUBLIC_FRACKS_FACTORY ||
-    '6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe',
+    'FtrzQ1hhjL7vbEPAxLBeLgrmomanSVj9UpV6LLJ5TYFS',
 };
 
 export const EXAMPLE_IDENTITIES = {
   issuer:
     process.env.NEXT_PUBLIC_ISSUER_IDENTITY ||
-    'EoENMXgL9GZBEVfjhn5KU4SkfjZeyoTEdd8NHAcMQsEB',
+    'Fb2roXDWjEaZwWJvxAWJTCRsK4Hy4V64MuCwoGXWMUtW',
   investor:
     process.env.NEXT_PUBLIC_INVESTOR_IDENTITY ||
     '11111111111111111111111111111111',

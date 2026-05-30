@@ -27,7 +27,7 @@ function shortAddress(address: string) {
 }
 
 function solscanAccountUrl(address: string) {
-  return `https://solscan.io/account/${address}?cluster=testnet`;
+  return `https://solscan.io/account/${address}?cluster=devnet`;
 }
 
 export default function InvestorIdentityPage() {

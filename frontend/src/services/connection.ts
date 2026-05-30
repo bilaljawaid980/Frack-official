@@ -1,6 +1,6 @@
 // ─── Singleton Solana Connection ─────────────────────────────────────────────
 //
-// Exports a singleton Connection to the FRACKS testnet RPC endpoint.
+// Exports a singleton Connection to the FRACKS devnet RPC endpoint.
 // Use getConnection() in services, hooks, and providers.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -41,7 +41,7 @@ export function switchToNextRpcEndpoint(): Connection | null {
 }
 
 /**
- * Returns the singleton Connection to the FRACKS testnet RPC endpoint.
+ * Returns the singleton Connection to the FRACKS devnet RPC endpoint.
  * The instance is created once and reused for the lifetime of the process.
  */
 export function getConnection(): Connection {

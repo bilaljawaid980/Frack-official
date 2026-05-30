@@ -3,13 +3,13 @@ import { PublicKey } from "@solana/web3.js";
 // ─── Network ────────────────────────────────────────────────────────────────
 
 export const SOLANA_NETWORK =
-  process.env.NEXT_PUBLIC_SOLANA_NETWORK?.trim() ?? "testnet";
+  process.env.NEXT_PUBLIC_SOLANA_NETWORK?.trim() ?? "devnet";
 export const RPC_URLS = [
   process.env.NEXT_PUBLIC_SOLANA_RPC_URL1,
   process.env.NEXT_PUBLIC_SOLANA_RPC_URL2,
   process.env.NEXT_PUBLIC_SOLANA_RPC_URL,
   process.env.NEXT_PUBLIC_RPC_URL,
-  "https://api.testnet.solana.com",
+  "https://api.devnet.solana.com",
 ]
   .map((url) => url?.trim())
   .filter((url): url is string => Boolean(url))
@@ -44,31 +44,31 @@ export const TOKEN_2022_PROGRAM_ID = new PublicKey(
     "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
 );
 export const FACTORY_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_FACTORY_PROGRAM_ID ?? "6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe"
+  process.env.NEXT_PUBLIC_FACTORY_PROGRAM_ID ?? "FtrzQ1hhjL7vbEPAxLBeLgrmomanSVj9UpV6LLJ5TYFS"
 );
 export const TOKEN_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_TOKEN_PROGRAM_ID ?? "92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s"
+  process.env.NEXT_PUBLIC_TOKEN_PROGRAM_ID ?? "6Naj8HsuNdUJQyyzmPssm1mZRDF7F5VMQ91n9QyMoyGj"
 );
 export const TOKEN_HOOK_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_TOKEN_HOOK_PROGRAM_ID ?? "4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m"
+  process.env.NEXT_PUBLIC_TOKEN_HOOK_PROGRAM_ID ?? "9JrgWtW4UrQoC3tVQRxWBBEQPjDJ2QFDzAVAvSzGtPJ5"
 );
 export const COMPLIANCE_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_COMPLIANCE_PROGRAM_ID ?? "FhMXw2VmYYksR4VcjQCUNWYrhzba1rmfiU1EDvaTsxHj"
+  process.env.NEXT_PUBLIC_COMPLIANCE_PROGRAM_ID ?? "HnJiNrmDeVFZksgEXaQwyVqHXQLRcyqXEksbYhkiPFFV"
 );
 export const IRP_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_IRP_PROGRAM_ID ?? "C8jtErJYtuu7pSZczfSm1JvDmv254Nmmw1KLX6rBdY8o"
+  process.env.NEXT_PUBLIC_IRP_PROGRAM_ID ?? "HQqgbvfmSzY1yEyhVbyhYqSsbVrRmjUnPmm2nE4ZwRvZ"
 );
 export const IRS_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_IRS_PROGRAM_ID ?? "GSLErK4bEfF6ZozTWfjYikWfnBitMYrdbbgfXubJBgVJ"
+  process.env.NEXT_PUBLIC_IRS_PROGRAM_ID ?? "CnAZUQ9jFm2eLGA8d8ek1gpLwGc6xZqvnbyJ9s7swbWc"
 );
 export const FID_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_FID_PROGRAM_ID ?? "EoENMXgL9GZBEVfjhn5KU4SkfjZeyoTEdd8NHAcMQsEB"
+  process.env.NEXT_PUBLIC_FID_PROGRAM_ID ?? "Fb2roXDWjEaZwWJvxAWJTCRsK4Hy4V64MuCwoGXWMUtW"
 );
 export const TIR_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_TIR_PROGRAM_ID ?? "8KDYYPx74w6ZLKZgcvVWrj1mCv1gcULdTh2jbxcJwGMJ"
+  process.env.NEXT_PUBLIC_TIR_PROGRAM_ID ?? "9bgANehpsEDdgyo5DwpY36wmnPdpCihSiAP9TLoBBf4L"
 );
 export const CTR_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_CTR_PROGRAM_ID ?? "12rCF9fuSth8T3o6sfpfWdGyaDEQ1jNsxe1ZvKH7q2tS"
+  process.env.NEXT_PUBLIC_CTR_PROGRAM_ID ?? "8MuWrtbZ1zPzrDhSKPjDd78SMQAMtBuprPnc1Zam1Gig"
 );
 
 // ─── Governance / Deployment PDAs ────────────────────────────────────────────
@@ -90,35 +90,35 @@ export const FRONTEND_DEPLOYMENT_PDA = new PublicKey(
 
 export const MOD_MAX_INVESTORS = new PublicKey(
   process.env.NEXT_PUBLIC_MOD_MAX_INVESTORS ??
-    "4KVbq2esECUHZZdsBiDMM3mxYt8K7rNJUdotG6uZJfRQ"
+    "2zfQv7RxmL5BAgXXFagZXBNby4Q41YGH6hnSJAcsXQeU"
 );
 export const MOD_COUNTRY_RESTRICT = new PublicKey(
   process.env.NEXT_PUBLIC_MOD_COUNTRY_RESTRICT ??
-    "BCGKsDTyncA4EbHzxGVmEi3pheotJiaxCwYvHGxERiZ7"
+    "4ChDAU375yPJXZLG5XqtbbKdirAr3xHU5vnhppUjgu2d"
 );
 export const MOD_MAX_BALANCE = new PublicKey(
   process.env.NEXT_PUBLIC_MOD_MAX_BALANCE ??
-    "9BjLakhcX1ms34VjRwUgMZQAgdbsMM8C1gSPqrJTyCpH"
+    "HEjNS1GC9nffSdXbi6aQ9WNQBNFyJQBGUshyrSeLpE9j"
 );
 export const MOD_MAX_TRANSFER = new PublicKey(
   process.env.NEXT_PUBLIC_MOD_MAX_TRANSFER ??
-    "Ee6RXC46Nb4Bo2BTQcXBHfuxLZdzbKtPmb3sGf2Egiqh"
+    "4gJbGvgnBhJ91gByKNo7eEVmCbsUkK5opyeo3M1VEJsy"
 );
 export const MOD_LOCKUP = new PublicKey(
   process.env.NEXT_PUBLIC_MOD_LOCKUP ??
-    "6XqxWPwZQrfTo2ZJeT7wBhJaXd1eKjB2kx5ZrP1CLwa9"
+    "EvDVqTUjs3ZsAUfPQdyVskYCzoPTbWybF5tcBtWYfAuz"
 );
 export const MOD_DAILY_LIMIT = new PublicKey(
   process.env.NEXT_PUBLIC_MOD_DAILY_LIMIT ??
-    "FYJ1K8cWUsDmbxNpgaBaEmm3RpvvfpxBBWg2MLm4x8Sq"
+    "5dfHskP5MijaDY2gYsE44CPAuomt1vWgbPdGi62cquoT"
 );
 export const MOD_SUPPLY_CAP = new PublicKey(
   process.env.NEXT_PUBLIC_MOD_SUPPLY_CAP ??
-    "EkgX6pGFCFT7FuNWuBAAMePy43iU9oETLDota4nTA3x8"
+    "6tfb66btx776wdsPS5EHDTwWnvPSLJQje7gFQ4EDGxGc"
 );
 export const MOD_COUNTRY_CAP = new PublicKey(
   process.env.NEXT_PUBLIC_MOD_COUNTRY_CAP ??
-    "Cv1HA7nHX8vxZvyCKXjk3gYPkqhfHFXxEsyxSXyRT3Ci"
+    "EcLffdKdSsCpNczazKsSeRw7FCN6vVjKAEMH5CZGBndr"
 );
 
 // ─── PDA Seed Constants ───────────────────────────────────────────────────────

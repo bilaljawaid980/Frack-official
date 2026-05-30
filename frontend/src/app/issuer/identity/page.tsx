@@ -31,7 +31,7 @@ import { toast } from "sonner";
 import { ProviderSignerConfig } from "@/components/trex/provider-signer-config";
 
 const DEPLOYED_FID_PROGRAM_ID = new PublicKey(
-  "EoENMXgL9GZBEVfjhn5KU4SkfjZeyoTEdd8NHAcMQsEB",
+  "Fb2roXDWjEaZwWJvxAWJTCRsK4Hy4V64MuCwoGXWMUtW",
 );
 
 async function getActiveFidProgramId() {

@@ -1,6 +1,6 @@
 export const INDEXER_DEFAULTS = {
-  rpcEndpoint: "https://api.testnet.solana.com",
-  factoryProgram: "6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe",
+  rpcEndpoint: "https://devnet.helius-rpc.com/?api-key=f2852f85-8a60-4eaf-bbe7-009aa1b9e41f",
+  factoryProgram: "FtrzQ1hhjL7vbEPAxLBeLgrmomanSVj9UpV6LLJ5TYFS",
   tokenList: [] as string[],
   maxAssetScan: 25,
   txScanLimit: 100,

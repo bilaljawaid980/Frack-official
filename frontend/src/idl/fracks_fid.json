@@ -1,5 +1,5 @@
 {
-  "address": "EoENMXgL9GZBEVfjhn5KU4SkfjZeyoTEdd8NHAcMQsEB",
+  "address": "Fb2roXDWjEaZwWJvxAWJTCRsK4Hy4V64MuCwoGXWMUtW",
   "metadata": {
     "name": "fracks_fid",
     "version": "0.1.0",
@@ -87,7 +87,7 @@
                 "path": "target_fid"
               },
               {
-                "kind": "account",
+                "kind": "arg",
                 "path": "issuer_fid"
               },
               {
@@ -308,26 +308,6 @@
           "signer": true
         },
         {
-          "name": "issuer_fid",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  102,
-                  105,
-                  100
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "issuer_fid.owner",
-                "account": "FidAccount"
-              }
-            ]
-          }
-        },
-        {
           "name": "claim",
           "writable": true,
           "pda": {
@@ -389,7 +369,8 @@
               },
               {
                 "kind": "account",
-                "path": "issuer_fid"
+                "path": "claim.issuer_fid",
+                "account": "ClaimAccount"
               },
               {
                 "kind": "account",

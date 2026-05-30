@@ -459,9 +459,17 @@ export default function AssetDetailPage({
                         <FileText className="h-5 w-5 text-muted-foreground" />
                         <p className="font-medium">{doc.name}</p>
                       </div>
-                      <Button variant="ghost" size="sm">
-                        <ExternalLink className="h-4 w-4" />
-                      </Button>
+                      {doc.url ? (
+                        <a
+                          href={doc.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                          title="Open document"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      ) : null}
                     </div>
                   ))}
                 </div>

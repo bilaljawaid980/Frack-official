@@ -120,7 +120,7 @@ function shortAddress(address: string) {
 }
 
 function solscanTokenUrl(tokenContract: string) {
-  return `https://solscan.io/token/${tokenContract}?cluster=testnet`;
+  return `https://solscan.io/token/${tokenContract}?cluster=devnet`;
 }
 
 function formatBaseUnits(rawAmount: string, decimals: number) {
@@ -1319,7 +1319,7 @@ export default function InvestorDashboardPage() {
                               </Button>
                             ) : intent.transferTxHash ? (
                               <a
-                                href={`https://solscan.io/tx/${intent.transferTxHash}?cluster=testnet`}
+                                href={`https://solscan.io/tx/${intent.transferTxHash}?cluster=devnet`}
                                 rel="noreferrer"
                                 target="_blank"
                                 className="text-sm text-[#172E7F] underline"
@@ -1613,7 +1613,7 @@ export default function InvestorDashboardPage() {
                           {req.transferTxHash ? (
                             <a
                               className="inline-flex items-center gap-1 text-xs text-[#172E7F] hover:underline"
-                              href={`https://solscan.io/tx/${req.transferTxHash}?cluster=testnet`}
+                              href={`https://solscan.io/tx/${req.transferTxHash}?cluster=devnet`}
                               target="_blank"
                               rel="noreferrer"
                             >

@@ -851,6 +851,7 @@ dependencies = [
  "fracks-token-hook",
  "solana-program",
  "spl-tlv-account-resolution",
+ "spl-token-metadata-interface",
  "spl-transfer-hook-interface",
 ]
 

@@ -38,7 +38,7 @@ import type { PermissionsState } from "@/hooks/use-permissions";
 
 function buildExplorerTxUrl(txHash: string): string {
   const base = process.env.NEXT_PUBLIC_SOLANA_EXPLORER || "https://solscan.io";
-  const cluster = process.env.NEXT_PUBLIC_SOLANA_CLUSTER || "testnet";
+  const cluster = process.env.NEXT_PUBLIC_SOLANA_CLUSTER || "devnet";
   if (cluster === "mainnet-beta") {
     return `${base.replace(/\/$/, "")}/tx/${txHash}`;
   }

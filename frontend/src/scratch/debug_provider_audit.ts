@@ -323,10 +323,7 @@ async function main() {
   const scopedTokenMintArg = arg("token");
   const rpc =
     arg("rpc") ??
-    process.env.NEXT_PUBLIC_SOLANA_RPC_URL1 ??
-    process.env.NEXT_PUBLIC_SOLANA_RPC_URL ??
-    process.env.SOLANA_RPC_URL1 ??
-    "https://api.testnet.solana.com";
+    process.env.NEXT_PUBLIC_SOLANA_RPC_URL1;
   const factory = new PublicKey(
     arg("factory") ??
       process.env.NEXT_PUBLIC_FACTORY_PROGRAM_ID ??

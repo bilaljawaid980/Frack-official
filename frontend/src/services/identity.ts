@@ -39,16 +39,16 @@ type FidProgram = Program<Idl>;
 type TirProgram = Program<Idl>;
 
 const DEPLOYED_FID_PROGRAM_ID = new PublicKey(
-  "EoENMXgL9GZBEVfjhn5KU4SkfjZeyoTEdd8NHAcMQsEB",
+  "Fb2roXDWjEaZwWJvxAWJTCRsK4Hy4V64MuCwoGXWMUtW",
 );
 const DEPLOYED_IRP_PROGRAM_ID = new PublicKey(
-  "C8jtErJYtuu7pSZczfSm1JvDmv254Nmmw1KLX6rBdY8o",
+  "HQqgbvfmSzY1yEyhVbyhYqSsbVrRmjUnPmm2nE4ZwRvZ",
 );
 const DEPLOYED_IRS_PROGRAM_ID = new PublicKey(
-  "GSLErK4bEfF6ZozTWfjYikWfnBitMYrdbbgfXubJBgVJ",
+  "CnAZUQ9jFm2eLGA8d8ek1gpLwGc6xZqvnbyJ9s7swbWc",
 );
 const DEPLOYED_TIR_PROGRAM_ID = new PublicKey(
-  "8KDYYPx74w6ZLKZgcvVWrj1mCv1gcULdTh2jbxcJwGMJ",
+  "9bgANehpsEDdgyo5DwpY36wmnPdpCihSiAP9TLoBBf4L",
 );
 
 const REVOKE_CLAIM_DISCRIMINATOR = Buffer.from([

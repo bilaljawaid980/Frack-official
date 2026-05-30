@@ -983,7 +983,7 @@ export function formatTransactionError(err: unknown): string {
     msg.includes("429") ||
     msg.includes("Too Many Requests")
   ) {
-    return "RPC rate limit hit. Please retry in a moment or switch to a less busy Solana testnet RPC endpoint.";
+    return "RPC rate limit hit. Please retry in a moment or switch to a less busy Solana devnet RPC endpoint.";
   }
 
   return msg || "An unexpected error occurred.";

@@ -4,7 +4,11 @@ const ACCESS_TOKEN_KEY = "rwa_access_token";
 const REFRESH_TOKEN_KEY = "rwa_refresh_token";
 
 export function getBackendUrl() {
-  const raw = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+  const raw = process.env.NEXT_PUBLIC_BACKEND_URL;
+  if (!raw) {
+    throw new Error("NEXT_PUBLIC_BACKEND_URL is not configured");
+  }
+
   return raw.replace(/\/+$/, "");
 }
 

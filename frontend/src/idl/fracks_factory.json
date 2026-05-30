@@ -1,5 +1,5 @@
 {
-  "address": "6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe",
+  "address": "FtrzQ1hhjL7vbEPAxLBeLgrmomanSVj9UpV6LLJ5TYFS",
   "metadata": {
     "name": "fracks_factory",
     "version": "0.1.0",
@@ -34,7 +34,7 @@
         },
         {
           "name": "hook_program",
-          "address": "4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m"
+          "address": "9JrgWtW4UrQoC3tVQRxWBBEQPjDJ2QFDzAVAvSzGtPJ5"
         },
         {
           "name": "token_2022_program",
@@ -166,37 +166,37 @@
           "name": "extra_account_metas",
           "writable": true
         },
-          {
-            "name": "token_program",
-            "address": "92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s"
-          },
-          {
-            "name": "token_2022_program",
-            "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
-          },
-          {
-            "name": "hook_program",
-            "address": "4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m"
-          },
+        {
+          "name": "token_program",
+          "address": "6Naj8HsuNdUJQyyzmPssm1mZRDF7F5VMQ91n9QyMoyGj"
+        },
+        {
+          "name": "token_2022_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "hook_program",
+          "address": "9JrgWtW4UrQoC3tVQRxWBBEQPjDJ2QFDzAVAvSzGtPJ5"
+        },
         {
           "name": "irp_program",
-          "address": "C8jtErJYtuu7pSZczfSm1JvDmv254Nmmw1KLX6rBdY8o"
+          "address": "HQqgbvfmSzY1yEyhVbyhYqSsbVrRmjUnPmm2nE4ZwRvZ"
         },
         {
           "name": "irs_program",
-          "address": "GSLErK4bEfF6ZozTWfjYikWfnBitMYrdbbgfXubJBgVJ"
+          "address": "CnAZUQ9jFm2eLGA8d8ek1gpLwGc6xZqvnbyJ9s7swbWc"
         },
         {
           "name": "tir_program",
-          "address": "8KDYYPx74w6ZLKZgcvVWrj1mCv1gcULdTh2jbxcJwGMJ"
+          "address": "9bgANehpsEDdgyo5DwpY36wmnPdpCihSiAP9TLoBBf4L"
         },
         {
           "name": "ctr_program",
-          "address": "12rCF9fuSth8T3o6sfpfWdGyaDEQ1jNsxe1ZvKH7q2tS"
+          "address": "8MuWrtbZ1zPzrDhSKPjDd78SMQAMtBuprPnc1Zam1Gig"
         },
         {
           "name": "compliance_program",
-          "address": "FhMXw2VmYYksR4VcjQCUNWYrhzba1rmfiU1EDvaTsxHj"
+          "address": "HnJiNrmDeVFZksgEXaQwyVqHXQLRcyqXEksbYhkiPFFV"
         },
         {
           "name": "system_program",
@@ -260,27 +260,27 @@
         },
         {
           "name": "token_program",
-          "address": "92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s"
+          "address": "6Naj8HsuNdUJQyyzmPssm1mZRDF7F5VMQ91n9QyMoyGj"
         },
         {
           "name": "irp_program",
-          "address": "C8jtErJYtuu7pSZczfSm1JvDmv254Nmmw1KLX6rBdY8o"
+          "address": "HQqgbvfmSzY1yEyhVbyhYqSsbVrRmjUnPmm2nE4ZwRvZ"
         },
         {
           "name": "irs_program",
-          "address": "GSLErK4bEfF6ZozTWfjYikWfnBitMYrdbbgfXubJBgVJ"
+          "address": "CnAZUQ9jFm2eLGA8d8ek1gpLwGc6xZqvnbyJ9s7swbWc"
         },
         {
           "name": "tir_program",
-          "address": "8KDYYPx74w6ZLKZgcvVWrj1mCv1gcULdTh2jbxcJwGMJ"
+          "address": "9bgANehpsEDdgyo5DwpY36wmnPdpCihSiAP9TLoBBf4L"
         },
         {
           "name": "ctr_program",
-          "address": "12rCF9fuSth8T3o6sfpfWdGyaDEQ1jNsxe1ZvKH7q2tS"
+          "address": "8MuWrtbZ1zPzrDhSKPjDd78SMQAMtBuprPnc1Zam1Gig"
         },
         {
           "name": "compliance_program",
-          "address": "FhMXw2VmYYksR4VcjQCUNWYrhzba1rmfiU1EDvaTsxHj"
+          "address": "HnJiNrmDeVFZksgEXaQwyVqHXQLRcyqXEksbYhkiPFFV"
         },
         {
           "name": "system_program",

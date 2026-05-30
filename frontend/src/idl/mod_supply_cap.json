@@ -1,5 +1,5 @@
 {
-  "address": "EkgX6pGFCFT7FuNWuBAAMePy43iU9oETLDota4nTA3x8",
+  "address": "6tfb66btx776wdsPS5EHDTwWnvPSLJQje7gFQ4EDGxGc",
   "metadata": {
     "name": "mod_supply_cap",
     "version": "0.1.0",
@@ -294,6 +294,66 @@
       ]
     },
     {
+      "name": "set_max_supply",
+      "discriminator": [
+        16,
+        207,
+        140,
+        77,
+        107,
+        20,
+        202,
+        158
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "module_state"
+          ]
+        },
+        {
+          "name": "module_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  95,
+                  115,
+                  117,
+                  112,
+                  112,
+                  108,
+                  121,
+                  95,
+                  99,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "module_state.token_mint",
+                "account": "SupplyCapModule"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "max_supply",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "transferred",
       "discriminator": [
         234,
@@ -376,6 +436,11 @@
       "code": 12003,
       "name": "ArithmeticOverflow",
       "msg": "Arithmetic overflow."
+    },
+    {
+      "code": 12004,
+      "name": "MaxSupplyBelowCurrent",
+      "msg": "New max supply cannot be lower than the already minted supply."
     }
   ],
   "types": [

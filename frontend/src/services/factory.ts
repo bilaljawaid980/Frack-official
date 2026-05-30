@@ -512,11 +512,11 @@ export class FactoryService {
   }
 
   /**
-   * Full two-step deployment targeting the testnet-deployed factory:
+   * Full two-step deployment targeting the devnet-deployed factory:
    * 1. Create the SPL Token-2022 mint directly via spl-token instructions
    * 2. deploy_token_suite — initialises all FRACKS state accounts
    *
-   * The deployed factory on testnet does not have a create_token_mint instruction,
+   * The deployed factory on devnet does not have a create_token_mint instruction,
    * so step 1 uses raw SPL Token-2022 instructions instead.
    *
    * @param args        Deployment arguments (tokenMint must match mintKeypair.publicKey)
@@ -1761,7 +1761,7 @@ export class FactoryService {
       }
 
       throw new Error(
-        "Transaction was submitted but confirmation is delayed on testnet. Check explorer/history before retrying deployment.",
+        "Transaction was submitted but confirmation is delayed on devnet. Check explorer/history before retrying deployment.",
       );
     }
   }

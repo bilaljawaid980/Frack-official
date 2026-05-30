@@ -586,19 +586,19 @@ function parseIssuerEntry(account: AccountInfo<Buffer>) {
 
 function getCtrProgramId() {
   return new PublicKey(
-    process.env.FRACKS_CTR || "12rCF9fuSth8T3o6sfpfWdGyaDEQ1jNsxe1ZvKH7q2tS",
+    process.env.FRACKS_CTR || "8MuWrtbZ1zPzrDhSKPjDd78SMQAMtBuprPnc1Zam1Gig",
   );
 }
 
 function getTirProgramId() {
   return new PublicKey(
-    process.env.FRACKS_TIR || "8KDYYPx74w6ZLKZgcvVWrj1mCv1gcULdTh2jbxcJwGMJ",
+    process.env.FRACKS_TIR || "9bgANehpsEDdgyo5DwpY36wmnPdpCihSiAP9TLoBBf4L",
   );
 }
 
 function deriveOwnerStatePDA(tokenMint: PublicKey): [PublicKey, number] {
   const tokenProgram = new PublicKey(
-    process.env.FRACKS_TOKEN_PROGRAM || "92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s",
+    process.env.FRACKS_TOKEN_PROGRAM || "6Naj8HsuNdUJQyyzmPssm1mZRDF7F5VMQ91n9QyMoyGj",
   );
 
   return PublicKey.findProgramAddressSync(

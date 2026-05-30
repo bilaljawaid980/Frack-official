@@ -4,7 +4,7 @@ import bs58 from "bs58";
 import nacl from "tweetnacl";
 import { Keypair, PublicKey } from "@solana/web3.js";
 
-const DEFAULT_FID_PROGRAM_ID = "EoENMXgL9GZBEVfjhn5KU4SkfjZeyoTEdd8NHAcMQsEB";
+const DEFAULT_FID_PROGRAM_ID = "Fb2roXDWjEaZwWJvxAWJTCRsK4Hy4V64MuCwoGXWMUtW";
 
 function decodeByteArray(value: unknown, label: string, expectedLength: number) {
   if (!Array.isArray(value) || value.length !== expectedLength) {

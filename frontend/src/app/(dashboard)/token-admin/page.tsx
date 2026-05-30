@@ -238,11 +238,11 @@ function buildTirInstruction(
 }
 
 function tokenExplorerUrl(address: string) {
-  return `https://solscan.io/token/${address}?cluster=testnet`;
+  return `https://solscan.io/token/${address}?cluster=devnet`;
 }
 
 function accountExplorerUrl(address: string) {
-  return `https://solscan.io/account/${address}?cluster=testnet`;
+  return `https://solscan.io/account/${address}?cluster=devnet`;
 }
 
 function TokenAdminPageContent() {

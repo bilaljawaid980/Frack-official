@@ -34,7 +34,7 @@ use fracks_token_hook::program::FracksTokenHook;
 use solana_program::hash::hash;
 use spl_token_metadata_interface::instruction::initialize as token_metadata_initialize;
 
-declare_id!("92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s");
+declare_id!("6Naj8HsuNdUJQyyzmPssm1mZRDF7F5VMQ91n9QyMoyGj");
 
 const MAX_NAME_LEN: usize = 64;
 const MAX_SYMBOL_LEN: usize = 12;
@@ -49,8 +49,8 @@ const SUBSCRIPTION_ESCROW_SPACE: usize = 8 + 32 + 32 + 32 + 8 + 8 + 8 + 1 + 1;
 const TRANSFER_APPROVAL_KIND_TRANSFER: u8 = 0;
 const TRANSFER_APPROVAL_KIND_FORCED: u8 = 1;
 const TRANSFER_APPROVAL_KIND_RECOVERY: u8 = 2;
-const FRACKS_TOKEN_HOOK_ID: Pubkey = pubkey!("4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m");
-const FRACKS_FACTORY_ID: Pubkey = pubkey!("6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe");
+const FRACKS_TOKEN_HOOK_ID: Pubkey = pubkey!("9JrgWtW4UrQoC3tVQRxWBBEQPjDJ2QFDzAVAvSzGtPJ5");
+const FRACKS_FACTORY_ID: Pubkey = pubkey!("FtrzQ1hhjL7vbEPAxLBeLgrmomanSVj9UpV6LLJ5TYFS");
 
 #[program]
 pub mod fracks_token {

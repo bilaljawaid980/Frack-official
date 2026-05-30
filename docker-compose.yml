@@ -1,65 +1,3 @@
-x-solana-env: &solana-env
-  SOLANA_RPC_URL1: ${SOLANA_RPC_URL1:-https://api.testnet.solana.com}
-  SOLANA_RPC_URL2: ${SOLANA_RPC_URL2:-}
-  SOLANA_RPC_URL: ${SOLANA_RPC_URL:-https://api.testnet.solana.com}
-  SOLANA_CLUSTER: ${SOLANA_CLUSTER:-testnet}
-  FRACKS_FACTORY: ${FRACKS_FACTORY:-6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe}
-  FRACKS_TOKEN_PROGRAM: ${FRACKS_TOKEN_PROGRAM:-92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s}
-  FRACKS_TOKEN_MINT: ${FRACKS_TOKEN_MINT:-99eSVUsJKBHL7JMiVVjCBqMShxX74Nb7d5JkDn19NQAR}
-  FRACKS_FID: ${FRACKS_FID:-EoENMXgL9GZBEVfjhn5KU4SkfjZeyoTEdd8NHAcMQsEB}
-  FRACKS_IRP: ${FRACKS_IRP:-C8jtErJYtuu7pSZczfSm1JvDmv254Nmmw1KLX6rBdY8o}
-  FRACKS_IRS: ${FRACKS_IRS:-GSLErK4bEfF6ZozTWfjYikWfnBitMYrdbbgfXubJBgVJ}
-  FRACKS_TIR: ${FRACKS_TIR:-8KDYYPx74w6ZLKZgcvVWrj1mCv1gcULdTh2jbxcJwGMJ}
-  FRACKS_CTR: ${FRACKS_CTR:-12rCF9fuSth8T3o6sfpfWdGyaDEQ1jNsxe1ZvKH7q2tS}
-  FRACKS_COMPLIANCE: ${FRACKS_COMPLIANCE:-FhMXw2VmYYksR4VcjQCUNWYrhzba1rmfiU1EDvaTsxHj}
-  MOD_MAX_INVESTORS: ${MOD_MAX_INVESTORS:-4KVbq2esECUHZZdsBiDMM3mxYt8K7rNJUdotG6uZJfRQ}
-  MOD_COUNTRY_RESTRICT: ${MOD_COUNTRY_RESTRICT:-BCGKsDTyncA4EbHzxGVmEi3pheotJiaxCwYvHGxERiZ7}
-  MOD_MAX_BALANCE: ${MOD_MAX_BALANCE:-9BjLakhcX1ms34VjRwUgMZQAgdbsMM8C1gSPqrJTyCpH}
-  MOD_MAX_TRANSFER: ${MOD_MAX_TRANSFER:-Ee6RXC46Nb4Bo2BTQcXBHfuxLZdzbKtPmb3sGf2Egiqh}
-  MOD_LOCKUP: ${MOD_LOCKUP:-6XqxWPwZQrfTo2ZJeT7wBhJaXd1eKjB2kx5ZrP1CLwa9}
-  MOD_DAILY_LIMIT: ${MOD_DAILY_LIMIT:-FYJ1K8cWUsDmbxNpgaBaEmm3RpvvfpxBBWg2MLm4x8Sq}
-  MOD_SUPPLY_CAP: ${MOD_SUPPLY_CAP:-EkgX6pGFCFT7FuNWuBAAMePy43iU9oETLDota4nTA3x8}
-  MOD_COUNTRY_CAP: ${MOD_COUNTRY_CAP:-Cv1HA7nHX8vxZvyCKXjk3gYPkqhfHFXxEsyxSXyRT3Ci}
-
-x-frontend-solana-env: &frontend-solana-env
-  NEXT_PUBLIC_RPC_URL: ${NEXT_PUBLIC_RPC_URL:-https://api.testnet.solana.com}
-  NEXT_PUBLIC_SOLANA_RPC_URL1: ${NEXT_PUBLIC_SOLANA_RPC_URL1:-https://api.testnet.solana.com}
-  NEXT_PUBLIC_SOLANA_RPC_URL2: ${NEXT_PUBLIC_SOLANA_RPC_URL2:-}
-  NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
-  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}
-  NEXT_PUBLIC_SOLANA_CLUSTER: ${NEXT_PUBLIC_SOLANA_CLUSTER:-testnet}
-  NEXT_PUBLIC_SOLANA_NETWORK: ${NEXT_PUBLIC_SOLANA_NETWORK:-testnet}
-  NEXT_PUBLIC_SOLANA_EXPLORER: ${NEXT_PUBLIC_SOLANA_EXPLORER:-https://explorer.solana.com}
-  NEXT_PUBLIC_EXPLORER_URL: ${NEXT_PUBLIC_EXPLORER_URL:-https://explorer.solana.com}
-  NEXT_PUBLIC_EXPLORER_CLUSTER: ${NEXT_PUBLIC_EXPLORER_CLUSTER:-testnet}
-  NEXT_PUBLIC_PLATFORM_OWNER: ${NEXT_PUBLIC_PLATFORM_OWNER:-7LA1ZMrc4j19sCSnXFmmiLvjo6KVWENwv9aS4oXYKq2E}
-  NEXT_PUBLIC_FRACKS_FACTORY: ${NEXT_PUBLIC_FRACKS_FACTORY:-6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe}
-  NEXT_PUBLIC_FRACKS_TOKEN_MINT: ${NEXT_PUBLIC_FRACKS_TOKEN_MINT:-99eSVUsJKBHL7JMiVVjCBqMShxX74Nb7d5JkDn19NQAR}
-  NEXT_PUBLIC_FRACKS_IRP: ${NEXT_PUBLIC_FRACKS_IRP:-C8jtErJYtuu7pSZczfSm1JvDmv254Nmmw1KLX6rBdY8o}
-  NEXT_PUBLIC_FRACKS_IRS: ${NEXT_PUBLIC_FRACKS_IRS:-GSLErK4bEfF6ZozTWfjYikWfnBitMYrdbbgfXubJBgVJ}
-  NEXT_PUBLIC_FRACKS_TIR: ${NEXT_PUBLIC_FRACKS_TIR:-8KDYYPx74w6ZLKZgcvVWrj1mCv1gcULdTh2jbxcJwGMJ}
-  NEXT_PUBLIC_FRACKS_CTR: ${NEXT_PUBLIC_FRACKS_CTR:-12rCF9fuSth8T3o6sfpfWdGyaDEQ1jNsxe1ZvKH7q2tS}
-  NEXT_PUBLIC_FRACKS_COMPLIANCE: ${NEXT_PUBLIC_FRACKS_COMPLIANCE:-FhMXw2VmYYksR4VcjQCUNWYrhzba1rmfiU1EDvaTsxHj}
-  NEXT_PUBLIC_FACTORY_PROGRAM_ID: ${NEXT_PUBLIC_FACTORY_PROGRAM_ID:-6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe}
-  NEXT_PUBLIC_TOKEN_PROGRAM_ID: ${NEXT_PUBLIC_TOKEN_PROGRAM_ID:-92MCTz2KpWqhSD7LWay97LmZbdmpAj4fJ3FXtV7rbW9s}
-  NEXT_PUBLIC_TOKEN_HOOK_PROGRAM_ID: ${NEXT_PUBLIC_TOKEN_HOOK_PROGRAM_ID:-4sLPqAViuzo1yJJExKn2TfP42enBQPhvAUZq5japm85m}
-  NEXT_PUBLIC_COMPLIANCE_PROGRAM_ID: ${NEXT_PUBLIC_COMPLIANCE_PROGRAM_ID:-FhMXw2VmYYksR4VcjQCUNWYrhzba1rmfiU1EDvaTsxHj}
-  NEXT_PUBLIC_IRP_PROGRAM_ID: ${NEXT_PUBLIC_IRP_PROGRAM_ID:-C8jtErJYtuu7pSZczfSm1JvDmv254Nmmw1KLX6rBdY8o}
-  NEXT_PUBLIC_IRS_PROGRAM_ID: ${NEXT_PUBLIC_IRS_PROGRAM_ID:-GSLErK4bEfF6ZozTWfjYikWfnBitMYrdbbgfXubJBgVJ}
-  NEXT_PUBLIC_FID_PROGRAM_ID: ${NEXT_PUBLIC_FID_PROGRAM_ID:-EoENMXgL9GZBEVfjhn5KU4SkfjZeyoTEdd8NHAcMQsEB}
-  NEXT_PUBLIC_TIR_PROGRAM_ID: ${NEXT_PUBLIC_TIR_PROGRAM_ID:-8KDYYPx74w6ZLKZgcvVWrj1mCv1gcULdTh2jbxcJwGMJ}
-  NEXT_PUBLIC_CTR_PROGRAM_ID: ${NEXT_PUBLIC_CTR_PROGRAM_ID:-12rCF9fuSth8T3o6sfpfWdGyaDEQ1jNsxe1ZvKH7q2tS}
-  NEXT_PUBLIC_TOKEN_2022_PROGRAM_ID: ${NEXT_PUBLIC_TOKEN_2022_PROGRAM_ID:-TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb}
-  NEXT_PUBLIC_MOD_MAX_INVESTORS: ${NEXT_PUBLIC_MOD_MAX_INVESTORS:-4KVbq2esECUHZZdsBiDMM3mxYt8K7rNJUdotG6uZJfRQ}
-  NEXT_PUBLIC_MOD_COUNTRY_RESTRICT: ${NEXT_PUBLIC_MOD_COUNTRY_RESTRICT:-BCGKsDTyncA4EbHzxGVmEi3pheotJiaxCwYvHGxERiZ7}
-  NEXT_PUBLIC_MOD_MAX_BALANCE: ${NEXT_PUBLIC_MOD_MAX_BALANCE:-9BjLakhcX1ms34VjRwUgMZQAgdbsMM8C1gSPqrJTyCpH}
-  NEXT_PUBLIC_MOD_MAX_TRANSFER: ${NEXT_PUBLIC_MOD_MAX_TRANSFER:-Ee6RXC46Nb4Bo2BTQcXBHfuxLZdzbKtPmb3sGf2Egiqh}
-  NEXT_PUBLIC_MOD_LOCKUP: ${NEXT_PUBLIC_MOD_LOCKUP:-6XqxWPwZQrfTo2ZJeT7wBhJaXd1eKjB2kx5ZrP1CLwa9}
-  NEXT_PUBLIC_MOD_DAILY_LIMIT: ${NEXT_PUBLIC_MOD_DAILY_LIMIT:-FYJ1K8cWUsDmbxNpgaBaEmm3RpvvfpxBBWg2MLm4x8Sq}
-  NEXT_PUBLIC_MOD_SUPPLY_CAP: ${NEXT_PUBLIC_MOD_SUPPLY_CAP:-EkgX6pGFCFT7FuNWuBAAMePy43iU9oETLDota4nTA3x8}
-  NEXT_PUBLIC_MOD_COUNTRY_CAP: ${NEXT_PUBLIC_MOD_COUNTRY_CAP:-Cv1HA7nHX8vxZvyCKXjk3gYPkqhfHFXxEsyxSXyRT3Ci}
-  NEXT_PUBLIC_FRACKS_COMPLIANCE_MODULES: ${NEXT_PUBLIC_FRACKS_COMPLIANCE_MODULES:-4KVbq2esECUHZZdsBiDMM3mxYt8K7rNJUdotG6uZJfRQ,BCGKsDTyncA4EbHzxGVmEi3pheotJiaxCwYvHGxERiZ7,9BjLakhcX1ms34VjRwUgMZQAgdbsMM8C1gSPqrJTyCpH,Ee6RXC46Nb4Bo2BTQcXBHfuxLZdzbKtPmb3sGf2Egiqh,6XqxWPwZQrfTo2ZJeT7wBhJaXd1eKjB2kx5ZrP1CLwa9,FYJ1K8cWUsDmbxNpgaBaEmm3RpvvfpxBBWg2MLm4x8Sq,EkgX6pGFCFT7FuNWuBAAMePy43iU9oETLDota4nTA3x8,Cv1HA7nHX8vxZvyCKXjk3gYPkqhfHFXxEsyxSXyRT3Ci}
-
 services:
   db:
     image: postgres:17-alpine
@@ -87,6 +25,8 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     container_name: fracks-migrate
+    env_file:
+      - ./backend/.env
     depends_on:
       db:
         condition: service_healthy
@@ -103,6 +43,8 @@ services:
       dockerfile: Dockerfile.backend
     container_name: fracks-backend
     restart: unless-stopped
+    env_file:
+      - ./backend/.env
     depends_on:
       db:
         condition: service_healthy
@@ -112,16 +54,14 @@ services:
       NODE_ENV: production
       PORT: 4082
       DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-1234}@db:5432/${DB_NAME:-rwaPlatformDB}?schema=public
-      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-011ad73351af6814a808ad96bf12627f}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-9be24ae2b9951d80c07137bd6663910a}
-      JWT_ACCESS_EXPIRES_IN: 15m
-      JWT_REFRESH_EXPIRES_IN: 7d
-      <<: *solana-env
-      INDEXER_INTERVAL_MS: 120000
     ports:
       - "4082:4082"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:4082/assets >/dev/null 2>&1 || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://localhost:4082/assets >/dev/null 2>&1 || exit 1",
+        ]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -136,6 +76,8 @@ services:
       dockerfile: Dockerfile.backend
     container_name: fracks-indexer
     restart: unless-stopped
+    env_file:
+      - ./backend/.env
     depends_on:
       db:
         condition: service_healthy
@@ -145,10 +87,6 @@ services:
         condition: service_started
     environment:
       DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-1234}@db:5432/${DB_NAME:-rwaPlatformDB}?schema=public
-      <<: *solana-env
-      INDEXER_INTERVAL_MS: 120000
-      INDEXER_RPC_DELAY_MS: ${INDEXER_RPC_DELAY_MS:-500}
-      INDEXER_RPC_MAX_RETRIES: ${INDEXER_RPC_MAX_RETRIES:-5}
     command: ["pnpm", "run", "indexer:once"]
     networks:
       - backend-db
@@ -158,25 +96,26 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
-      args:
-        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-http://localhost:4082}
-        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:4083}
-        <<: *frontend-solana-env
+      secrets:
+        - frontend_env
     container_name: fracks-frontend
     restart: unless-stopped
+    env_file:
+      - ./frontend/.env.local
     depends_on:
       backend:
         condition: service_started
     environment:
       BACKEND_URL: http://backend:4082
       PORT: 4083
-      NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-http://localhost:4082}
-      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:4083}
-      <<: *frontend-solana-env
     ports:
       - "4083:4083"
     networks:
       - frontend-public
+
+secrets:
+  frontend_env:
+    file: ./frontend/.env.local
 
 volumes:
   postgres_data:

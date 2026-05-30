@@ -1,5 +1,5 @@
 {
-  "address": "FhMXw2VmYYksR4VcjQCUNWYrhzba1rmfiU1EDvaTsxHj",
+  "address": "HnJiNrmDeVFZksgEXaQwyVqHXQLRcyqXEksbYhkiPFFV",
   "metadata": {
     "name": "fracks_compliance",
     "version": "0.1.0",
@@ -740,6 +740,11 @@
       "code": 12053,
       "name": "MissingModuleSupportAccount",
       "msg": "Missing module support account."
+    },
+    {
+      "code": 12054,
+      "name": "ComplianceCheckFailed",
+      "msg": "Compliance check failed."
     }
   ],
   "types": [

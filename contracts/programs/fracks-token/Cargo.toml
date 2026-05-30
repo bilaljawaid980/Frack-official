@@ -19,6 +19,7 @@ anchor-spl = { workspace = true }
 solana-program = { workspace = true }
 spl-transfer-hook-interface = "0.10.0"
 spl-tlv-account-resolution = "0.10.0"
+spl-token-metadata-interface = "0.7.0"
 fracks-irp = { path = "../fracks-irp", features = ["cpi"] }
 fracks-compliance = { path = "../fracks-compliance", features = ["cpi"] }
 fracks-irs = { path = "../fracks-irs", features = ["cpi"] }

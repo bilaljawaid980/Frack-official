@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use fracks_fid::FidAccount;
 
-declare_id!("GSLErK4bEfF6ZozTWfjYikWfnBitMYrdbbgfXubJBgVJ");
+declare_id!("CnAZUQ9jFm2eLGA8d8ek1gpLwGc6xZqvnbyJ9s7swbWc");
 
 const COUNTRY_MIN: u16 = 1;
 const COUNTRY_MAX: u16 = 999;
