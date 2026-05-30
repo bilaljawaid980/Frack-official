@@ -23,12 +23,19 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TokenSelector } from "@/components/rwa/token-selector";
 import { useAssetsContext } from "@/contexts/assets-context";
 import { useWallet } from "@/hooks/use-wallet";
+import { apiFetch } from "@/lib/backend";
 import {
   buildInstructionData,
   connection,
@@ -65,6 +72,14 @@ type ProviderDetails = {
   topics: number[];
   isActive: boolean;
   label?: string;
+};
+
+type TrustedIssuer = {
+  id: string;
+  walletAddress: string;
+  authorityName: string;
+  kycAuthorized: boolean;
+  amlAuthorized: boolean;
 };
 
 function shorten(value?: string | null, head = 6, tail = 5) {
@@ -245,6 +260,13 @@ function accountExplorerUrl(address: string) {
   return `https://solscan.io/account/${address}?cluster=devnet`;
 }
 
+function authorizedTopicLabel(issuer: TrustedIssuer) {
+  return [
+    issuer.kycAuthorized ? "KYC topic 1" : null,
+    issuer.amlAuthorized ? "AML topic 2" : null,
+  ].filter(Boolean).join(", ");
+}
+
 function TokenAdminPageContent() {
   const searchParams = useSearchParams();
   const { isConnected, connectWallet, address } = useWallet();
@@ -259,6 +281,7 @@ function TokenAdminPageContent() {
   const [workingRole, setWorkingRole] = useState<ProviderRole | null>(null);
   const [kycWallet, setKycWallet] = useState("");
   const [amlWallet, setAmlWallet] = useState("");
+  const [trustedIssuers, setTrustedIssuers] = useState<TrustedIssuer[]>([]);
 
   const selectedAsset = useMemo(
     () => assets.find((asset) => asset.tokenContractAddress === selectedTokenContract) || null,
@@ -290,6 +313,18 @@ function TokenAdminPageContent() {
     };
 
     loadFactory();
+  }, []);
+
+  useEffect(() => {
+    const loadTrustedIssuers = async () => {
+      try {
+        setTrustedIssuers(await apiFetch<TrustedIssuer[]>("/trusted-issuers"));
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to load trusted issuers.");
+      }
+    };
+
+    void loadTrustedIssuers();
   }, []);
 
   useEffect(() => {
@@ -414,6 +449,17 @@ function TokenAdminPageContent() {
     }
     if (!walletValue || !isValidPublicKey(walletValue)) {
       toast.error("Enter a valid provider wallet address.");
+      return;
+    }
+    const registryIssuer = trustedIssuers.find(
+      (issuer) => issuer.walletAddress === walletValue,
+    );
+    const authorized =
+      role === "kyc"
+        ? registryIssuer?.kycAuthorized
+        : registryIssuer?.amlAuthorized;
+    if (!registryIssuer || !authorized) {
+      toast.error(`Select a Personnel-approved issuer authorized for ${role.toUpperCase()}.`);
       return;
     }
 
@@ -717,6 +763,7 @@ function TokenAdminPageContent() {
                 isWorking={workingRole === "kyc"}
                 canRemove={!!adminState.kycProvider}
                 disabled={!signerIsTirOwner || !!workingRole}
+                options={trustedIssuers.filter((issuer) => issuer.kycAuthorized)}
               />
 
               <ProviderEditor
@@ -729,6 +776,7 @@ function TokenAdminPageContent() {
                 isWorking={workingRole === "aml"}
                 canRemove={!!adminState.amlProvider}
                 disabled={!signerIsTirOwner || !!workingRole}
+                options={trustedIssuers.filter((issuer) => issuer.amlAuthorized)}
               />
             </CardContent>
           </Card>
@@ -820,6 +868,7 @@ function ProviderEditor({
   isWorking,
   canRemove,
   disabled,
+  options,
 }: {
   title: string;
   topic: number;
@@ -830,6 +879,7 @@ function ProviderEditor({
   isWorking: boolean;
   canRemove: boolean;
   disabled: boolean;
+  options: TrustedIssuer[];
 }) {
   return (
     <div className="rounded-xl border border-slate-200 p-4">
@@ -851,17 +901,33 @@ function ProviderEditor({
           </Button>
         )}
       </div>
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <Input
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="Provider wallet address"
-          className="font-mono text-sm"
-        />
+      <div className="flex flex-col gap-3">
+        <Select value={value} onValueChange={onChange} disabled={disabled}>
+          <SelectTrigger className="w-full bg-white">
+            <SelectValue placeholder="Select an approved trusted issuer" />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map((issuer) => (
+              <SelectItem key={issuer.id} value={issuer.walletAddress}>
+                <span className="flex flex-col text-left">
+                  <span className="font-medium">{issuer.authorityName}</span>
+                  <span className="font-mono text-xs text-slate-500">
+                    {shorten(issuer.walletAddress, 12, 8)} · {authorizedTopicLabel(issuer)}
+                  </span>
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {options.length === 0 ? (
+          <p className="text-xs text-amber-700">
+            No approved trusted issuers are authorized for this topic. Add one in Personnel first.
+          </p>
+        ) : null}
         <Button
           type="button"
           className="bg-[#172E7F] hover:bg-[#21439B]"
-          disabled={disabled || isWorking}
+          disabled={disabled || isWorking || !value}
           onClick={onSave}
         >
           {isWorking ? (

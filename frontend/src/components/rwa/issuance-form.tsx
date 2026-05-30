@@ -2,13 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { motion } from "framer-motion";
 import { 
   Shield, 
-  Plus, 
   Trash2, 
   Loader2, 
   Rocket, 
@@ -154,6 +153,32 @@ const DOCUMENT_TYPE_OPTIONS = [
   { value: "other", label: "Other Legal Document" },
 ];
 
+const CLAIM_TOPIC_OPTIONS = [
+  { value: "1", label: "KYC", description: "Know Your Customer verification" },
+  { value: "2", label: "AML", description: "Anti-Money Laundering screening" },
+];
+
+type TrustedIssuerRecord = {
+  id: string;
+  walletAddress: string;
+  authorityName: string;
+  kycAuthorized: boolean;
+  amlAuthorized: boolean;
+};
+
+function getAuthorizedTopicValues(issuer: TrustedIssuerRecord) {
+  return [
+    issuer.kycAuthorized ? "1" : null,
+    issuer.amlAuthorized ? "2" : null,
+  ].filter((topic): topic is string => Boolean(topic));
+}
+
+function getAuthorizedTopicLabel(issuer: TrustedIssuerRecord) {
+  return getAuthorizedTopicValues(issuer)
+    .map((topic) => (topic === "1" ? "KYC topic 1" : "AML topic 2"))
+    .join(", ");
+}
+
 function formatDocumentType(value?: string) {
   if (!value) return "Document";
   return value
@@ -209,6 +234,9 @@ export function IssuanceForm({
   const [uploadingDocuments, setUploadingDocuments] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [documentsApproved, setDocumentsApproved] = useState(false);
+  const [trustedIssuerRecords, setTrustedIssuerRecords] = useState<TrustedIssuerRecord[]>([]);
+  const [trustedIssuersLoading, setTrustedIssuersLoading] = useState(false);
+  const [trustedIssuerSelection, setTrustedIssuerSelection] = useState("");
   const isVerified = true;
   const hasOnchainId = true;
   const identityLoading = false;
@@ -248,6 +276,14 @@ export function IssuanceForm({
       documents: [],
     },
   });
+  const requiredClaimTopics = useWatch({
+    control: form.control,
+    name: "complianceRequirements.claimTopics",
+  }) || [];
+  const selectedTrustedIssuers = useWatch({
+    control: form.control,
+    name: "complianceRequirements.trustedIssuers",
+  }) || [];
 
   const configuredPlatformOwner = process.env.NEXT_PUBLIC_PLATFORM_OWNER || "";
   const isConfiguredPlatformOwner =
@@ -305,6 +341,91 @@ export function IssuanceForm({
     setStoredUploadedDocuments([]);
     setDocumentsApproved(false);
   }, [deploymentRequestId, isApplicationMode]);
+
+  useEffect(() => {
+    const loadTrustedIssuers = async () => {
+      setTrustedIssuersLoading(true);
+      try {
+        setTrustedIssuerRecords(await apiFetch<TrustedIssuerRecord[]>("/trusted-issuers"));
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to load trusted issuers.");
+      } finally {
+        setTrustedIssuersLoading(false);
+      }
+    };
+
+    void loadTrustedIssuers();
+  }, []);
+
+  const toggleClaimTopic = (topic: string) => {
+    const currentTopics = form.getValues("complianceRequirements.claimTopics");
+    const nextTopics = currentTopics.includes(topic)
+      ? currentTopics.filter((item) => item !== topic)
+      : [...currentTopics, topic];
+    form.setValue("complianceRequirements.claimTopics", nextTopics, { shouldValidate: true });
+
+    const currentIssuers = form.getValues("complianceRequirements.trustedIssuers");
+    form.setValue(
+      "complianceRequirements.trustedIssuers",
+      currentIssuers
+        .map((issuer) => {
+          const registryIssuer = trustedIssuerRecords.find(
+            (record) => record.walletAddress === issuer.walletAddress,
+          );
+          const authorizedTopics = registryIssuer
+            ? getAuthorizedTopicValues(registryIssuer)
+            : issuer.topics.map((item) => item.toString());
+          return {
+            ...issuer,
+            topics: authorizedTopics
+              .filter((item) => nextTopics.includes(item))
+              .map((item) => BigInt(item)),
+          };
+        })
+        .filter((issuer) => issuer.topics.length > 0),
+      { shouldValidate: true },
+    );
+  };
+
+  const addTrustedIssuer = (walletAddress: string) => {
+    const issuer = trustedIssuerRecords.find((item) => item.walletAddress === walletAddress);
+    if (!issuer) return;
+
+    const currentIssuers = form.getValues("complianceRequirements.trustedIssuers");
+    if (currentIssuers.some((item) => item.walletAddress === walletAddress)) {
+      toast.error("This trusted issuer has already been selected.");
+      setTrustedIssuerSelection("");
+      return;
+    }
+
+    const requiredTopics = form.getValues("complianceRequirements.claimTopics");
+    const topics = getAuthorizedTopicValues(issuer)
+      .filter((topic) => requiredTopics.includes(topic))
+      .map((topic) => BigInt(topic));
+    if (topics.length === 0) {
+      toast.error("This issuer is not authorized for any currently required claim topic.");
+      setTrustedIssuerSelection("");
+      return;
+    }
+
+    form.setValue(
+      "complianceRequirements.trustedIssuers",
+      [
+        ...currentIssuers,
+        {
+          walletAddress: issuer.walletAddress,
+          issuerFid: deriveFidFromWallet(
+            issuer.walletAddress,
+            factoryState?.fidProgramId ? new PublicKey(factoryState.fidProgramId) : undefined,
+          ),
+          topics,
+          label: issuer.authorityName,
+        },
+      ],
+      { shouldValidate: true },
+    );
+    setTrustedIssuerSelection("");
+  };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
@@ -447,6 +568,25 @@ export function IssuanceForm({
         issuerFid: deriveFidFromWallet(issuer.walletAddress, activeFidProgramId),
       }),
     );
+    const invalidRegistryIssuer = trustedIssuers.find((issuer) => {
+      const registryIssuer = trustedIssuerRecords.find(
+        (record) => record.walletAddress === issuer.walletAddress,
+      );
+      if (!registryIssuer) return true;
+      const authorizedTopics = getAuthorizedTopicValues(registryIssuer);
+      return issuer.topics.some((topic) => !authorizedTopics.includes(topic.toString()));
+    });
+    if (invalidRegistryIssuer) {
+      toast.error("Each trusted issuer must be selected from Personnel and authorized for its assigned topics.");
+      return;
+    }
+    const missingIssuerTopic = data.complianceRequirements.claimTopics.find(
+      (topic) => !trustedIssuers.some((issuer) => issuer.topics.some((item) => item.toString() === topic)),
+    );
+    if (missingIssuerTopic) {
+      toast.error(`Select an approved trusted issuer for required claim topic ${missingIssuerTopic}.`);
+      return;
+    }
     if (trustedIssuers.some((issuer) => !issuer.issuerFid)) {
       toast.error("One or more trusted issuer wallets could not be resolved to an active FID PDA.");
       return;
@@ -1095,153 +1235,102 @@ export function IssuanceForm({
               <div className="space-y-6">
                 {/* Claim Topics */}
                 <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-900">Required Identity Claims</h4>
-                      <p className="text-xs text-slate-500">Numeric identifiers for required investor attributes.</p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 bg-white"
-                      onClick={() => {
-                        const topics = form.getValues("complianceRequirements.claimTopics");
-                        form.setValue("complianceRequirements.claimTopics", [...topics, ""]);
-                      }}
-                    >
-                      <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Topic
-                    </Button>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900">Required Identity Claims</h4>
+                    <p className="text-xs text-slate-500">Select the investor credentials required before transfers are allowed.</p>
                   </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {form.watch("complianceRequirements.claimTopics").map((_, index) => (
-                      <div key={index} className="relative">
-                        <FormField
-                          control={form.control}
-                          name={`complianceRequirements.claimTopics.${index}`}
-                          render={({ field }: { field: any }) => (
-                            <FormItem>
-                              <FormControl>
-                                <Input 
-                                  placeholder="ID (e.g. 1)" 
-                                  className="h-10 bg-white font-mono text-center"
-                                  {...field} 
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {CLAIM_TOPIC_OPTIONS.map((topic) => (
+                      <label key={topic.value} className="flex items-start gap-3 rounded-md border border-slate-200 bg-white p-4">
+                        <Checkbox
+                          checked={requiredClaimTopics.includes(topic.value)}
+                          onCheckedChange={() => toggleClaimTopic(topic.value)}
                         />
-                        {index > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const topics = form.getValues("complianceRequirements.claimTopics");
-                              form.setValue("complianceRequirements.claimTopics", topics.filter((_, i) => i !== index));
-                            }}
-                            className="absolute -top-1.5 -right-1.5 bg-slate-200 hover:bg-slate-300 rounded-full p-1 text-slate-600 transition-colors"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
-                        )}
-                      </div>
+                        <span>
+                          <span className="block text-sm font-semibold text-slate-900">
+                            {topic.label} <span className="font-mono text-xs text-slate-500">topic {topic.value}</span>
+                          </span>
+                          <span className="mt-1 block text-xs text-slate-500">{topic.description}</span>
+                        </span>
+                      </label>
                     ))}
                   </div>
                 </div>
 
                 {/* Trusted Issuers */}
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
+                  <div>
                     <h4 className="text-sm font-bold text-slate-900">Trusted Claim Issuers</h4>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8"
-                      onClick={() => {
-                        const issuers = form.getValues("complianceRequirements.trustedIssuers");
-                        form.setValue("complianceRequirements.trustedIssuers", [
-                          ...issuers,
-                          { walletAddress: "", issuerFid: "", topics: [1n], label: "" }
-                        ]);
-                      }}
-                    >
-                      <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Issuer
-                    </Button>
+                    <p className="text-xs text-slate-500">
+                      Select authorities approved by the platform admin in Personnel.
+                    </p>
                   </div>
 
-                  {form.watch("complianceRequirements.trustedIssuers").length === 0 ? (
+                  <Select value={trustedIssuerSelection} onValueChange={addTrustedIssuer}>
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder={trustedIssuersLoading ? "Loading approved issuers..." : "Select an approved trusted issuer"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {trustedIssuerRecords.map((issuer) => (
+                        <SelectItem key={issuer.id} value={issuer.walletAddress}>
+                          <span className="flex flex-col text-left">
+                            <span className="font-medium">{issuer.authorityName}</span>
+                            <span className="font-mono text-xs text-slate-500">
+                              {issuer.walletAddress.slice(0, 12)}...{issuer.walletAddress.slice(-8)} · {getAuthorizedTopicLabel(issuer)}
+                            </span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {!trustedIssuersLoading && trustedIssuerRecords.length === 0 ? (
+                    <p className="text-xs text-amber-700">
+                      No approved trusted issuers are available. Add an authority in Personnel first.
+                    </p>
+                  ) : null}
+
+                  {selectedTrustedIssuers.length === 0 ? (
                     <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
                       <Shield className="h-8 w-8 text-slate-300 mx-auto mb-2" />
-                      <p className="text-sm text-slate-500 italic">No trusted issuers defined. Add at least one to verify identity claims.</p>
+                      <p className="text-sm text-slate-500">Select at least one approved issuer for each required claim topic.</p>
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {form.watch("complianceRequirements.trustedIssuers").map((issuer, index) => (
-                        <Card key={index} className="border border-slate-200 shadow-sm overflow-hidden">
-                          <div className="p-4 space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <FormField
-                                control={form.control}
-                                name={`complianceRequirements.trustedIssuers.${index}.label`}
-                                render={({ field }: { field: any }) => (
-                                  <FormItem>
-                                    <FormLabel className="text-[10px] uppercase font-bold text-slate-500">Label</FormLabel>
-                                    <FormControl>
-                                      <Input placeholder="e.g. KYC Global" className="h-9 text-sm" {...field} />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                              <FormField
-                                control={form.control}
-                                name={`complianceRequirements.trustedIssuers.${index}.walletAddress`}
-                                render={({ field }: { field: any }) => (
-                                  <FormItem>
-                                    <FormLabel className="text-[10px] uppercase font-bold text-slate-500">Wallet Address</FormLabel>
-                                    <FormControl>
-                                      <Input 
-                                        placeholder="Issuer Pubkey" 
-                                        className="h-9 text-sm font-mono"
-                                        {...field} 
-                                        onChange={(e: any) => {
-                                          field.onChange(e);
-                                          const fid = deriveFidFromWallet(
-                                            e.target.value,
-                                            factoryState?.fidProgramId
-                                              ? new PublicKey(factoryState.fidProgramId)
-                                              : undefined,
-                                          );
-                                          form.setValue(`complianceRequirements.trustedIssuers.${index}.issuerFid`, fid);
-                                        }}
-                                      />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
+                      {selectedTrustedIssuers.map((issuer, index) => (
+                        <div key={issuer.walletAddress} className="rounded-md border border-slate-200 bg-white p-4">
+                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-slate-900">{issuer.label}</div>
+                              <div className="mt-1 break-all font-mono text-xs text-slate-500">{issuer.walletAddress}</div>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {issuer.topics.map((topic) => (
+                                  <span key={topic.toString()} className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-[#172E7F]">
+                                    {topic.toString() === "1" ? "KYC topic 1" : "AML topic 2"}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
-                            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                            <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3 md:border-l md:border-t-0 md:pl-4 md:pt-0">
                               <div className="text-[10px] font-mono text-slate-400 truncate max-w-[200px]">
-                                FID: {issuer.issuerFid || "—"}
+                                FID: {issuer.issuerFid || "Pending derivation"}
                               </div>
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                className="h-7 text-xs text-red-500 hover:text-red-600 hover:bg-red-50"
+                                className="h-8 shrink-0 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
                                 onClick={() => {
                                   const issuers = form.getValues("complianceRequirements.trustedIssuers");
-                                  form.setValue("complianceRequirements.trustedIssuers", issuers.filter((_, i) => i !== index));
+                                  form.setValue("complianceRequirements.trustedIssuers", issuers.filter((_, i) => i !== index), { shouldValidate: true });
                                 }}
                               >
-                                Remove Issuer
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Remove
                               </Button>
                             </div>
                           </div>
-                        </Card>
+                        </div>
                       ))}
                     </div>
                   )}

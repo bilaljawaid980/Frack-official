@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { PublicKey } from '@solana/web3.js';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTokenBuyIntentDto } from './dto/create-token-buy-intent.dto';
@@ -41,6 +42,14 @@ function parseAmount(value: string, label: string): bigint {
   return BigInt(value);
 }
 
+function normalizeWallet(value: string, label: string): string {
+  try {
+    return new PublicKey(value).toBase58();
+  } catch {
+    throw new ConflictException(`${label} must be a valid Solana wallet address.`);
+  }
+}
+
 @Injectable()
 export class TokenListingsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -51,6 +60,7 @@ export class TokenListingsService {
       asset_id as "assetId",
       "tokenContract",
       "sellerWallet",
+      "targetBuyerWallet",
       "amountBaseUnits",
       "amountRemaining",
       price,
@@ -72,6 +82,12 @@ export class TokenListingsService {
       "sellerWallet",
       "buyerWallet",
       "amountBaseUnits",
+      "fullName",
+      email,
+      nationality,
+      country,
+      "idDocumentUrl",
+      "proofOfAddressUrl",
       status,
       required_claim_topics as "requiredClaimTopics",
       "kycProvider",
@@ -92,6 +108,13 @@ export class TokenListingsService {
   async createListing(dto: CreateTokenSellListingDto) {
     const amount = parseAmount(dto.amountBaseUnits, 'amountBaseUnits');
     if (amount <= 0n) throw new ConflictException('Listing amount must be greater than zero.');
+    const sellerWallet = normalizeWallet(dto.sellerWallet, 'sellerWallet');
+    const targetBuyerWallet = dto.targetBuyerWallet
+      ? normalizeWallet(dto.targetBuyerWallet, 'targetBuyerWallet')
+      : null;
+    if (targetBuyerWallet === sellerWallet) {
+      throw new ConflictException('targetBuyerWallet must be different from sellerWallet.');
+    }
     const id = randomUUID();
     const rows = await this.prisma.$queryRaw<Array<Record<string, unknown>>>`
       INSERT INTO "TokenSellListing" (
@@ -99,6 +122,7 @@ export class TokenListingsService {
         asset_id,
         "tokenContract",
         "sellerWallet",
+        "targetBuyerWallet",
         "amountBaseUnits",
         "amountRemaining",
         price,
@@ -112,7 +136,8 @@ export class TokenListingsService {
         ${id},
         ${dto.assetId || null},
         ${dto.tokenContract},
-        ${dto.sellerWallet},
+        ${sellerWallet},
+        ${targetBuyerWallet},
         ${dto.amountBaseUnits},
         ${dto.amountBaseUnits},
         ${dto.price ?? null},
@@ -132,6 +157,11 @@ export class TokenListingsService {
     if (query.assetId) filters.push(Prisma.sql`asset_id = ${query.assetId}`);
     if (query.tokenContract) filters.push(Prisma.sql`"tokenContract" = ${query.tokenContract}`);
     if (query.sellerWallet) filters.push(Prisma.sql`"sellerWallet" = ${query.sellerWallet}`);
+    if (query.targetBuyerWallet) {
+      filters.push(Prisma.sql`"targetBuyerWallet" = ${query.targetBuyerWallet}`);
+    } else if (!query.sellerWallet) {
+      filters.push(Prisma.sql`"targetBuyerWallet" IS NULL`);
+    }
     if (query.status) filters.push(Prisma.sql`status = ${query.status}`);
     if (query.open === 'true') {
       filters.push(Prisma.sql`status IN (${Prisma.join(OPEN_LISTING_STATUSES)})`);
@@ -179,10 +209,14 @@ export class TokenListingsService {
     if (listing.expiresAt && new Date(String(listing.expiresAt)).getTime() <= Date.now()) {
       throw new ConflictException('Listing is expired.');
     }
+    const buyerWallet = normalizeWallet(dto.buyerWallet, 'buyerWallet');
+    if (listing.targetBuyerWallet && listing.targetBuyerWallet !== buyerWallet) {
+      throw new ConflictException('This listing is reserved for another wallet.');
+    }
     const requested = parseAmount(dto.amountBaseUnits, 'amountBaseUnits');
     const remaining = parseAmount(String(listing.amountRemaining), 'amountRemaining');
     if (requested <= 0n) throw new ConflictException('Requested amount must be greater than zero.');
-    if (requested > remaining) throw new ConflictException('Requested amount exceeds listing remaining amount.');
+    if (requested !== remaining) throw new ConflictException('Requested amount must match the listing amount.');
     const status = dto.status || 'BUYER_INTERESTED';
     if (!BUY_INTENT_STATUSES.has(status)) throw new ConflictException('Invalid buy intent status.');
 
@@ -190,7 +224,7 @@ export class TokenListingsService {
       SELECT id
       FROM "TokenBuyIntent"
       WHERE "listingId" = ${listingId}
-        AND "buyerWallet" = ${dto.buyerWallet}
+        AND "buyerWallet" = ${buyerWallet}
         AND status NOT IN (${Prisma.join(BUY_INTENT_CLOSED_STATUSES)})
       LIMIT 1
     `;
@@ -208,6 +242,12 @@ export class TokenListingsService {
         "sellerWallet",
         "buyerWallet",
         "amountBaseUnits",
+        "fullName",
+        email,
+        nationality,
+        country,
+        "idDocumentUrl",
+        "proofOfAddressUrl",
         status,
         required_claim_topics,
         "kycProvider",
@@ -223,8 +263,14 @@ export class TokenListingsService {
         ${listing.assetId ? String(listing.assetId) : null},
         ${String(listing.tokenContract)},
         ${String(listing.sellerWallet)},
-        ${dto.buyerWallet},
+        ${buyerWallet},
         ${dto.amountBaseUnits},
+        ${dto.fullName || null},
+        ${dto.email || null},
+        ${dto.nationality || null},
+        ${dto.country || null},
+        ${dto.idDocumentUrl || null},
+        ${dto.proofOfAddressUrl || null},
         ${status},
         ${dto.requiredClaimTopics || []},
         ${dto.kycProvider || null},

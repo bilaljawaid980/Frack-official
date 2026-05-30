@@ -11,6 +11,10 @@ export class CreateTokenSellListingDto {
   @IsString()
   sellerWallet!: string;
 
+  @IsOptional()
+  @IsString()
+  targetBuyerWallet?: string;
+
   @IsString()
   amountBaseUnits!: string;
 

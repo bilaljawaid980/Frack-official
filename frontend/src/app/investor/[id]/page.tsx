@@ -105,6 +105,7 @@ type TokenSellListing = {
   assetId?: string | null;
   tokenContract: string;
   sellerWallet: string;
+  targetBuyerWallet?: string | null;
   amountBaseUnits: string;
   amountRemaining: string;
   price?: number | null;
@@ -150,6 +151,8 @@ export default function InvestorDashboardPage() {
   const [listingPrice, setListingPrice] = useState("");
   const [listingTerms, setListingTerms] = useState("Off-chain settlement between buyer and seller.");
   const [listingExpiry, setListingExpiry] = useState("");
+  const [listingAudience, setListingAudience] = useState<"public" | "wallet">("public");
+  const [listingTargetBuyer, setListingTargetBuyer] = useState("");
   const [creatingListing, setCreatingListing] = useState(false);
   const [processingListingId, setProcessingListingId] = useState<string | null>(null);
   const [processingBuyIntentId, setProcessingBuyIntentId] = useState<string | null>(null);
@@ -540,6 +543,8 @@ export default function InvestorDashboardPage() {
     setListingPrice("");
     setListingTerms("Off-chain settlement between buyer and seller.");
     setListingExpiry("");
+    setListingAudience("public");
+    setListingTargetBuyer("");
   };
 
   const runDirectTransferPreflight = useCallback(async () => {
@@ -665,6 +670,13 @@ export default function InvestorDashboardPage() {
     try {
       const decimals = 6;
       const amountBaseUnits = BigInt(parseTokenAmount(listingAmount, decimals));
+      let targetBuyerWallet: string | undefined;
+      if (listingAudience === "wallet") {
+        targetBuyerWallet = new PublicKey(listingTargetBuyer.trim()).toBase58();
+        if (targetBuyerWallet === address) {
+          throw new Error("The reserved buyer wallet must be different from the seller wallet.");
+        }
+      }
       const service = new TransferService(anchorProvider.connection, anchorProvider);
       const capacity = await service.checkSellerListingCapacity(
         new PublicKey(listingHolding.tokenContract),
@@ -681,6 +693,7 @@ export default function InvestorDashboardPage() {
           assetId: listingHolding.assetId,
           tokenContract: listingHolding.tokenContract,
           sellerWallet: address,
+          targetBuyerWallet,
           amountBaseUnits: amountBaseUnits.toString(),
           price: listingPrice ? Number(listingPrice) : undefined,
           currency: listingPrice ? "USD" : undefined,
@@ -1362,6 +1375,7 @@ export default function InvestorDashboardPage() {
                       <TableHead>Token</TableHead>
                       <TableHead>Listed</TableHead>
                       <TableHead>Remaining</TableHead>
+                      <TableHead>Buyer</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Action</TableHead>
                     </TableRow>
@@ -1378,6 +1392,11 @@ export default function InvestorDashboardPage() {
                           </TableCell>
                           <TableCell>{listing.amountBaseUnits} base units</TableCell>
                           <TableCell>{listing.amountRemaining} base units</TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {listing.targetBuyerWallet
+                              ? shortAddress(listing.targetBuyerWallet)
+                              : "Anybody"}
+                          </TableCell>
                           <TableCell>
                             <Badge variant="secondary">{listing.status.replaceAll("_", " ")}</Badge>
                           </TableCell>
@@ -1498,6 +1517,33 @@ export default function InvestorDashboardPage() {
                   <Input value={listingHolding.balance.toString()} disabled className="mt-2" />
                 </div>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="listing-audience">Who can request to buy?</Label>
+                <Select
+                  value={listingAudience}
+                  onValueChange={(value: "public" | "wallet") => setListingAudience(value)}
+                >
+                  <SelectTrigger id="listing-audience" className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="public">Anybody</SelectItem>
+                    <SelectItem value="wallet">Specific wallet address</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {listingAudience === "wallet" ? (
+                <div>
+                  <Label htmlFor="listing-target-buyer">Buyer wallet address</Label>
+                  <Input
+                    id="listing-target-buyer"
+                    value={listingTargetBuyer}
+                    onChange={(event) => setListingTargetBuyer(event.target.value)}
+                    placeholder="Enter the wallet allowed to request this listing"
+                    className="mt-2 font-mono text-sm"
+                  />
+                </div>
+              ) : null}
               <div>
                 <Label htmlFor="listing-amount">Amount to list</Label>
                 <Input
@@ -1552,7 +1598,7 @@ export default function InvestorDashboardPage() {
             </Button>
             <Button
               onClick={() => void createListing()}
-              disabled={creatingListing || !listingAmount}
+              disabled={creatingListing || !listingAmount || (listingAudience === "wallet" && !listingTargetBuyer.trim())}
               className="bg-[#172E7F] hover:bg-[#24469E]"
             >
               {creatingListing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

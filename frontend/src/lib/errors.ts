@@ -121,6 +121,12 @@ const TOKEN_RAW_ERRORS: Record<number, Omit<DecodedError, "code">> = {
     message: "Token is paused.",
     userMessage: "This token is currently paused.",
   },
+  6004: {
+    name: "ComplianceCheckFailed",
+    message: "Compliance check failed.",
+    userMessage:
+      "This operation does not satisfy the token's configured compliance rules.",
+  },
   6009: {
     name: "NotAgent",
     message: "Signer is not an active agent.",
@@ -219,6 +225,8 @@ const IRS_RAW_ERRORS: Record<number, Omit<DecodedError, "code">> = {
 };
 
 const ERROR_NAME_USER_MESSAGES: Record<string, string> = {
+  ComplianceCheckFailed:
+    "This operation does not satisfy the token's configured compliance rules.",
   WalletNotVerified:
     "Wallet is not verified. The sender and recipient must both have active FID identity and valid required claims.",
   InvalidFidAccount:

@@ -2646,6 +2646,7 @@ fn evaluate_compliance<'info>(
     from_country: u16,
     to_country: u16,
 ) -> Result<()> {
+    let is_mint = from == Pubkey::default();
     require_keys_eq!(
         token_state.compliance,
         compliance_state_info.key(),
@@ -2681,7 +2682,7 @@ fn evaluate_compliance<'info>(
         if matches_account_discriminator(module_info, "CountryRestrictModule")? {
             let module = deserialize_local::<CountryRestrictModuleView>(module_info)?;
             require!(
-                module.allowed_countries.contains(&from_country)
+                (is_mint || module.allowed_countries.contains(&from_country))
                     && module.allowed_countries.contains(&to_country),
                 FracksTokenError::ComplianceCheckFailed
             );
@@ -2710,6 +2711,9 @@ fn evaluate_compliance<'info>(
         }
 
         if matches_account_discriminator(module_info, "DailyTransferLimitModule")? {
+            if is_mint {
+                continue;
+            }
             let module = deserialize_local::<DailyTransferLimitModuleView>(module_info)?;
             let used = read_daily_usage(
                 remaining_accounts,

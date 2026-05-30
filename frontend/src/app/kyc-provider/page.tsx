@@ -54,10 +54,17 @@ type TokenTransferRequest = {
   listingId?: string;
   tokenContract: string;
   fromWallet: string;
+  sellerWallet?: string;
   toWallet?: string;
   buyerWallet?: string;
   amount?: number;
   amountBaseUnits?: string;
+  fullName?: string | null;
+  email?: string | null;
+  nationality?: string | null;
+  country?: string | null;
+  idDocumentUrl?: string | null;
+  proofOfAddressUrl?: string | null;
   status: string;
   kycProvider?: string | null;
   amlProvider?: string | null;
@@ -100,6 +107,8 @@ export default function KycProviderPage() {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] =
     useState<TokenPurchaseRequest | null>(null);
+  const [selectedTransferRequest, setSelectedTransferRequest] =
+    useState<TokenTransferRequest | null>(null);
   const [rejectingRequest, setRejectingRequest] =
     useState<TokenPurchaseRequest | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
@@ -181,7 +190,7 @@ export default function KycProviderPage() {
         transferMerged.set(request.id, {
           ...request,
           source: "listing",
-          fromWallet: request.fromWallet || (request as any).sellerWallet,
+          fromWallet: request.fromWallet || request.sellerWallet || "",
           toWallet: request.toWallet || request.buyerWallet,
         });
       });
@@ -898,15 +907,27 @@ export default function KycProviderPage() {
                           <Badge variant="secondary">Transfer topic {topic}</Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            disabled={isProcessing}
-                            size="sm"
-                            onClick={() => void approveTransferRequest(request)}
-                            className="bg-[#172E7F] hover:bg-[#24469E]"
-                          >
-                            {isProcessing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-1 h-4 w-4" />}
-                            Review / Issue Claim
-                          </Button>
+                          <div className="flex justify-end gap-2">
+                            {request.source === "listing" ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setSelectedTransferRequest(request)}
+                              >
+                                <FileText className="mr-1 h-4 w-4" />
+                                Details
+                              </Button>
+                            ) : null}
+                            <Button
+                              disabled={isProcessing}
+                              size="sm"
+                              onClick={() => void approveTransferRequest(request)}
+                              className="bg-[#172E7F] hover:bg-[#24469E]"
+                            >
+                              {isProcessing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-1 h-4 w-4" />}
+                              Review / Issue Claim
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -1013,6 +1034,73 @@ export default function KycProviderPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setSelectedRequest(null)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(selectedTransferRequest)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedTransferRequest(null);
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Marketplace KYC Details</DialogTitle>
+            <DialogDescription>
+              Review the buyer details submitted with this marketplace request.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedTransferRequest ? (
+            <div className="grid gap-4 text-sm md:grid-cols-2">
+              <div>
+                <Label className="text-slate-500">Investor</Label>
+                <p className="font-medium">{selectedTransferRequest.fullName || "Not provided"}</p>
+              </div>
+              <div>
+                <Label className="text-slate-500">Email</Label>
+                <p className="font-medium">{selectedTransferRequest.email || "Not provided"}</p>
+              </div>
+              <div>
+                <Label className="text-slate-500">Country</Label>
+                <p className="font-medium">{selectedTransferRequest.country || "Not provided"}</p>
+              </div>
+              <div>
+                <Label className="text-slate-500">Nationality</Label>
+                <p className="font-medium">{selectedTransferRequest.nationality || "Not provided"}</p>
+              </div>
+              <div className="md:col-span-2">
+                <Label className="text-slate-500">Buyer wallet</Label>
+                <p className="break-all font-mono text-xs">
+                  {selectedTransferRequest.toWallet || selectedTransferRequest.buyerWallet}
+                </p>
+              </div>
+              <div>
+                <Label className="text-slate-500">ID document</Label>
+                {selectedTransferRequest.idDocumentUrl ? (
+                  <a className="block break-all text-[#172E7F] underline" href={selectedTransferRequest.idDocumentUrl} rel="noreferrer" target="_blank">
+                    {selectedTransferRequest.idDocumentUrl}
+                  </a>
+                ) : (
+                  <p className="text-slate-500">Not provided</p>
+                )}
+              </div>
+              <div>
+                <Label className="text-slate-500">Proof of address</Label>
+                {selectedTransferRequest.proofOfAddressUrl ? (
+                  <a className="block break-all text-[#172E7F] underline" href={selectedTransferRequest.proofOfAddressUrl} rel="noreferrer" target="_blank">
+                    {selectedTransferRequest.proofOfAddressUrl}
+                  </a>
+                ) : (
+                  <p className="text-slate-500">Not provided</p>
+                )}
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedTransferRequest(null)}>
               Close
             </Button>
           </DialogFooter>

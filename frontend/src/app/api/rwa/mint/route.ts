@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 function getBackendUrl() {
-  const raw = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+  const raw = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
+  if (!raw) {
+    throw new Error('Backend URL is not configured. Set BACKEND_URL or NEXT_PUBLIC_BACKEND_URL.');
+  }
   return raw.replace(/\/+$/, '');
 }
 

@@ -376,6 +376,7 @@ model TokenSellListing {
   assetId         String?   @map("asset_id")
   tokenContract   String
   sellerWallet    String
+  targetBuyerWallet String?
   amountBaseUnits String
   amountRemaining String
   price           Float?
@@ -389,6 +390,7 @@ model TokenSellListing {
   @@index([assetId])
   @@index([tokenContract])
   @@index([sellerWallet])
+  @@index([targetBuyerWallet])
   @@index([status])
   @@index([expiresAt])
 }
@@ -401,6 +403,12 @@ model TokenBuyIntent {
   sellerWallet        String
   buyerWallet         String
   amountBaseUnits     String
+  fullName            String?
+  email               String?
+  nationality         String?
+  country             String?
+  idDocumentUrl       String?
+  proofOfAddressUrl   String?
   status              String    @default("BUYER_INTERESTED")
   requiredClaimTopics String[]  @default([]) @map("required_claim_topics")
   kycProvider         String?
@@ -445,5 +453,19 @@ model TokenTransferHistory {
   @@index([fromWallet])
   @@index([toWallet])
   @@index([txHash])
+}
+
+model TrustedIssuer {
+  id              String   @id @default(uuid())
+  walletAddress   String   @unique
+  authorityName   String
+  kycAuthorized   Boolean  @default(false)
+  amlAuthorized   Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([authorityName])
+  @@index([kycAuthorized])
+  @@index([amlAuthorized])
 }
 

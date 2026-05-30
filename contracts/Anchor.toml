@@ -65,7 +65,7 @@ mod_supply_cap = "6tfb66btx776wdsPS5EHDTwWnvPSLJQje7gFQ4EDGxGc"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [workspace]

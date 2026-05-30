@@ -23,7 +23,7 @@ export function getAccessToken() {
 
 export async function apiFetch<T>(path: string, options: RequestInit = {}) {
   const url = `${getBackendUrl()}${path}`;
-  const headers = new Headers(options.headers || {}); 
+  const headers = new Headers(options.headers || {});
   headers.set("Content-Type", "application/json");
 
   const token = getAccessToken();

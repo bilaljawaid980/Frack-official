@@ -1,4 +1,4 @@
-import { IsArray, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsEmail, IsOptional, IsString } from 'class-validator';
 
 export class CreateTokenBuyIntentDto {
   @IsString()
@@ -6,6 +6,30 @@ export class CreateTokenBuyIntentDto {
 
   @IsString()
   amountBaseUnits!: string;
+
+  @IsOptional()
+  @IsString()
+  fullName?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  nationality?: string;
+
+  @IsOptional()
+  @IsString()
+  country?: string;
+
+  @IsOptional()
+  @IsString()
+  idDocumentUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  proofOfAddressUrl?: string;
 
   @IsOptional()
   @IsString()

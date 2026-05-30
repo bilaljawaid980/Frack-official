@@ -7,15 +7,15 @@ import {
   TOKEN_2022_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import { RPC_URL } from "../lib/constants";
+import { MOD_COUNTRY_CAP, RPC_URL } from "../lib/constants";
 import { createReadonlyProvider } from "../lib/anchor";
 import { fetchFactoryStateAccount } from "../lib/solana";
 import { TokenService } from "../services/token";
 
-const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:4000";
+const BACKEND_URL =
+  process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4082";
 const CLAIM_ACCOUNT_SIZE = 230;
 const MINT_DISCRIMINATOR = Buffer.from([51, 57, 225, 47, 182, 146, 137, 166]);
-const MOD_COUNTRY_CAP = new PublicKey("Cv1HA7nHX8vxZvyCKXjk3gYPkqhfHFXxEsyxSXyRT3Ci");
 
 type CliArgs = {
   token?: string;

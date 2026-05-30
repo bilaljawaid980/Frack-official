@@ -16,6 +16,7 @@ import { AssetRequestsModule } from "./asset-requests/asset-requests.module";
 import { TokenPurchaseRequestsModule } from './token-purchase-requests/token-purchase-requests.module';
 import { TokenTransferRequestsModule } from './token-transfer-requests/token-transfer-requests.module';
 import { TokenListingsModule } from './token-listings/token-listings.module';
+import { TrustedIssuersModule } from './trusted-issuers/trusted-issuers.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { TokenListingsModule } from './token-listings/token-listings.module';
     TokenPurchaseRequestsModule,
     TokenTransferRequestsModule,
     TokenListingsModule,
+    TrustedIssuersModule,
   ],
 })
 export class AppModule {}

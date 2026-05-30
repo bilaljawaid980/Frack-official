@@ -1,482 +1,321 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { Shield, Users, Snowflake, AlertCircle } from "lucide-react";
-import { useWallet } from "@/hooks/use-wallet";
-import { useAssetsContext } from "@/contexts/assets-context";
-import { usePermissions } from "@/hooks/use-permissions";
-import { ROLE_WALLETS } from "@/lib/zigchain-config";
+import { useCallback, useEffect, useState } from "react";
+import { useWallet as useSolanaWallet } from "@solana/wallet-adapter-react";
+import { PublicKey } from "@solana/web3.js";
+import { Loader2, RefreshCw, ShieldCheck, Trash2, Wallet } from "lucide-react";
+import { toast } from "sonner";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { TokenSelector } from "@/components/rwa/token-selector";
-import { toast } from "sonner";
+import { useWallet } from "@/hooks/use-wallet";
+import { buildAdminWalletHeaders } from "@/lib/admin-wallet-auth";
+import { apiFetch } from "@/lib/backend";
+import { ROLE_WALLETS } from "@/lib/zigchain-config";
 
-const CLAIM_TOPICS = [
-  { id: 1, name: "KYC (Know Your Customer)" },
-  { id: 2, name: "AML (Anti-Money Laundering)" },
-  { id: 3, name: "Accredited Investor" },
-  { id: 4, name: "Residency Verification" },
-];
+type TrustedIssuer = {
+  id: string;
+  walletAddress: string;
+  authorityName: string;
+  kycAuthorized: boolean;
+  amlAuthorized: boolean;
+  createdAt: string;
+};
+
+function shortAddress(address: string) {
+  return `${address.slice(0, 8)}...${address.slice(-6)}`;
+}
+
+function isValidWallet(value: string) {
+  try {
+    new PublicKey(value.trim());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function AuthorizationBadges({ issuer }: { issuer: TrustedIssuer }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {issuer.kycAuthorized ? <Badge className="bg-[#172E7F] text-white">KYC topic 1</Badge> : null}
+      {issuer.amlAuthorized ? <Badge className="bg-[#CBA135] text-white">AML topic 2</Badge> : null}
+    </div>
+  );
+}
 
 export default function PersonnelPage() {
-  const { address, trexClient, connectWallet, isConnecting, isConnected } =
-    useWallet();
-  const { assets, loadAssets } = useAssetsContext();
-  const [selectedTokenContract, setSelectedTokenContract] = useState<
-    string | null
-  >(null);
-  const [selectedSymbol, setSelectedSymbol] = useState<string>("");
-  const [isTirOwner, setIsTirOwner] = useState(false);
+  const { address, connectWallet, isConnected, isConnecting } = useWallet();
+  const { signMessage } = useSolanaWallet();
+  const [trustedIssuers, setTrustedIssuers] = useState<TrustedIssuer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [issuerWallet, setIssuerWallet] = useState("");
+  const [authorityName, setAuthorityName] = useState("");
+  const [kycAuthorized, setKycAuthorized] = useState(false);
+  const [amlAuthorized, setAmlAuthorized] = useState(false);
 
-  const { permissions } = usePermissions({
-    trexClient,
-    walletAddress: address,
-    tokenContract: selectedTokenContract || undefined,
-  });
+  const isPlatformAdmin =
+    Boolean(address) &&
+    address?.toLowerCase() === ROLE_WALLETS.platformOwner.toLowerCase();
 
-  const isPlatformOwner =
-    !!address &&
-    address.toLowerCase() === ROLE_WALLETS.platformOwner.toLowerCase();
-  const canManageAgents = !!permissions?.isTokenOwner;
-  const canFreeze = !!(permissions?.isTokenOwner || permissions?.isTokenAgent);
-
-  const [issuerAddress, setIssuerAddress] = useState("");
-  const [selectedTopics, setSelectedTopics] = useState<number[]>([1, 2]);
-  const [issuerToRemove, setIssuerToRemove] = useState("");
-  const [agentAddress, setAgentAddress] = useState("");
-  const [freezeAddress, setFreezeAddress] = useState("");
-  const [isWorking, setIsWorking] = useState(false);
+  const loadTrustedIssuers = useCallback(async () => {
+    setLoading(true);
+    try {
+      setTrustedIssuers(await apiFetch<TrustedIssuer[]>("/trusted-issuers"));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to load trusted issuers.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    let isMounted = true;
-    const loadTirOwner = async () => {
-      if (!trexClient || !address) {
-        setIsTirOwner(false);
-        return;
-      }
-      try {
-        const owner = await trexClient.getTirOwner(selectedTokenContract || undefined);
-        if (!isMounted) return;
-        setIsTirOwner(!!owner && owner.toLowerCase() === address.toLowerCase());
-      } catch {
-        if (!isMounted) return;
-        setIsTirOwner(false);
-      }
-    };
-    loadTirOwner();
-    return () => {
-      isMounted = false;
-    };
-  }, [trexClient, address, selectedTokenContract]);
+    void Promise.resolve().then(loadTrustedIssuers);
+  }, [loadTrustedIssuers]);
 
-  const handleTokenSelect = (
-    contract: string,
-    _assetId: string,
-    symbol: string,
-  ) => {
-    setSelectedTokenContract(contract);
-    setSelectedSymbol(symbol);
+  const resetForm = () => {
+    setIssuerWallet("");
+    setAuthorityName("");
+    setKycAuthorized(false);
+    setAmlAuthorized(false);
   };
 
-  const toggleTopic = (topic: number) => {
-    setSelectedTopics((prev) =>
-      prev.includes(topic)
-        ? prev.filter((id) => id !== topic)
-        : [...prev, topic],
-    );
-  };
-
-  const handleAddIssuer = async () => {
-    if (!trexClient || !selectedTokenContract) return;
-    if (!issuerAddress || selectedTopics.length === 0) {
-      toast.error("Enter issuer address and topics");
+  const addTrustedIssuer = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!isPlatformAdmin) {
+      toast.error("Connect the platform admin wallet to add trusted issuers.");
       return;
     }
-    setIsWorking(true);
-    try {
-      await trexClient.addTrustedIssuer(
-        issuerAddress,
-        selectedTopics,
-        selectedTokenContract,
-      );
-      toast.success("Trusted issuer added");
-      setIssuerAddress("");
-    } catch (error: any) {
-      toast.error(error.message || "Failed to add issuer");
-    } finally {
-      setIsWorking(false);
-    }
-  };
-
-  const handleTransferTirOwnership = async () => {
-    if (!trexClient) return;
-    setIsWorking(true);
-    try {
-      await trexClient.updateTirOwner(ROLE_WALLETS.platformOwner);
-      toast.success("Trusted Issuers Registry owner updated");
-      setIsTirOwner(true);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to update TIR owner");
-    } finally {
-      setIsWorking(false);
-    }
-  };
-
-  const handleRemoveIssuer = async () => {
-    if (!trexClient || !selectedTokenContract) return;
-    if (!issuerToRemove) {
-      toast.error("Enter issuer address");
+    if (!isValidWallet(issuerWallet)) {
+      toast.error("Enter a valid Solana issuer wallet address.");
       return;
     }
-    setIsWorking(true);
-    try {
-      await trexClient.removeTrustedIssuer(issuerToRemove, selectedTokenContract);
-      toast.success("Trusted issuer removed");
-      setIssuerToRemove("");
-    } catch (error: any) {
-      toast.error(error.message || "Failed to remove issuer");
-    } finally {
-      setIsWorking(false);
-    }
-  };
-
-  const handleAddAgent = async () => {
-    if (!trexClient || !selectedTokenContract) return;
-    if (!agentAddress) {
-      toast.error("Enter agent address");
+    if (!kycAuthorized && !amlAuthorized) {
+      toast.error("Authorize the issuer for KYC, AML, or both.");
       return;
     }
-    setIsWorking(true);
+
+    setSaving(true);
+    const toastId = toast.loading("Saving trusted issuer...");
     try {
-      await trexClient.addAgent(agentAddress, selectedTokenContract);
-      toast.success("Agent added");
-      setAgentAddress("");
-    } catch (error: any) {
-      toast.error(error.message || "Failed to add agent");
+      const body = JSON.stringify({
+        walletAddress: issuerWallet.trim(),
+        authorityName: authorityName.trim(),
+        kycAuthorized,
+        amlAuthorized,
+      });
+      const headers = await buildAdminWalletHeaders({
+        body,
+        method: "POST",
+        path: "/trusted-issuers",
+        signMessage,
+        walletAddress: address!,
+      });
+      await apiFetch<TrustedIssuer>("/trusted-issuers", {
+        method: "POST",
+        body,
+        headers,
+      });
+      resetForm();
+      await loadTrustedIssuers();
+      toast.success("Trusted issuer added.", { id: toastId });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to add trusted issuer.", { id: toastId });
     } finally {
-      setIsWorking(false);
+      setSaving(false);
     }
   };
 
-  const handleRemoveAgent = async () => {
-    if (!trexClient || !selectedTokenContract) return;
-    if (!agentAddress) {
-      toast.error("Enter agent address");
-      return;
-    }
-    setIsWorking(true);
+  const removeTrustedIssuer = async (issuer: TrustedIssuer) => {
+    if (!isPlatformAdmin) return;
+    setRemovingId(issuer.id);
+    const toastId = toast.loading(`Removing ${issuer.authorityName}...`);
     try {
-      await trexClient.removeAgent(agentAddress, selectedTokenContract);
-      toast.success("Agent removed");
-      setAgentAddress("");
-    } catch (error: any) {
-      toast.error(error.message || "Failed to remove agent");
+      const path = `/trusted-issuers/${issuer.id}`;
+      const headers = await buildAdminWalletHeaders({
+        method: "DELETE",
+        path,
+        signMessage,
+        walletAddress: address!,
+      });
+      await apiFetch(path, { method: "DELETE", headers });
+      await loadTrustedIssuers();
+      toast.success("Trusted issuer removed.", { id: toastId });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to remove trusted issuer.", { id: toastId });
     } finally {
-      setIsWorking(false);
+      setRemovingId(null);
     }
   };
-
-  const handleFreeze = async (action: "freeze" | "unfreeze") => {
-    if (!trexClient || !selectedTokenContract) return;
-    if (!freezeAddress) {
-      toast.error("Enter a wallet address");
-      return;
-    }
-    setIsWorking(true);
-    try {
-      if (action === "freeze") {
-        await trexClient.freezeAddress(freezeAddress, selectedTokenContract);
-        toast.success("Address frozen");
-      } else {
-        await trexClient.unfreezeAddress(freezeAddress, selectedTokenContract);
-        toast.success("Address unfrozen");
-      }
-      setFreezeAddress("");
-    } catch (error: any) {
-      toast.error(error.message || "Failed to update freeze status");
-    } finally {
-      setIsWorking(false);
-    }
-  };
-
-  const tokenSelection = useMemo(
-    () => (
-      <Card className="bg-white rounded-2xl">
-        <CardHeader>
-          <CardTitle className="text-lg">Token context</CardTitle>
-          <CardDescription>
-            Select the token contract to manage agents and freezes.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <TokenSelector
-            selectedTokenContract={selectedTokenContract}
-            onSelect={handleTokenSelect}
-            className="max-w-md"
-          />
-          {selectedTokenContract && (
-            <p className="text-xs text-muted-foreground mt-3">
-              Selected token:{" "}
-              {selectedSymbol || selectedTokenContract.slice(0, 12) + "..."}
-            </p>
-          )}
-        </CardContent>
-      </Card>
-    ),
-    [selectedTokenContract, selectedSymbol],
-  );
 
   if (!isConnected) {
     return (
-      <div className="py-12 text-center space-y-4">
-        <h1 className="text-3xl font-bold">Personnel Management</h1>
-        <p className="text-muted-foreground">
-          Connect your wallet to manage platform personnel.
-        </p>
-        <Button size="lg" onClick={connectWallet} disabled={isConnecting}>
-          Connect Wallet
-        </Button>
+      <div className="rounded-[22px] p-8 glass-panel">
+        <div className="mx-auto flex min-h-[50vh] max-w-lg flex-col items-center justify-center text-center">
+          <div className="mb-4 rounded-xl bg-[#172E7F] p-3 text-white">
+            <Wallet className="h-7 w-7" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-950">Trusted Issuer Registry</h1>
+          <p className="mt-2 text-sm text-slate-600">
+            Connect the platform admin wallet to manage approved KYC and AML authorities.
+          </p>
+          <Button className="mt-6 bg-[#172E7F] hover:bg-[#21439B]" onClick={connectWallet} disabled={isConnecting}>
+            Connect Wallet
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isPlatformAdmin) {
+    return (
+      <div className="rounded-[22px] p-8 glass-panel">
+        <Alert className="border-amber-200 bg-amber-50">
+          <ShieldCheck className="h-4 w-4 text-amber-700" />
+          <AlertDescription className="text-amber-900">
+            This page is restricted to the platform admin wallet.
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 p-8 glass-panel rounded-[22px]">
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        <h1 className="text-2xl font-bold">Personnel Management</h1>
-        <p className="text-sm text-muted-foreground">
-          Manage trusted issuers, token agents, and frozen wallets.
-        </p>
-      </motion.div>
-
-      {tokenSelection}
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="bg-white rounded-2xl">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5" />
-              Trusted Issuers (KYC Providers)
-            </CardTitle>
-            <CardDescription>
-              Add or remove KYC issuers from the Trusted Issuers Registry.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {!isTirOwner && (
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  On-chain permissions still apply. If this wallet is not the
-                  TIR owner, issuer updates will fail.
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {!isPlatformOwner && (
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={handleTransferTirOwnership}
-                disabled={isWorking}
-              >
-                Make platform owner the TIR owner
-              </Button>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="issuer-add">Issuer Address</Label>
-              <Input
-                id="issuer-add"
-                placeholder="Solana address"
-                value={issuerAddress}
-                onChange={(e) => setIssuerAddress(e.target.value)}
-                disabled={isWorking}
-                className="h-11"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Claim Topics</Label>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {CLAIM_TOPICS.map((topic) => (
-                  <label
-                    key={topic.id}
-                    className="flex items-center gap-2 rounded-xl border border-slate-200/70 bg-white/70 px-3 py-2 text-sm text-slate-700 shadow-sm transition-colors hover:border-slate-300/80"
-                  >
-                    <Checkbox
-                      checked={selectedTopics.includes(topic.id)}
-                      onCheckedChange={() => toggleTopic(topic.id)}
-                      disabled={isWorking}
-                    />
-                    <span>{topic.name}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-            <Button
-              className="w-full bg-gradient-to-tr from-[#172E7F] to-[#2A5FA6] hover:opacity-90"
-              onClick={handleAddIssuer}
-              disabled={isWorking || !issuerAddress}
-            >
-              Add Trusted Issuer
-            </Button>
-
-            <div className="space-y-2 pt-2">
-              <Label htmlFor="issuer-remove">Remove Issuer</Label>
-              <Input
-                id="issuer-remove"
-                placeholder="Solana address"
-                value={issuerToRemove}
-                onChange={(e) => setIssuerToRemove(e.target.value)}
-                disabled={isWorking}
-                className="h-11"
-              />
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={handleRemoveIssuer}
-                disabled={isWorking || !issuerToRemove}
-              >
-                Remove Issuer
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white rounded-2xl">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Token Agents
-            </CardTitle>
-            <CardDescription>
-              Assign agent wallets for a specific token contract.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {!selectedTokenContract && (
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Select a token to manage its agents.
-                </AlertDescription>
-              </Alert>
-            )}
-            {selectedTokenContract && !canManageAgents && (
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  On-chain permissions still apply. If this wallet is not the
-                  token owner, agent updates will fail.
-                </AlertDescription>
-              </Alert>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="agent-address">Agent Address</Label>
-              <Input
-                id="agent-address"
-                placeholder="Solana address"
-                value={agentAddress}
-                onChange={(e) => setAgentAddress(e.target.value)}
-                disabled={!selectedTokenContract || isWorking}
-                className="h-11"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button
-                className="flex-1 bg-linear-to-tr from-[#172E7F] to-[#2A5FA6] hover:opacity-90"
-                onClick={handleAddAgent}
-                disabled={!selectedTokenContract || isWorking || !agentAddress}
-              >
-                Add Agent
-              </Button>
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={handleRemoveAgent}
-                disabled={!selectedTokenContract || isWorking || !agentAddress}
-              >
-                Remove Agent
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+    <div className="space-y-6 rounded-[22px] p-8 glass-panel">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <Badge variant="outline" className="mb-3 border-[#CBA135]/40 text-[#172E7F]">
+            Platform Administration
+          </Badge>
+          <h1 className="text-3xl font-semibold text-slate-950">Trusted Issuer Registry</h1>
+          <p className="mt-2 max-w-3xl text-sm text-slate-600">
+            Approve the authorities that token administrators can assign to KYC and AML claim topics.
+          </p>
+        </div>
+        <Button variant="outline" onClick={() => void loadTrustedIssuers()} disabled={loading}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          Refresh
+        </Button>
       </div>
 
-      <Card className="bg-white rounded-2xl">
+      <Card className="border-slate-200 bg-white">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Snowflake className="h-5 w-5" />
-            Freeze / Unfreeze Wallets
-          </CardTitle>
+          <CardTitle>Add trusted issuer</CardTitle>
           <CardDescription>
-            Freeze token transfers for specific wallets (token owner or agent).
+            Save an approved issuer authority and the claim topics it is permitted to issue.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {!selectedTokenContract && (
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                Select a token to update freeze status.
-              </AlertDescription>
-            </Alert>
-          )}
-          {selectedTokenContract && !canFreeze && (
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                On-chain permissions still apply. If this wallet is not an
-                owner/agent, freeze actions will fail.
-              </AlertDescription>
-            </Alert>
-          )}
-          <div className="space-y-2">
-            <Label htmlFor="freeze-address">Wallet Address</Label>
-            <Input
-              id="freeze-address"
-              placeholder="Solana address"
-              value={freezeAddress}
-              onChange={(e) => setFreezeAddress(e.target.value)}
-              disabled={!selectedTokenContract || isWorking}
-              className="h-11"
-            />
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="destructive"
-              className="flex-1"
-              onClick={() => handleFreeze("freeze")}
-              disabled={!selectedTokenContract || isWorking || !freezeAddress}
-            >
-              Freeze
-            </Button>
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => handleFreeze("unfreeze")}
-              disabled={!selectedTokenContract || isWorking || !freezeAddress}
-            >
-              Unfreeze
-            </Button>
-          </div>
+        <CardContent>
+          <form className="space-y-5" onSubmit={addTrustedIssuer}>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="issuer-wallet">Issuer wallet address</Label>
+                <Input
+                  id="issuer-wallet"
+                  value={issuerWallet}
+                  onChange={(event) => setIssuerWallet(event.target.value)}
+                  placeholder="Solana wallet address"
+                  className="font-mono text-sm"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="issuer-authority-name">Issuer authority name</Label>
+                <Input
+                  id="issuer-authority-name"
+                  value={authorityName}
+                  onChange={(event) => setAuthorityName(event.target.value)}
+                  placeholder="e.g. Acme Compliance Services"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Authorized claim topics</Label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="flex items-start gap-3 rounded-md border border-slate-200 p-4">
+                  <Checkbox checked={kycAuthorized} onCheckedChange={(checked) => setKycAuthorized(checked === true)} />
+                  <span>
+                    <span className="block text-sm font-semibold text-slate-900">Authorize for KYC</span>
+                    <span className="mt-1 block text-xs text-slate-500">Allows this issuer to apply claim topic 1.</span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-3 rounded-md border border-slate-200 p-4">
+                  <Checkbox checked={amlAuthorized} onCheckedChange={(checked) => setAmlAuthorized(checked === true)} />
+                  <span>
+                    <span className="block text-sm font-semibold text-slate-900">Authorize for AML</span>
+                    <span className="mt-1 block text-xs text-slate-500">Allows this issuer to apply claim topic 2.</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button type="submit" disabled={saving} className="bg-[#172E7F] hover:bg-[#21439B]">
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                Save trusted issuer
+              </Button>
+            </div>
+          </form>
         </CardContent>
       </Card>
+
+      <div>
+        <div className="mb-3">
+          <h2 className="text-lg font-semibold text-slate-950">Approved issuers</h2>
+          <p className="text-sm text-slate-600">These authorities are available during token compliance configuration.</p>
+        </div>
+        {loading ? (
+          <div className="py-10 text-center text-sm text-slate-500">Loading trusted issuers...</div>
+        ) : trustedIssuers.length === 0 ? (
+          <div className="rounded-md border border-dashed border-slate-300 bg-white/60 py-10 text-center text-sm text-slate-500">
+            No trusted issuers have been added yet.
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-left text-slate-500">
+                <tr>
+                  <th className="px-4 py-3 font-semibold">Authority</th>
+                  <th className="px-4 py-3 font-semibold">Wallet address</th>
+                  <th className="px-4 py-3 font-semibold">Authorized topics</th>
+                  <th className="px-4 py-3 text-right font-semibold">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {trustedIssuers.map((issuer) => (
+                  <tr key={issuer.id}>
+                    <td className="px-4 py-4 font-medium text-slate-900">{issuer.authorityName}</td>
+                    <td className="px-4 py-4 font-mono text-xs text-slate-600" title={issuer.walletAddress}>
+                      {shortAddress(issuer.walletAddress)}
+                    </td>
+                    <td className="px-4 py-4"><AuthorizationBadges issuer={issuer} /></td>
+                    <td className="px-4 py-4 text-right">
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        title={`Remove ${issuer.authorityName}`}
+                        disabled={removingId === issuer.id}
+                        onClick={() => void removeTrustedIssuer(issuer)}
+                      >
+                        {removingId === issuer.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-red-600" />}
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
