@@ -13,7 +13,7 @@ import { fetchFactoryStateAccount } from "../lib/solana";
 import { TokenService } from "../services/token";
 
 const BACKEND_URL =
-  process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4082";
+  process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL;
 const CLAIM_ACCOUNT_SIZE = 230;
 const MINT_DISCRIMINATOR = Buffer.from([51, 57, 225, 47, 182, 146, 137, 166]);
 

@@ -28,14 +28,19 @@ const menuItems = [
     category: "Issuer",
     items: [
       { name: "Issuer Portal", href: "/issuer" },
-      { name: "Issuer FID", href: "/issuer/identity" },
       { name: "Tokenize Asset", href: "/issuer/submit-request" },
+    ],
+  },
+  {
+    category: "Trusted Providers",
+    items: [
+      { name: "Claim Provider", href: "/trusted-provider/claim-provider" },
+      { name: "Provider FID", href: "/trusted-provider/provider-fid" },
     ],
   },
   {
     category: "Admin",
     items: [
-      { name: "KYC Provider", href: "/kyc-provider" },
       { name: "Asset Issuance", href: "/issuance" },
       { name: "Token Admin", href: "/token-admin" },
       { name: "Compliance", href: "/compliance" },
@@ -48,23 +53,18 @@ export function Sidebar() {
   const pathname = usePathname();
   const { address } = useAppContext();
   const {
-    canSeeCompliance,
-    canSeeIssuance,
-    canSeeAdminTab,
-    canSeeActivityLogs,
+    canSeeAdminBlock,
+    canSeeTrustedProviders,
   } = usePermissionsContext();
 
   const visibleItems = menuItems.map((section) => ({
     ...section,
-    items: section.items.filter((item) => {
-      if (item.href === "/token-admin") return canSeeAdminTab;
-      if (item.href === "/personnel") return canSeeActivityLogs;
-      if (item.href === "/compliance") return canSeeCompliance;
-      if (item.href === "/issuance") return canSeeIssuance;
-      if (item.href === "/investor") return !!address;
+    items: section.items.filter(() => {
+      if (section.category === "Trusted Providers") return canSeeTrustedProviders;
+      if (section.category === "Admin") return canSeeAdminBlock;
       return true;
     }),
-  }));
+  })).filter((section) => section.items.length > 0);
 
   return (
     <aside className="w-70 h-[calc(100vh-40px)] m-5 flex flex-col app-sidebar rounded-[26px] overflow-hidden shrink-0 fixed left-0 top-0 border-r-2 border-[#CBA135]/60">

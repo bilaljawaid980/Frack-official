@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { useWallet } from "@/hooks/use-wallet";
 import { buildAdminWalletHeaders } from "@/lib/admin-wallet-auth";
 import { apiFetch } from "@/lib/backend";
+import { queryCache } from "@/lib/query-cache";
 import { ROLE_WALLETS } from "@/lib/zigchain-config";
 
 type TrustedIssuer = {
@@ -122,6 +123,7 @@ export default function PersonnelPage() {
         body,
         headers,
       });
+      queryCache.invalidatePrefix("trusted-provider:");
       resetForm();
       await loadTrustedIssuers();
       toast.success("Trusted issuer added.", { id: toastId });
@@ -145,6 +147,7 @@ export default function PersonnelPage() {
         walletAddress: address!,
       });
       await apiFetch(path, { method: "DELETE", headers });
+      queryCache.invalidatePrefix("trusted-provider:");
       await loadTrustedIssuers();
       toast.success("Trusted issuer removed.", { id: toastId });
     } catch (error) {

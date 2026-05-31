@@ -52,6 +52,8 @@ import {
 } from "@/lib/asset-compliance";
 import { MOD_SUPPLY_CAP } from "@/lib/constants";
 
+type ComplianceStatusValue = "compliant" | "pending" | "non-compliant" | "under-review";
+
 type SupplyCapSnapshot = {
   currentSupply?: string;
   currentCap?: string;
@@ -80,12 +82,11 @@ export default function CompliancePage() {
   const { connection } = useConnection();
   const anchorProvider = useAnchorProvider();
   const {
-    permissions,
     canSeeCompliance,
     loading: permissionsLoading,
   } = usePermissionsContext();
   const { assets, updateCompliance, loading } = useAssetsContext();
-  const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
+  const [, setSelectedAsset] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [selectedJurisdiction, setSelectedJurisdiction] =
     useState<string>("all");
@@ -198,10 +199,16 @@ export default function CompliancePage() {
         notes: "Manual compliance update",
       });
       toast.success(`Compliance status updated to ${status}`);
-    } catch (error) {
+    } catch {
       toast.error("Failed to update compliance status");
     }
   };
+  const complianceStatusRows: { status: ComplianceStatusValue; count: number }[] = [
+    { status: "compliant", count: complianceStats.compliant },
+    { status: "pending", count: complianceStats.pending },
+    { status: "non-compliant", count: complianceStats.nonCompliant },
+    { status: "under-review", count: complianceStats.underReview },
+  ];
 
   const handleSupplyCapUpdate = async (asset: RWAAsset) => {
     const value = supplyCapInputs[asset.id]?.trim();
@@ -300,7 +307,7 @@ export default function CompliancePage() {
         <Alert>
           <AlertDescription>
             Compliance owner configures transfer restrictions and reviews asset
-            compliance. Other roles should use the KYC Provider and Identity
+            compliance. Other roles should use the Claim Provider and Identity
             Management pages.
           </AlertDescription>
         </Alert>
@@ -428,14 +435,7 @@ export default function CompliancePage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {[
-                    "compliant",
-                    "pending",
-                    "non-compliant",
-                    "under-review",
-                  ].map((status) => {
-                    const count =
-                      complianceStats[status as keyof typeof complianceStats];
+                  {complianceStatusRows.map(({ status, count }) => {
                     const percentage =
                       complianceStats.total > 0
                         ? (count / complianceStats.total) * 100
@@ -445,7 +445,7 @@ export default function CompliancePage() {
                       <div key={status} className="space-y-2">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <ComplianceBadge status={status as any} size="sm" />
+                            <ComplianceBadge status={status} size="sm" />
                             <span className="text-sm text-muted-foreground">
                               {count} assets
                             </span>
@@ -489,7 +489,7 @@ export default function CompliancePage() {
                     <FileCheck className="h-4 w-4" />
                     Run Compliance Check
                   </Button>
-                  <Link href="/kyc-provider">
+                  <Link href="/trusted-provider/claim-provider">
                     <Button
                       variant="outline"
                       className="w-full justify-start gap-2"

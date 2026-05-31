@@ -3,7 +3,7 @@
 /**
  * PermissionsContext - Centralized, singleton provider for user permissions.
  *
- * Previously, the Sidebar, Dashboard, Compliance, Issuance, KYC Provider, Token Admin,
+ * Previously, the Sidebar, Dashboard, Compliance, Issuance, Claim Provider, Token Admin,
  * Personnel, and Admin Identities pages each called `usePermissions()` independently,
  * each making 7 parallel RPC calls to check roles. With 9 consumers, that's 63 redundant RPC calls.
  *
@@ -35,6 +35,7 @@ import {
 import { TREX_CONTRACTS, ROLE_WALLETS } from "@/lib/zigchain-config";
 import { queryCache } from "@/lib/query-cache";
 import { useAppContext } from "@/contexts/app-context";
+import { apiFetch } from "@/lib/backend";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -55,6 +56,10 @@ interface PermissionsContextType {
   permissions: PermissionsState;
   loading: boolean;
   error: string | null;
+  isPlatformAdmin: boolean;
+  isClaimProvider: boolean;
+  canSeeAdminBlock: boolean;
+  canSeeTrustedProviders: boolean;
   canSeeAdminIdentities: boolean;
   canSeeCompliance: boolean;
   canSeeIssuance: boolean;
@@ -79,7 +84,7 @@ const emptyPermissions: PermissionsState = {
 // Temporary Solana migration switch: keep pages/actions visible while contract
 // execution is tested. Re-enable RBAC by setting this to false and validating
 // the Solana role PDA checks below against the final deployed programs.
-export const RBAC_DISABLED_FOR_SOLANA_TESTING = true;
+export const RBAC_DISABLED_FOR_SOLANA_TESTING = false;
 
 export const testingPermissions: PermissionsState = {
   isFactoryAdmin: true,
@@ -134,6 +139,29 @@ function parseIssuerEntry(info: AccountInfo<Buffer> | null) {
     offset += 4 + labelLen;
   }
   return { isActive, topics };
+}
+
+type TrustedIssuerRecord = {
+  walletAddress: string;
+  kycAuthorized: boolean;
+};
+
+function isPlatformAdminWallet(walletAddress?: string | null) {
+  return (
+    !!walletAddress &&
+    !!ROLE_WALLETS.platformOwner &&
+    walletAddress.toLowerCase() === ROLE_WALLETS.platformOwner.toLowerCase()
+  );
+}
+
+async function fetchIsClaimProvider(walletAddress: string) {
+  const normalizedWallet = walletAddress.toLowerCase();
+  const issuers = await apiFetch<TrustedIssuerRecord[]>("/trusted-issuers");
+  return issuers.some(
+    (issuer) =>
+      issuer.kycAuthorized &&
+      issuer.walletAddress.toLowerCase() === normalizedWallet,
+  );
 }
 
 export async function fetchPermissionsForWallet(
@@ -220,12 +248,54 @@ export async function fetchPermissionsForWallet(
 export function PermissionsProvider({ children }: { children: ReactNode }) {
   const { address: walletAddress } = useAppContext();
   const [loading, setLoading] = useState(false);
+  const [providerLoading, setProviderLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [trustedProvider, setTrustedProvider] = useState(false);
   const [permissions, setPermissions] =
     useState<PermissionsState>(
       RBAC_DISABLED_FOR_SOLANA_TESTING ? testingPermissions : emptyPermissions,
     );
   const requestIdRef = useRef(0);
+
+  useEffect(() => {
+    const wallet = walletAddress?.trim();
+    if (!wallet || isPlatformAdminWallet(wallet)) {
+      window.queueMicrotask(() => {
+        setTrustedProvider(false);
+        setProviderLoading(false);
+      });
+      return;
+    }
+
+    let isCancelled = false;
+    const loadTrustedProvider = async () => {
+      setProviderLoading(true);
+      try {
+        const result = await queryCache.query(
+          `trusted-provider:${wallet.toLowerCase()}`,
+          () => fetchIsClaimProvider(wallet),
+          60_000,
+        );
+        if (!isCancelled) {
+          setTrustedProvider(result);
+        }
+      } catch (err) {
+        console.error("Failed to load trusted provider role:", err);
+        if (!isCancelled) {
+          setTrustedProvider(false);
+        }
+      } finally {
+        if (!isCancelled) {
+          setProviderLoading(false);
+        }
+      }
+    };
+
+    void loadTrustedProvider();
+    return () => {
+      isCancelled = true;
+    };
+  }, [walletAddress]);
 
   useEffect(() => {
     if (RBAC_DISABLED_FOR_SOLANA_TESTING) {
@@ -274,31 +344,30 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   }, [walletAddress]);
 
   // ─ Derived visibility flags ─
-  const isEnvAdmin = !!walletAddress && !!ROLE_WALLETS.platformOwner && walletAddress.toLowerCase() === ROLE_WALLETS.platformOwner.toLowerCase();
-  const isFactoryAdmin = permissions.isFactoryAdmin || isEnvAdmin;
+  const isPlatformAdmin = isPlatformAdminWallet(walletAddress);
+  const effectivePermissions = isPlatformAdmin ? testingPermissions : permissions;
+  const isClaimProvider = trustedProvider;
+  const canSeeAdminBlock = isPlatformAdmin;
+  const canSeeTrustedProviders = isPlatformAdmin || isClaimProvider;
 
   const canSeeAdminIdentities = useMemo(
-    () => RBAC_DISABLED_FOR_SOLANA_TESTING || permissions.isIdentityRegistryOwner || permissions.isTrustedIssuer || isEnvAdmin,
-    [permissions, isEnvAdmin],
+    () => canSeeAdminBlock,
+    [canSeeAdminBlock],
   );
-  const canSeeCompliance = RBAC_DISABLED_FOR_SOLANA_TESTING || permissions.isComplianceOwner || isFactoryAdmin;
-  const canSeeIssuance = RBAC_DISABLED_FOR_SOLANA_TESTING || isFactoryAdmin;
-  const canSeeKycProvider = RBAC_DISABLED_FOR_SOLANA_TESTING || permissions.canKycProvider || isEnvAdmin;
-  const canSeeAdminTab =
-    RBAC_DISABLED_FOR_SOLANA_TESTING ||
-    permissions.isTokenOwner ||
-    permissions.isTokenIssuer ||
-    permissions.isTokenController ||
-    permissions.isTokenAgent ||
-    permissions.isComplianceOwner ||
-    permissions.isClaimTopicsOwner ||
-    isFactoryAdmin;
-  const canSeeActivityLogs = RBAC_DISABLED_FOR_SOLANA_TESTING || isEnvAdmin;
+  const canSeeCompliance = canSeeAdminBlock;
+  const canSeeIssuance = canSeeAdminBlock;
+  const canSeeKycProvider = canSeeTrustedProviders;
+  const canSeeAdminTab = canSeeAdminBlock;
+  const canSeeActivityLogs = canSeeAdminBlock;
 
   const value: PermissionsContextType = {
-    permissions,
-    loading,
+    permissions: effectivePermissions,
+    loading: loading || providerLoading,
     error,
+    isPlatformAdmin,
+    isClaimProvider,
+    canSeeAdminBlock,
+    canSeeTrustedProviders,
     canSeeAdminIdentities,
     canSeeCompliance,
     canSeeIssuance,
