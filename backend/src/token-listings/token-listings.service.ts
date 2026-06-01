@@ -7,6 +7,7 @@ import { CreateTokenBuyIntentDto } from './dto/create-token-buy-intent.dto';
 import { CreateTokenSellListingDto } from './dto/create-token-sell-listing.dto';
 import { UpdateTokenBuyIntentDto } from './dto/update-token-buy-intent.dto';
 import { UpdateTokenSellListingDto } from './dto/update-token-sell-listing.dto';
+import { BlockchainTransactionsService } from '../blockchain-transactions/blockchain-transactions.service';
 
 const LISTING_STATUSES = new Set(['LISTED', 'PARTIALLY_FILLED', 'FILLED', 'CANCELLED', 'EXPIRED']);
 const OPEN_LISTING_STATUSES = ['LISTED', 'PARTIALLY_FILLED'];
@@ -52,7 +53,10 @@ function normalizeWallet(value: string, label: string): string {
 
 @Injectable()
 export class TokenListingsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly blockchainTransactions: BlockchainTransactionsService,
+  ) {}
 
   private listingSelect() {
     return Prisma.sql`
@@ -95,6 +99,14 @@ export class TokenListingsService {
       "issuerWallet",
       "preflightFailure",
       "simulationError",
+      "kycClaimTxHash",
+      "kycClaimedAt",
+      "amlClaimTxHash",
+      "amlClaimedAt",
+      "whitelistTxHash",
+      "whitelistedAt",
+      "activationTxHash",
+      "activatedAt",
       "transferTxHash",
       "transferredAt",
       "rejectionReason",
@@ -337,6 +349,22 @@ export class TokenListingsService {
     ];
     if (dto.preflightFailure !== undefined) updates.push(Prisma.sql`"preflightFailure" = ${dto.preflightFailure}`);
     if (dto.simulationError !== undefined) updates.push(Prisma.sql`"simulationError" = ${dto.simulationError}`);
+    if (dto.claimTxHash && intent.status === 'PENDING_KYC') {
+      updates.push(Prisma.sql`"kycClaimTxHash" = ${dto.claimTxHash}`);
+      updates.push(Prisma.sql`"kycClaimedAt" = NOW()`);
+    }
+    if (dto.claimTxHash && intent.status === 'PENDING_AML') {
+      updates.push(Prisma.sql`"amlClaimTxHash" = ${dto.claimTxHash}`);
+      updates.push(Prisma.sql`"amlClaimedAt" = NOW()`);
+    }
+    if (dto.whitelistTxHash) {
+      updates.push(Prisma.sql`"whitelistTxHash" = ${dto.whitelistTxHash}`);
+      updates.push(Prisma.sql`"whitelistedAt" = NOW()`);
+    }
+    if (dto.activationTxHash) {
+      updates.push(Prisma.sql`"activationTxHash" = ${dto.activationTxHash}`);
+      updates.push(Prisma.sql`"activatedAt" = NOW()`);
+    }
     if (dto.status === 'REJECTED') {
       updates.push(Prisma.sql`"rejectionReason" = ${dto.rejectionReason || 'Rejected'}`);
       updates.push(Prisma.sql`"rejectedAt" = NOW()`);
@@ -390,6 +418,7 @@ export class TokenListingsService {
         `;
         return updatedIntent;
       });
+      await this.recordBuyIntentLedgerEntries(id, dto, intent);
       return rows[0];
     }
 
@@ -399,7 +428,41 @@ export class TokenListingsService {
       WHERE id = ${id}
       RETURNING ${this.buyIntentSelect()}
     `;
+    await this.recordBuyIntentLedgerEntries(id, dto, intent);
     return rows[0];
+  }
+
+  private async recordBuyIntentLedgerEntries(
+    id: string,
+    dto: UpdateTokenBuyIntentDto,
+    intent: Record<string, unknown>,
+  ) {
+    const ledgerBase = {
+      actorWallet: dto.reviewerWallet || null,
+      entityType: 'token_buy_intent',
+      entityId: id,
+      assetId: String(intent.assetId || '') || undefined,
+      tokenContract: String(intent.tokenContract),
+    };
+    const status = String(intent.status);
+    const entries = [
+      dto.claimTxHash && status === 'PENDING_KYC'
+        ? { ...ledgerBase, txHash: dto.claimTxHash, actionType: 'TRANSFER_ELIGIBILITY_KYC_CLAIM' }
+        : null,
+      dto.claimTxHash && status === 'PENDING_AML'
+        ? { ...ledgerBase, txHash: dto.claimTxHash, actionType: 'TRANSFER_ELIGIBILITY_AML_CLAIM' }
+        : null,
+      dto.whitelistTxHash
+        ? { ...ledgerBase, txHash: dto.whitelistTxHash, actionType: 'INVESTOR_WHITELISTED' }
+        : null,
+      dto.activationTxHash
+        ? { ...ledgerBase, txHash: dto.activationTxHash, actionType: 'IDENTITY_ACTIVATED' }
+        : null,
+      dto.transferTxHash
+        ? { ...ledgerBase, txHash: dto.transferTxHash, actionType: 'MARKETPLACE_TRANSFER' }
+        : null,
+    ].filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+    await Promise.all(entries.map((entry) => this.blockchainTransactions.record(entry)));
   }
 
   async resumeBuyIntentAfterIdentity(id: string) {

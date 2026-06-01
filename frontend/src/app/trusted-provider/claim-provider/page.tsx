@@ -44,6 +44,8 @@ import { useAnchorProvider } from "@/hooks/useAnchorProvider";
 import { useWallet } from "@/hooks/use-wallet";
 import { apiFetch } from "@/lib/backend";
 import { runClaimSignSmokeTest } from "@/lib/claim-sign-debug";
+import { recordBlockchainTransactionSafely } from "@/lib/blockchain-transactions";
+import { TransactionToastLink } from "@/lib/solscan";
 import { IdentityService } from "@/services/identity";
 import { TokenService } from "@/services/token";
 import type { TokenPurchaseRequest } from "@/types/token-purchase-request";
@@ -368,7 +370,18 @@ export default function ClaimProviderPage() {
         }
         if (check.investorHasActiveClaim && check.providerSignerValid === false) {
           toast.loading(`Revoking stale transfer recipient claim...`, { id: loadingToast });
-          await identityService.revokeActiveClaimForTopic(investorWallet, BigInt(topic));
+          const revokeTxHash = await identityService.revokeActiveClaimForTopic(
+            investorWallet,
+            BigInt(topic),
+          );
+          recordBlockchainTransactionSafely({
+            txHash: revokeTxHash,
+            actionType: "TRANSFER_ELIGIBILITY_STALE_CLAIM_REVOKED",
+            actorWallet: address,
+            entityType: request.source === "listing" ? "token_buy_intent" : "token_transfer_request",
+            entityId: request.id,
+            tokenContract: request.tokenContract,
+          });
         }
         toast.loading(`Issuing fresh transfer recipient claim...`, { id: loadingToast });
         const signature = await identityService.issueClaim(
@@ -385,10 +398,13 @@ export default function ClaimProviderPage() {
             : `/token-transfer-requests/${request.id}/status`,
           {
           method: "PATCH",
-          body: JSON.stringify({ status: nextStatus, reviewerWallet: address, transferTxHash: signature }),
+          body: JSON.stringify({ status: nextStatus, reviewerWallet: address, claimTxHash: signature }),
           },
         );
-        toast.success("Transfer recipient claim issued.", { id: loadingToast });
+        toast.success("Transfer recipient claim issued.", {
+          id: loadingToast,
+          description: <TransactionToastLink signature={signature} />,
+        });
         await loadRequests();
         return;
       }
@@ -510,7 +526,19 @@ export default function ClaimProviderPage() {
         // should issue the claim for the investor and advance the request.
         if (check.investorHasActiveClaim && check.providerSignerValid === false) {
           toast.loading(`Revoking stale ${reviewType} claim...`, { id: loadingToast });
-          await identityService.revokeActiveClaimForTopic(investorWallet, BigInt(topic));
+          const revokeTxHash = await identityService.revokeActiveClaimForTopic(
+            investorWallet,
+            BigInt(topic),
+          );
+          recordBlockchainTransactionSafely({
+            txHash: revokeTxHash,
+            actionType: "PURCHASE_STALE_CLAIM_REVOKED",
+            actorWallet: address,
+            entityType: "token_purchase_request",
+            entityId: request.id,
+            assetId: request.assetId,
+            tokenContract: request.tokenContract,
+          });
           
           toast.loading(`Issuing fresh ${reviewType} claim...`, { id: loadingToast });
           const signature = await identityService.issueClaim(
@@ -544,7 +572,10 @@ export default function ClaimProviderPage() {
           await updateRequestStatus(request, nextStatus, { claimTxHash: signature });
           toast.success(
             `Stale ${reviewType} claim revoked and fresh claim issued.`,
-            { id: loadingToast },
+            {
+              id: loadingToast,
+              description: <TransactionToastLink signature={signature} />,
+            },
           );
           return;
         }
@@ -582,6 +613,7 @@ export default function ClaimProviderPage() {
         });
         toast.success(`${reviewType} claim issued. Request advanced.`, {
           id: loadingToast,
+          description: <TransactionToastLink signature={signature} />,
         });
         return;
       }

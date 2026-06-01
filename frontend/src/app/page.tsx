@@ -53,7 +53,7 @@ function buildAssetBackedSeries(assets: RWAAsset[]): AnalyticsPoint[] | undefine
     if (!entry) return;
 
     const tokenized = Number(asset.tokenizedAmount || asset.total_tokenized || 0);
-    entry.issued += tokenized > 0 ? tokenized : Number(asset.totalSupply) || 0;
+    entry.issued += tokenized > 0 ? tokenized : 0;
   });
 
   const series = months.map((month) => {
@@ -68,21 +68,7 @@ function buildAssetBackedSeries(assets: RWAAsset[]): AnalyticsPoint[] | undefine
 
   if (hasChartActivity(series)) return series;
 
-  const totalSupply = assets.reduce(
-    (sum, asset) => sum + (Number(asset.totalSupply) || 0),
-    0,
-  );
-  if (totalSupply <= 0) return undefined;
-
-  return months.map((month, index) => {
-    const issued = Math.round((totalSupply * (index + 1)) / months.length);
-    return {
-      month: month.label,
-      issued,
-      redeemed: 0,
-      net: issued,
-    };
-  });
+  return undefined;
 }
 
 export default function Page() {
@@ -362,14 +348,14 @@ export default function Page() {
       <div className="grid grid-cols-1 items-stretch gap-4 pt-4 xl:grid-cols-[minmax(460px,1.08fr)_minmax(380px,0.92fr)]">
         <div className="glass-card flex min-w-0 flex-col rounded-[20px] p-6">
           <h1 className="text-2xl font-semibold mb-6">Tokenized Assets</h1>
-          <div className="flex-1 min-h-0 overflow-auto">
-            <AssetsList assets={assets} loading={loading} limit={10} />
+          <div className="h-[1308px] min-h-0 overflow-auto pr-1">
+            <AssetsList assets={assets} loading={loading} />
           </div>
         </div>
         <div className="glass-card flex min-w-0 flex-col rounded-[20px] p-6">
           <h1 className="text-2xl font-semibold mb-6">Top Transactions</h1>
-          <div className="max-h-[640px] flex-1 min-h-0 overflow-auto pr-1">
-            <TopTransactions limit={7} />
+          <div className="h-[1308px] min-h-0 overflow-auto pr-1">
+            <TopTransactions />
           </div>
         </div>
       </div>

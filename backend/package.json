@@ -13,7 +13,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "indexer:dev": "ts-node -r tsconfig-paths/register src/indexer/indexer.runner.ts",
-    "indexer:once": "node dist/indexer/indexer.runner.js"
+    "indexer:once": "node dist/indexer/indexer.runner.js --once"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",

@@ -25,6 +25,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { apiFetch } from "@/lib/backend";
+import { TransactionToastLink } from "@/lib/solscan";
+import { recordBlockchainTransactionSafely } from "@/lib/blockchain-transactions";
 import { PublicKey } from "@solana/web3.js";
 import { toast } from "sonner";
 import type { TokenPurchaseRequest } from "@/types/token-purchase-request";
@@ -550,7 +552,9 @@ export default function IssuerPage() {
         amount: baseAmount,
       });
       await updatePurchaseRequestStatus(request, "MINTED", { mintTxHash: sig });
-      toast.success("Tokens minted to investor wallet");
+      toast.success("Tokens minted to investor wallet", {
+        description: <TransactionToastLink signature={sig} />,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Mint failed";
       if (
@@ -588,6 +592,15 @@ export default function IssuerPage() {
       const issuerWallet = request.issuerWallet;
       const issuer = new PublicKey(issuerWallet);
       const sig = await identityService.transferIrpOwnership(mint, issuer);
+      recordBlockchainTransactionSafely({
+        txHash: sig,
+        actionType: "IRP_OWNERSHIP_REPAIRED",
+        actorWallet: walletAddress,
+        entityType: "token_purchase_request",
+        entityId: request.id,
+        assetId: request.assetId,
+        tokenContract: request.tokenContract,
+      });
       const key = `${request.tokenContract}:${request.investorWallet}`;
       setWalletIdentityMap((current) => ({
         ...current,
@@ -599,7 +612,9 @@ export default function IssuerPage() {
           canActivate: true,
         },
       }));
-      toast.success(`IRP ownership repaired. Tx: ${sig.slice(0, 10)}...${sig.slice(-8)}`);
+      toast.success("IRP ownership repaired.", {
+        description: <TransactionToastLink signature={sig} />,
+      });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Registry repair failed");
     }
@@ -611,6 +626,7 @@ export default function IssuerPage() {
       const mint = new PublicKey(request.tokenContract);
       const wallet = new PublicKey(transferRecipientWallet(request));
       const existingIdentity = await identityService.fetchWalletIdentity(mint, wallet);
+      let whitelistTxHash: string | undefined;
       if (!existingIdentity) {
         const investorFid = identityService.findFidPda(wallet)[0];
         const fidAccount = await identityService.fetchFid(wallet);
@@ -619,13 +635,19 @@ export default function IssuerPage() {
         if (fidAccount.country < 1 || fidAccount.country > 999) {
           throw new Error(`Recipient FID has invalid country code ${fidAccount.country}.`);
         }
-        await identityService.registerIdentity(mint, wallet, investorFid, fidAccount.country);
+        whitelistTxHash = await identityService.registerIdentity(
+          mint,
+          wallet,
+          investorFid,
+          fidAccount.country,
+        );
       }
       await apiFetch(transferRequestStatusEndpoint(request), {
         method: "PATCH",
         body: JSON.stringify({
           status: "PENDING_ISSUER_ACTIVATION",
           reviewerWallet: walletAddress,
+          whitelistTxHash,
         }),
       });
       setTransferRequests((current) =>
@@ -659,7 +681,7 @@ export default function IssuerPage() {
   const handleActivateTransferRecipient = async (request: TokenTransferRequest) => {
     try {
       if (!identityService) throw new Error("Connect issuer wallet first.");
-      await identityService.setIdentityActivation(
+      const activationTxHash = await identityService.setIdentityActivation(
         new PublicKey(request.tokenContract),
         new PublicKey(transferRecipientWallet(request)),
         true,
@@ -669,6 +691,7 @@ export default function IssuerPage() {
         body: JSON.stringify({
           status: request.source === "listing" ? "READY_FOR_SELLER_ACCEPTANCE" : "READY_TO_TRANSFER",
           reviewerWallet: walletAddress,
+          activationTxHash,
         }),
       });
       setTransferRequests((current) => current.filter((item) => item.id !== request.id));
@@ -893,11 +916,16 @@ export default function IssuerPage() {
                                           `Investor FID has invalid country code ${fidAccount.country}. Ask the investor to update their FID country before whitelisting.`,
                                         );
                                       }
-                                      await identityService.registerIdentity(
+                                      const whitelistTxHash = await identityService.registerIdentity(
                                         mint,
                                         wallet,
                                         investorFid,
                                         fidAccount.country,
+                                      );
+                                      await updatePurchaseRequestStatus(
+                                        request,
+                                        request.status,
+                                        { whitelistTxHash },
                                       );
                                       setWalletIdentityMap((cur) => ({
                                         ...cur,
@@ -959,7 +987,13 @@ export default function IssuerPage() {
                                         if (!identityService) throw new Error("Connect IRS owner to activate identity");
                                         const mint = new PublicKey(request.tokenContract);
                                         const wallet = new PublicKey(request.investorWallet);
-                                        await identityService.setIdentityActivation(mint, wallet, true);
+                                        const activationTxHash =
+                                          await identityService.setIdentityActivation(mint, wallet, true);
+                                        await updatePurchaseRequestStatus(
+                                          request,
+                                          request.status,
+                                          { activationTxHash },
+                                        );
                                         setWalletIdentityMap((cur) => ({
                                           ...cur,
                                           [key]: { ...cur[key], isActive: true },

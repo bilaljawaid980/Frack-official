@@ -109,7 +109,11 @@ export class IndexerService {
       const tokenState = tokenStateInfo
         ? parseTokenState(tokenStateInfo)
         : null;
-      const metadata = await this.buildIndexedMetadata(deployment.tokenMint);
+      const metadata = await this.buildIndexedMetadata(
+        deployment.tokenMint,
+        deployment.complianceState,
+        tokenState?.decimals,
+      );
 
       tokens.push({
         asset_id: Number(deployment.deploymentId),
@@ -375,10 +379,24 @@ export class IndexerService {
         indexedObject.claimTopics.length > 0
           ? indexedObject.claimTopics
           : existingObject.claimTopics,
+      complianceModules:
+        Array.isArray(indexedObject.complianceModules) &&
+        indexedObject.complianceModules.length > 0
+          ? indexedObject.complianceModules
+          : existingObject.complianceModules,
+      complianceModuleParams:
+        isRecord(indexedObject.complianceModuleParams) &&
+        Object.keys(indexedObject.complianceModuleParams).length > 0
+          ? indexedObject.complianceModuleParams
+          : existingObject.complianceModuleParams,
     };
   }
 
-  private async buildIndexedMetadata(tokenMint: PublicKey) {
+  private async buildIndexedMetadata(
+    tokenMint: PublicKey,
+    complianceState: PublicKey,
+    decimals?: number,
+  ) {
     const [ctrState] = PublicKey.findProgramAddressSync(
       [Buffer.from("ctr_state"), tokenMint.toBuffer()],
       getCtrProgramId(),
@@ -390,14 +408,25 @@ export class IndexerService {
 
     const claimTopics = await this.readClaimTopics(ctrState);
     const trustedIssuers = await this.readTrustedIssuers(tirState);
+    const complianceMetadata = await this.readComplianceMetadata(
+      complianceState,
+      decimals,
+    );
 
-    if (claimTopics.length === 0 && trustedIssuers.length === 0) {
+    if (
+      claimTopics.length === 0 &&
+      trustedIssuers.length === 0 &&
+      complianceMetadata.complianceModules.length === 0 &&
+      decimals === undefined
+    ) {
       return null;
     }
 
     return {
+      ...(decimals === undefined ? {} : { decimals }),
       claimTopics,
       trustedIssuers,
+      ...complianceMetadata,
     };
   }
 
@@ -440,6 +469,41 @@ export class IndexerService {
     }
 
     return issuers;
+  }
+
+  private async readComplianceMetadata(
+    complianceState: PublicKey,
+    decimals = 6,
+  ) {
+    const account = await this.withRpcRetries(
+      `getAccountInfo(complianceState:${complianceState.toBase58()})`,
+      () => this.connection.getAccountInfo(complianceState, "confirmed"),
+    );
+    const moduleStates = account ? parseComplianceState(account) : [];
+    if (moduleStates.length === 0) {
+      return { complianceModules: [], complianceModuleParams: {} };
+    }
+
+    const moduleAccounts = await this.withRpcRetries(
+      `getMultipleAccountsInfo(complianceModules:${complianceState.toBase58()})`,
+      () => this.connection.getMultipleAccountsInfo(moduleStates, "confirmed"),
+    );
+    const complianceModules: string[] = [];
+    const complianceModuleParams: Record<string, Record<string, string>> = {};
+
+    for (const [index] of moduleStates.entries()) {
+      const moduleAccount = moduleAccounts?.[index];
+      if (!moduleAccount) continue;
+
+      const programId = moduleAccount.owner.toBase58();
+      const params = parseComplianceModuleParams(moduleAccount, decimals);
+      if (!params) continue;
+
+      complianceModules.push(programId);
+      complianceModuleParams[programId] = params;
+    }
+
+    return { complianceModules, complianceModuleParams };
   }
 
   private async readFidOwner(fid: PublicKey) {
@@ -488,7 +552,8 @@ function parseTokenDeployment(account: AccountInfo<Buffer>) {
   offset += 32; // irs_state
   offset += 32; // tir_state
   offset += 32; // ctr_state
-  offset += 32; // compliance_state
+  const complianceState = readPubkey(data, offset);
+  offset += 32;
   const deployedAt = data.readBigInt64LE(offset);
 
   return {
@@ -496,6 +561,7 @@ function parseTokenDeployment(account: AccountInfo<Buffer>) {
     issuer,
     tokenMint,
     tokenState,
+    complianceState,
     deployedAt,
   };
 }
@@ -535,6 +601,24 @@ function parseOwnerState(account: AccountInfo<Buffer>) {
   const data = account.data;
   if (data.length < 8 + 32) return null;
   return new PublicKey(data.subarray(8, 40));
+}
+
+function parseComplianceState(account: AccountInfo<Buffer>) {
+  const data = account.data;
+  let offset = 8 + 32 + 32;
+  if (data.length < offset + 4) return [];
+
+  const moduleCount = data.readUInt32LE(offset);
+  offset += 4;
+
+  const modules: PublicKey[] = [];
+  for (let index = 0; index < moduleCount; index += 1) {
+    if (data.length < offset + 32) break;
+    modules.push(readPubkey(data, offset));
+    offset += 32;
+  }
+
+  return modules;
 }
 
 function parseClaimTopicsState(account: AccountInfo<Buffer>) {
@@ -594,6 +678,128 @@ function getTirProgramId() {
   return new PublicKey(
     process.env.FRACKS_TIR || "9bgANehpsEDdgyo5DwpY36wmnPdpCihSiAP9TLoBBf4L",
   );
+}
+
+const MODULE_PROGRAM_IDS = {
+  maxInvestors: () =>
+    new PublicKey(
+      process.env.MOD_MAX_INVESTORS || "2zfQv7RxmL5BAgXXFagZXBNby4Q41YGH6hnSJAcsXQeU",
+    ).toBase58(),
+  countryRestrict: () =>
+    new PublicKey(
+      process.env.MOD_COUNTRY_RESTRICT || "4ChDAU375yPJXZLG5XqtbbKdirAr3xHU5vnhppUjgu2d",
+    ).toBase58(),
+  maxBalance: () =>
+    new PublicKey(
+      process.env.MOD_MAX_BALANCE || "HEjNS1GC9nffSdXbi6aQ9WNQBNFyJQBGUshyrSeLpE9j",
+    ).toBase58(),
+  maxTransfer: () =>
+    new PublicKey(
+      process.env.MOD_MAX_TRANSFER || "4gJbGvgnBhJ91gByKNo7eEVmCbsUkK5opyeo3M1VEJsy",
+    ).toBase58(),
+  lockup: () =>
+    new PublicKey(
+      process.env.MOD_LOCKUP || "EvDVqTUjs3ZsAUfPQdyVskYCzoPTbWybF5tcBtWYfAuz",
+    ).toBase58(),
+  dailyLimit: () =>
+    new PublicKey(
+      process.env.MOD_DAILY_LIMIT || "5dfHskP5MijaDY2gYsE44CPAuomt1vWgbPdGi62cquoT",
+    ).toBase58(),
+  supplyCap: () =>
+    new PublicKey(
+      process.env.MOD_SUPPLY_CAP || "6tfb66btx776wdsPS5EHDTwWnvPSLJQje7gFQ4EDGxGc",
+    ).toBase58(),
+  countryCap: () =>
+    new PublicKey(
+      process.env.MOD_COUNTRY_CAP || "EcLffdKdSsCpNczazKsSeRw7FCN6vVjKAEMH5CZGBndr",
+    ).toBase58(),
+};
+
+function parseComplianceModuleParams(
+  account: AccountInfo<Buffer>,
+  decimals: number,
+): Record<string, string> | null {
+  const data = account.data;
+  const programId = account.owner.toBase58();
+
+  if (programId === MODULE_PROGRAM_IDS.countryRestrict()) {
+    const countries = readU16Vector(data, 72);
+    return countries.length > 0 ? { allowed_countries: countries.join(",") } : null;
+  }
+
+  if (programId === MODULE_PROGRAM_IDS.countryCap()) {
+    const caps = readCountryCapVector(data, 104);
+    return caps.length > 0 ? { country_caps: caps.join(",") } : null;
+  }
+
+  if (programId === MODULE_PROGRAM_IDS.maxBalance() && data.length >= 80) {
+    return { max_balance: formatBaseUnits(data.readBigUInt64LE(72), decimals) };
+  }
+
+  if (programId === MODULE_PROGRAM_IDS.maxTransfer() && data.length >= 80) {
+    return { max_amount: formatBaseUnits(data.readBigUInt64LE(72), decimals) };
+  }
+
+  if (programId === MODULE_PROGRAM_IDS.lockup() && data.length >= 80) {
+    return { lockup_end: data.readBigInt64LE(72).toString() };
+  }
+
+  if (programId === MODULE_PROGRAM_IDS.maxInvestors() && data.length >= 112) {
+    return { max_investors: data.readBigUInt64LE(104).toString() };
+  }
+
+  if (programId === MODULE_PROGRAM_IDS.dailyLimit() && data.length >= 112) {
+    return { daily_limit: formatBaseUnits(data.readBigUInt64LE(104), decimals) };
+  }
+
+  if (programId === MODULE_PROGRAM_IDS.supplyCap() && data.length >= 112) {
+    return { max_supply: formatBaseUnits(data.readBigUInt64LE(104), decimals) };
+  }
+
+  return null;
+}
+
+function readU16Vector(data: Buffer, offset: number) {
+  if (data.length < offset + 4) return [];
+  const count = data.readUInt32LE(offset);
+  offset += 4;
+
+  const values: number[] = [];
+  for (let index = 0; index < count; index += 1) {
+    if (data.length < offset + 2) break;
+    values.push(data.readUInt16LE(offset));
+    offset += 2;
+  }
+  return values;
+}
+
+function readCountryCapVector(data: Buffer, offset: number) {
+  if (data.length < offset + 4) return [];
+  const count = data.readUInt32LE(offset);
+  offset += 4;
+
+  const caps: string[] = [];
+  for (let index = 0; index < count; index += 1) {
+    if (data.length < offset + 10) break;
+    const country = data.readUInt16LE(offset);
+    offset += 2;
+    const cap = data.readBigUInt64LE(offset);
+    offset += 8;
+    caps.push(`${country}:${cap.toString()}`);
+  }
+  return caps;
+}
+
+function formatBaseUnits(value: bigint, decimals: number) {
+  const scale = 10n ** BigInt(Math.max(0, decimals));
+  if (scale === 1n) return value.toString();
+
+  const whole = value / scale;
+  const fraction = value % scale;
+  if (fraction === 0n) return whole.toString();
+
+  const fractionText = fraction.toString().padStart(decimals, "0").replace(/0+$/, "");
+  return `${whole.toString()}.${fractionText}`;
 }
 
 function deriveOwnerStatePDA(tokenMint: PublicKey): [PublicKey, number] {

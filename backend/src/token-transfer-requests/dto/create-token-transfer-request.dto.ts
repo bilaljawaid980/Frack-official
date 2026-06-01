@@ -55,4 +55,12 @@ export class CreateTokenTransferRequestDto {
   @IsOptional()
   @IsString()
   transferTxHash?: string;
+
+  @IsOptional()
+  @IsString()
+  whitelistTxHash?: string;
+
+  @IsOptional()
+  @IsString()
+  activationTxHash?: string;
 }

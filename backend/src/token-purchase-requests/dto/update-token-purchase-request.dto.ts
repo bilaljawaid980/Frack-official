@@ -22,4 +22,12 @@ export class UpdateTokenPurchaseRequestDto extends PartialType(CreateTokenPurcha
   @IsOptional()
   @IsString()
   mintTxHash?: string;
+
+  @IsOptional()
+  @IsString()
+  whitelistTxHash?: string;
+
+  @IsOptional()
+  @IsString()
+  activationTxHash?: string;
 }

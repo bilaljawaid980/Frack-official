@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAnchorProvider } from "@/hooks/useAnchorProvider";
+import { TransactionToastLink } from "@/lib/solscan";
 import { IdentityService } from "@/services/identity";
 import type { FidAccount } from "@/types";
 import type { BadgeProps } from "@/components/ui/badge";
@@ -113,7 +114,9 @@ export function ProviderSignerConfig({
     try {
       const identity = new IdentityService(anchorProvider);
       const tx = await identity.setOwnFidSignerKey(new PublicKey(nextSigner));
-      toast.success(`Wallet signer restored. Tx: ${tx.slice(0, 16)}...`);
+      toast.success("Wallet signer restored.", {
+        description: <TransactionToastLink signature={tx} />,
+      });
       await refresh();
       onRotated?.();
     } catch (error) {

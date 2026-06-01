@@ -6,7 +6,8 @@ export type TokenPurchaseRequestStatus =
   | "APPROVED_FOR_MINT"
   | "ACTION_REQUIRED_INVESTOR_IDENTITY"
   | "REJECTED"
-  | "MINTED";
+  | "MINTED"
+  | "CANCELLED";
 
 export type TokenPurchaseRequest = {
   id: string;
@@ -26,8 +27,15 @@ export type TokenPurchaseRequest = {
   requiredClaimTopics: string[];
   status: TokenPurchaseRequestStatus;
   kycClaimTxHash?: string | null;
+  kycApprovedAt?: string | null;
   amlClaimTxHash?: string | null;
+  amlApprovedAt?: string | null;
+  whitelistTxHash?: string | null;
+  whitelistedAt?: string | null;
+  activationTxHash?: string | null;
+  activatedAt?: string | null;
   mintTxHash?: string | null;
+  mintedAt?: string | null;
   rejectionReason?: string | null;
   createdAt: string;
   updatedAt: string;

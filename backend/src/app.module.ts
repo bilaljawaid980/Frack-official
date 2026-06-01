@@ -17,6 +17,7 @@ import { TokenPurchaseRequestsModule } from './token-purchase-requests/token-pur
 import { TokenTransferRequestsModule } from './token-transfer-requests/token-transfer-requests.module';
 import { TokenListingsModule } from './token-listings/token-listings.module';
 import { TrustedIssuersModule } from './trusted-issuers/trusted-issuers.module';
+import { BlockchainTransactionsModule } from './blockchain-transactions/blockchain-transactions.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { TrustedIssuersModule } from './trusted-issuers/trusted-issuers.module';
     TokenTransferRequestsModule,
     TokenListingsModule,
     TrustedIssuersModule,
+    BlockchainTransactionsModule,
   ],
 })
 export class AppModule {}

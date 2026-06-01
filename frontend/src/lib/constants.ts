@@ -189,7 +189,7 @@ export const COMPLIANCE_MODULES: ComplianceModuleDefinition[] = [
         label: "Allowed Countries",
         type: "countries",
         required: true,
-        description: "ISO 3166-1 numeric country codes that are allowed.",
+        description: "Select the countries whose investors may receive this token.",
       },
     ],
   },
@@ -284,7 +284,7 @@ export const COMPLIANCE_MODULES: ComplianceModuleDefinition[] = [
         type: "country_caps",
         required: true,
         description:
-          "Per-country investor caps expressed as {country: number, cap: number}[].",
+          "Select each country and set the maximum number of investors allowed from it.",
       },
     ],
   },

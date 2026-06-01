@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import * as ISO3166 from "iso-3166-1";
 import { PublicKey } from "@solana/web3.js";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -8,9 +9,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAnchorProvider } from "@/hooks/useAnchorProvider";
 import { useWallet } from "@/hooks/use-wallet";
 import { apiFetch } from "@/lib/backend";
+import { TransactionToastLink } from "@/lib/solscan";
 import { IdentityService } from "@/services/identity";
 import type { TokenPurchaseRequest } from "@/types/token-purchase-request";
 import {
@@ -28,6 +38,65 @@ function shortAddress(address: string) {
 
 function solscanAccountUrl(address: string) {
   return `https://solscan.io/account/${address}?cluster=devnet`;
+}
+
+type IsoCountryRecord = {
+  country?: string;
+  name?: string;
+  alpha2?: string;
+  alpha3?: string;
+  numeric?: string | number;
+};
+
+type CountryOption = {
+  alpha2: string;
+  name: string;
+  numeric: number;
+};
+
+function countryFlagUrl(alpha2: string) {
+  return `https://flagcdn.com/w40/${alpha2.toLowerCase()}.png`;
+}
+
+function CountryFlag({
+  country,
+  className = "",
+}: {
+  country: Pick<CountryOption, "alpha2" | "name">;
+  className?: string;
+}) {
+  return (
+    <span
+      aria-label={`${country.name} flag`}
+      className={`inline-block h-3.5 w-5 shrink-0 overflow-hidden rounded-[2px] bg-slate-100 bg-cover bg-center shadow-sm ring-1 ring-slate-900/10 ${className}`}
+      role="img"
+      style={{ backgroundImage: `url("${countryFlagUrl(country.alpha2)}")` }}
+    />
+  );
+}
+
+const COUNTRY_OPTIONS: CountryOption[] = (ISO3166.all() as IsoCountryRecord[])
+  .map((country) => {
+    const alpha2 = country.alpha2?.toUpperCase() ?? "";
+    const numeric = Number(country.numeric);
+    const name = country.country ?? country.name ?? "";
+
+    if (!alpha2 || !name || !Number.isInteger(numeric)) return null;
+    return {
+      alpha2,
+      name,
+      numeric,
+    };
+  })
+  .filter((country): country is CountryOption => Boolean(country))
+  .sort((left, right) => left.name.localeCompare(right.name));
+
+const COUNTRY_BY_NUMERIC = new Map(
+  COUNTRY_OPTIONS.map((country) => [country.numeric, country]),
+);
+
+function countryLabel(country: CountryOption) {
+  return `${country.name} (${country.numeric})`;
 }
 
 export default function InvestorIdentityPage() {
@@ -158,19 +227,31 @@ export default function InvestorIdentityPage() {
 
     const countryCode = Number(fidCountryCode);
     if (!Number.isInteger(countryCode) || countryCode < 1 || countryCode > 999) {
-      toast.error("Enter a valid numeric country code between 1 and 999.");
+      toast.error("Select a valid investor country.");
       return;
     }
 
+    const selectedCountry = COUNTRY_BY_NUMERIC.get(countryCode);
     setRegisteringFid(true);
-    const loadingToast = toast.loading("Registering investor FID...");
+    const loadingToast = toast.loading(
+      selectedCountry ? (
+        <span className="inline-flex items-center gap-2">
+          Registering investor from
+          <CountryFlag country={selectedCountry} />
+          <span>{selectedCountry.name}...</span>
+        </span>
+      ) : (
+        `Registering investor from country ${countryCode}...`
+      ),
+    );
     try {
       const service = new IdentityService(anchorProvider);
-      await service.ensureOwnFid(countryCode, false);
+      const tx = await service.ensureOwnFid(countryCode, false);
       await loadFidStatus();
       await resumeBlockedIdentityRequests();
       toast.success("Investor FID registered successfully.", {
         id: loadingToast,
+        description: tx ? <TransactionToastLink signature={tx} /> : undefined,
       });
     } catch (error) {
       toast.error(
@@ -215,8 +296,9 @@ export default function InvestorIdentityPage() {
         providerWallet,
         BigInt(topicNumber),
       );
-      toast.success(`Stale claim removed. Tx: ${shortAddress(tx)}`, {
+      toast.success("Stale claim removed.", {
         id: loadingToast,
+        description: <TransactionToastLink signature={tx} />,
       });
       await loadFidStatus();
     } catch (error) {
@@ -249,6 +331,12 @@ export default function InvestorIdentityPage() {
       </div>
     );
   }
+
+  const registeredCountry =
+    fidCountry === null || fidCountry === undefined
+      ? null
+      : COUNTRY_BY_NUMERIC.get(fidCountry);
+  const selectedCountry = COUNTRY_BY_NUMERIC.get(Number(fidCountryCode));
 
   return (
     <div className="rounded-[22px] p-8 glass-panel">
@@ -332,7 +420,16 @@ export default function InvestorIdentityPage() {
                     <span className="mr-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
                       Country
                     </span>
-                    <span className="text-slate-600">{fidCountry ?? "N/A"}</span>
+                    <span className="text-slate-600">
+                      {registeredCountry ? (
+                        <span className="inline-flex items-center gap-2">
+                          <CountryFlag country={registeredCountry} />
+                          {countryLabel(registeredCountry)}
+                        </span>
+                      ) : (
+                        fidCountry ?? "N/A"
+                      )}
+                    </span>
                   </div>
                   {fidAddress ? (
                     <button
@@ -359,23 +456,50 @@ export default function InvestorIdentityPage() {
                 className="text-left text-xs font-medium text-slate-600"
                 htmlFor="fid-country-code"
               >
-                Country code
+                Investor country
               </label>
               <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto">
-                <Input
-                  className="h-10 w-full bg-white sm:w-28"
-                  id="fid-country-code"
-                  inputMode="numeric"
-                  min={1}
-                  max={999}
-                  onChange={(event) => {
-                    const value = event.target.value.replace(/\D/g, "");
-                    setFidCountryCode(value.slice(0, 3));
-                  }}
-                  placeholder="840"
-                  type="text"
+                <Select
+                  disabled={registeringFid || fidLoading}
+                  onValueChange={setFidCountryCode}
                   value={fidCountryCode}
-                />
+                >
+                  <SelectTrigger
+                    className="h-10 w-full bg-white sm:w-80"
+                    id="fid-country-code"
+                  >
+                    {selectedCountry ? (
+                      <span className="flex min-w-0 items-center gap-2 pr-2">
+                        <CountryFlag country={selectedCountry} />
+                        <span className="truncate">{selectedCountry.name}</span>
+                        <span className="shrink-0 text-xs text-slate-400">
+                          {selectedCountry.numeric}
+                        </span>
+                      </span>
+                    ) : (
+                      <SelectValue placeholder="Select country" />
+                    )}
+                  </SelectTrigger>
+                  <SelectContent className="max-h-80">
+                    <SelectGroup>
+                      {COUNTRY_OPTIONS.map((country) => (
+                        <SelectItem
+                          key={`${country.alpha2}-${country.numeric}`}
+                          textValue={`${country.name} ${country.numeric}`}
+                          value={String(country.numeric)}
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            <CountryFlag country={country} />
+                            <span className="truncate">{country.name}</span>
+                            <span className="shrink-0 text-xs text-slate-400">
+                              {country.numeric}
+                            </span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
                 <Button
                   className="w-full bg-linear-to-tr from-[#172E7F] to-[#2A5FA6] px-6 text-white shadow-lg shadow-[#172E7F]/20 hover:from-[#1F3E95] hover:to-[#326CB8] sm:w-fit"
                   disabled={registeringFid || fidLoading}
@@ -392,7 +516,7 @@ export default function InvestorIdentityPage() {
                 </Button>
               </div>
               <p className="max-w-sm text-left text-xs leading-5 text-slate-500 lg:text-right">
-                Use numeric ISO country code, for example 840 for United States.
+                The numeric ISO country code is applied automatically when you register.
               </p>
             </div>
           )}

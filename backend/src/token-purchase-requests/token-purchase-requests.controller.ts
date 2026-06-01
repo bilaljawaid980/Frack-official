@@ -12,6 +12,16 @@ export class TokenPurchaseRequestsController {
     return this.tokenPurchaseRequestsService.create(createDto);
   }
 
+  @Post('preflight')
+  preflight(@Body() body: {
+    tokenContract: string;
+    investorWallet: string;
+    country?: string | number | null;
+    amount?: string | number | null;
+  }) {
+    return this.tokenPurchaseRequestsService.preflight(body);
+  }
+
   @Get()
   findAll(@Query() query: any) {
     return this.tokenPurchaseRequestsService.findAll(query);

@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Building2, MapPin, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
+import { formatTokenizedPercentage } from "@/lib/asset-tokenization";
 import { RWAAsset } from "@/types/rwa";
 import Link from "next/link";
 
@@ -13,8 +14,9 @@ interface AssetsListProps {
   limit?: number;
 }
 
-export function AssetsList({ assets, loading, limit = 5 }: AssetsListProps) {
-  const displayAssets = limit ? assets.slice(0, limit) : assets;
+export function AssetsList({ assets, loading, limit }: AssetsListProps) {
+  const displayAssets =
+    typeof limit === "number" ? assets.slice(0, limit) : assets;
   const getAssetKey = (asset: RWAAsset, index: number) =>
     [
       asset.id,
@@ -56,7 +58,7 @@ export function AssetsList({ assets, loading, limit = 5 }: AssetsListProps) {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: index * 0.1 }}
-            className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-lg border p-4 transition-colors hover:bg-gray-50"
+            className="grid min-h-[76px] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-lg border p-4 transition-colors hover:bg-gray-50"
           >
             <div className="flex min-w-0 items-center gap-3">
               <div className="shrink-0 rounded-lg bg-blue-50 p-2">
@@ -87,11 +89,7 @@ export function AssetsList({ assets, loading, limit = 5 }: AssetsListProps) {
               <div className="w-20 text-right">
                 <div className="flex items-center justify-end gap-1">
                   <p className="font-semibold text-sm text-green-600">
-                    {(
-                      (asset.tokenizedAmount / asset.totalSupply) *
-                      100
-                    ).toFixed(1)}
-                    %
+                    {formatTokenizedPercentage(asset)}
                   </p>
                   <TrendingUp className="h-3 w-3 text-green-600" />
                 </div>

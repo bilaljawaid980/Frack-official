@@ -32,6 +32,7 @@ import {
   fetchFactoryStateAccount,
   type FactoryStateAccount,
 } from "@/lib/solana";
+import { recordBlockchainTransactionSafely } from "@/lib/blockchain-transactions";
 
 type IrpProgram = Program<Idl>;
 type IrsProgram = Program<Idl>;
@@ -701,7 +702,11 @@ export class IdentityService {
     return txSignature;
   }
 
-  async ensureOwnFid(country = 0, isIssuer = false): Promise<string | null> {
+  async ensureOwnFid(
+    country = 0,
+    isIssuer = false,
+    ownerType: "investor" | "issuer" | "provider" = isIssuer ? "issuer" : "investor",
+  ): Promise<string | null> {
     const ids = await this.getProgramIds();
     const fidProgram = this.getFidProgram(ids.fid);
     const owner = this.provider.wallet.publicKey;
@@ -709,18 +714,29 @@ export class IdentityService {
     const existing = await this.fetchFid(owner);
     if (existing) {
       if (existing.isIssuer !== isIssuer || (!isIssuer && existing.country !== country)) {
-        return await (fidProgram.methods as any)
+        const txHash = await (fidProgram.methods as any)
           .updateFidProfile(isIssuer, country)
           .accounts({
             authority: owner,
             fid: fidPda,
           })
           .rpc({ commitment: "confirmed" });
+
+        recordBlockchainTransactionSafely({
+          txHash,
+          actionType: `${ownerType.toUpperCase()}_FID_UPDATED`,
+          actorWallet: owner.toBase58(),
+          entityType: "fid",
+          entityId: fidPda.toBase58(),
+          metadata: { country, isIssuer },
+        });
+
+        return txHash;
       }
       return null;
     }
 
-    return await (fidProgram.methods as any)
+    const txHash = await (fidProgram.methods as any)
       .createFid(isIssuer, country)
       .accounts({
         owner,
@@ -728,6 +744,17 @@ export class IdentityService {
         systemProgram: SystemProgram.programId,
       })
       .rpc({ commitment: "confirmed" });
+
+    recordBlockchainTransactionSafely({
+      txHash,
+      actionType: `${ownerType.toUpperCase()}_FID_CREATED`,
+      actorWallet: owner.toBase58(),
+      entityType: "fid",
+      entityId: fidPda.toBase58(),
+      metadata: { country, isIssuer },
+    });
+
+    return txHash;
   }
 
   /**

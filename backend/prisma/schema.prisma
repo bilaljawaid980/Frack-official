@@ -42,7 +42,7 @@ model Asset {
   issuerWallet   String?
   legalOwner     String?
   metadata       Json?
-  deployedAt     DateTime?
+  deployedAt     DateTime? @db.Timestamptz(3)
   lifecycleState String   @default("ISSUED")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -221,7 +221,7 @@ model ActivityLog {
   newValue    Json?
   reason      String?
   txHash      String?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
 }
 
 model IdentitySnapshot {
@@ -315,16 +315,20 @@ model TokenPurchaseRequest {
   
   status            String   @default("SUBMITTED")
   
-  kycApprovedAt     DateTime?
+  kycApprovedAt     DateTime? @db.Timestamptz(3)
   kycApprovedBy     String?
   kycClaimTxHash    String?
-  amlApprovedAt     DateTime?
+  amlApprovedAt     DateTime? @db.Timestamptz(3)
   amlApprovedBy     String?
   amlClaimTxHash    String?
-  issuerApprovedAt  DateTime?
+  issuerApprovedAt  DateTime? @db.Timestamptz(3)
   issuerApprovedBy  String?
+  whitelistTxHash   String?
+  whitelistedAt     DateTime? @db.Timestamptz(3)
+  activationTxHash  String?
+  activatedAt       DateTime? @db.Timestamptz(3)
   mintTxHash        String?
-  mintedAt          DateTime?
+  mintedAt          DateTime? @db.Timestamptz(3)
   rejectionReason   String?
   rejectedAt        DateTime?
   rejectedBy        String?
@@ -354,8 +358,16 @@ model TokenTransferRequest {
   issuerWallet        String?
   preflightFailure    String?
   simulationError     String?
+  kycClaimTxHash      String?
+  kycClaimedAt        DateTime? @db.Timestamptz(3)
+  amlClaimTxHash      String?
+  amlClaimedAt        DateTime? @db.Timestamptz(3)
+  whitelistTxHash     String?
+  whitelistedAt       DateTime? @db.Timestamptz(3)
+  activationTxHash    String?
+  activatedAt         DateTime? @db.Timestamptz(3)
   transferTxHash      String?
-  transferredAt       DateTime?
+  transferredAt       DateTime? @db.Timestamptz(3)
   rejectionReason     String?
   rejectedAt          DateTime?
   rejectedBy          String?
@@ -416,8 +428,16 @@ model TokenBuyIntent {
   issuerWallet        String?
   preflightFailure    String?
   simulationError     String?
+  kycClaimTxHash      String?
+  kycClaimedAt        DateTime? @db.Timestamptz(3)
+  amlClaimTxHash      String?
+  amlClaimedAt        DateTime? @db.Timestamptz(3)
+  whitelistTxHash     String?
+  whitelistedAt       DateTime? @db.Timestamptz(3)
+  activationTxHash    String?
+  activatedAt         DateTime? @db.Timestamptz(3)
   transferTxHash      String?
-  transferredAt       DateTime?
+  transferredAt       DateTime? @db.Timestamptz(3)
   rejectionReason     String?
   rejectedAt          DateTime?
   rejectedBy          String?
@@ -445,7 +465,7 @@ model TokenTransferHistory {
   amountBaseUnits String
   txHash          String
   status          String   @default("TRANSFERRED")
-  createdAt       DateTime @default(now())
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
 
   @@index([listingId])
   @@index([buyIntentId])
@@ -453,6 +473,25 @@ model TokenTransferHistory {
   @@index([fromWallet])
   @@index([toWallet])
   @@index([txHash])
+}
+
+model BlockchainTransaction {
+  id            String   @id @default(uuid())
+  txHash        String   @unique
+  actionType    String
+  actorWallet   String?
+  entityType    String?
+  entityId      String?
+  assetId       String?
+  tokenContract String?
+  metadata      Json?
+  occurredAt    DateTime @default(now()) @db.Timestamptz(3)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([occurredAt])
+  @@index([actionType])
+  @@index([assetId])
+  @@index([tokenContract])
 }
 
 model TrustedIssuer {

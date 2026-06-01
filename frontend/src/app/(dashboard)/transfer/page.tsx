@@ -17,6 +17,7 @@ import { useAnchorProvider } from "@/hooks/useAnchorProvider";
 import { useAssetsContext } from "@/contexts/assets-context";
 import { useWallet } from "@/hooks/use-wallet";
 import { apiFetch } from "@/lib/backend";
+import { TransactionToastLink } from "@/lib/solscan";
 import { formatTokenAmount, parseTokenAmount } from "@/lib/token-utils";
 import { TransferService, type TransferPreflightResult } from "@/services/transfer";
 
@@ -178,7 +179,9 @@ function TransferPageContent() {
           transferTxHash: result.signature,
         }),
       }).catch(() => null);
-      toast.success(`Transfer submitted: ${shortAddress(result.signature)}`);
+      toast.success("Transfer submitted.", {
+        description: <TransactionToastLink signature={result.signature} />,
+      });
       setPreflight(null);
       setRecipient("");
       setAmount("");

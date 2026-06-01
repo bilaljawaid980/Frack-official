@@ -40,6 +40,10 @@ import { ConnectWalletCard } from "@/components/wallet/connect-wallet-card";
 import { useAssetsContext } from "@/contexts/assets-context";
 import { useWallet } from "@/hooks/use-wallet";
 import { formatCurrency, formatPercentage } from "@/lib/utils";
+import {
+  formatTokenizedPercentage,
+  getTokenizedPercentage,
+} from "@/lib/asset-tokenization";
 import { RWAAsset } from "@/types/rwa";
 
 function assetRenderKey(asset: RWAAsset) {
@@ -90,15 +94,9 @@ export default function AssetsPage() {
         case "value-asc":
           return a.underlyingValue - b.underlyingValue;
         case "tokenized-desc":
-          return (
-            b.tokenizedAmount / b.totalSupply -
-            a.tokenizedAmount / a.totalSupply
-          );
+          return getTokenizedPercentage(b) - getTokenizedPercentage(a);
         case "tokenized-asc":
-          return (
-            a.tokenizedAmount / a.totalSupply -
-            b.tokenizedAmount / b.totalSupply
-          );
+          return getTokenizedPercentage(a) - getTokenizedPercentage(b);
         case "name-asc":
           return a.name.localeCompare(b.name);
         case "name-desc":
@@ -120,9 +118,7 @@ export default function AssetsPage() {
     const avgTokenization =
       assets.length > 0
         ? assets.reduce((sum, asset) => {
-            const supply = Number(asset.totalSupply) || 0;
-            const tokenized = Number(asset.tokenizedAmount) || 0;
-            return sum + (supply > 0 ? (tokenized / supply) * 100 : 0);
+            return sum + getTokenizedPercentage(asset);
           }, 0) / assets.length
         : 0;
     const compliantCount = assets.filter(
@@ -478,11 +474,7 @@ export default function AssetsPage() {
 
                         <div className="text-right">
                           <p className="font-medium">
-                            {(
-                              (asset.tokenizedAmount / asset.totalSupply) *
-                              100
-                            ).toFixed(1)}
-                            %
+                            {formatTokenizedPercentage(asset)}
                           </p>
                           <p className="text-sm text-muted-foreground">
                             Tokenized
@@ -630,11 +622,7 @@ export default function AssetsPage() {
                               Tokenized
                             </p>
                             <p className="font-medium">
-                              {(
-                                (asset.tokenizedAmount / asset.totalSupply) *
-                                100
-                              ).toFixed(1)}
-                              %
+                              {formatTokenizedPercentage(asset)}
                             </p>
                           </div>
                           <div>

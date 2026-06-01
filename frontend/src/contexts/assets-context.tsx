@@ -26,7 +26,14 @@ import { RWAAsset, IssuanceRequest } from "@/types/rwa";
 import { toast } from "sonner";
 import { apiFetch, getBackendUrl } from "@/lib/backend";
 import { queryCache } from "@/lib/query-cache";
+import { TransactionToastLink } from "@/lib/solscan";
 import { useAppContext } from "@/contexts/app-context";
+
+type IndexedTokenState = {
+  tokenContract: string;
+  decimals: number;
+  totalSupply: string;
+};
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -69,6 +76,34 @@ function safeParseJson(raw: string) {
   }
 }
 
+function positiveNumber(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
+}
+
+function getSupplyCap(metadata: Record<string, unknown>) {
+  const paramsByModule = metadata.complianceModuleParams;
+  if (!paramsByModule || typeof paramsByModule !== "object") return null;
+
+  for (const params of Object.values(paramsByModule)) {
+    if (!params || typeof params !== "object") continue;
+    const supplyCap = positiveNumber((params as Record<string, unknown>).max_supply);
+    if (supplyCap !== null) return supplyCap;
+  }
+
+  return null;
+}
+
+function getMintedSupply(token?: IndexedTokenState) {
+  if (!token) return 0;
+  const rawSupply = Number(token.totalSupply);
+  const decimals = Number(token.decimals);
+  if (!Number.isFinite(rawSupply) || !Number.isInteger(decimals) || decimals < 0) {
+    return 0;
+  }
+  return rawSupply / 10 ** decimals;
+}
+
 function mapIndexedAsset(asset: {
   id: string;
   factoryAssetId?: number | null;
@@ -84,7 +119,7 @@ function mapIndexedAsset(asset: {
   updatedAt?: string;
   deployedAt?: string | null;
   lifecycleState?: string;
-}): RWAAsset {
+}, token?: IndexedTokenState): RWAAsset {
   const rawMetadata =
     typeof asset.metadata === "string"
       ? safeParseJson(asset.metadata)
@@ -135,8 +170,8 @@ function mapIndexedAsset(asset: {
       | "debt"
       | "art"
       | "intellectual-property",
-    totalSupply: Number(rawMetadata.totalSupply || 0),
-    tokenizedAmount: 0,
+    totalSupply: getSupplyCap(rawMetadata) ?? positiveNumber(rawMetadata.totalSupply) ?? 0,
+    tokenizedAmount: getMintedSupply(token),
     tokenPrice: Number(rawMetadata.initialPrice || 1.0),
     tokenDenom: "lamports",
     underlyingValue: rawMetadata.underlyingValue || 0,
@@ -184,10 +219,11 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
         throw new Error("Backend URL not configured");
       }
 
-      const indexedAssets = await queryCache.query(
-        "assets:indexed",
-        () =>
-          apiFetch<
+      const [indexedAssets, indexedTokens] = await Promise.all([
+        queryCache.query(
+          "assets:indexed",
+          () =>
+            apiFetch<
             Array<{
               id: string;
               factoryAssetId?: number | null;
@@ -203,11 +239,22 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
               updatedAt?: string;
               deployedAt?: string | null;
             }>
-          >("/indexed/assets"),
-        60_000, // 60s TTL for indexed assets
-      );
+            >("/indexed/assets"),
+          60_000,
+        ),
+        queryCache.query(
+          "tokens:indexed",
+          () => apiFetch<IndexedTokenState[]>("/indexed/tokens"),
+          60_000,
+        ),
+      ]);
 
-      const loadedAssets = indexedAssets.map(mapIndexedAsset);
+      const tokensByContract = new Map(
+        indexedTokens.map((token) => [token.tokenContract, token]),
+      );
+      const loadedAssets = indexedAssets.map((asset) =>
+        mapIndexedAsset(asset, tokensByContract.get(asset.tokenContract)),
+      );
       setAssets(loadedAssets);
     } catch (err: any) {
       setError(err.message);
@@ -289,6 +336,7 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
         // Invalidate cache and reload
         toast.loading("Syncing blockchain state...", { id: loadingToast });
         queryCache.invalidatePrefix("assets:");
+        queryCache.invalidatePrefix("tokens:");
         await new Promise((resolve) => setTimeout(resolve, 2000));
         await loadAssets();
 
@@ -345,10 +393,12 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
           amount.toString(),
           asset.tokenContractAddress,
         );
-        toast.success(`Tokens minted! TX: ${txHash.slice(0, 10)}...`, {
+        toast.success("Tokens minted.", {
           id: loadingToast,
+          description: <TransactionToastLink signature={txHash} />,
         });
         queryCache.invalidatePrefix("assets:");
+        queryCache.invalidatePrefix("tokens:");
         await loadAssets();
       } catch (err: any) {
         toast.error(`Failed to mint tokens: ${err.message}`, {
@@ -383,8 +433,9 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
           recipient,
           amount.toString(),
         );
-        toast.success(`Tokens transferred! TX: ${txHash.slice(0, 10)}...`, {
+        toast.success("Tokens transferred.", {
           id: loadingToast,
+          description: <TransactionToastLink signature={txHash} />,
         });
         queryCache.invalidatePrefix("assets:");
         await loadAssets();

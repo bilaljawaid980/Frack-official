@@ -36,6 +36,7 @@ import { TokenSelector } from "@/components/rwa/token-selector";
 import { useAssetsContext } from "@/contexts/assets-context";
 import { useWallet } from "@/hooks/use-wallet";
 import { apiFetch } from "@/lib/backend";
+import { TransactionToastLink } from "@/lib/solscan";
 import {
   buildInstructionData,
   connection,
@@ -533,7 +534,7 @@ function TokenAdminPageContent() {
       const signature = await sendTirInstructions(instructions);
       toast.success(`${role.toUpperCase()} provider updated`, {
         id: toastId,
-        description: shorten(signature, 10, 8),
+        description: <TransactionToastLink signature={signature} />,
       });
 
       await loadAssets();
@@ -588,7 +589,7 @@ function TokenAdminPageContent() {
       const signature = await sendTirInstructions(instructions);
       toast.success(`${role.toUpperCase()} provider removed`, {
         id: toastId,
-        description: shorten(signature, 10, 8),
+        description: <TransactionToastLink signature={signature} />,
       });
 
       if (role === "kyc") setKycWallet("");

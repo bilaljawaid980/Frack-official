@@ -2,10 +2,14 @@ import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateAssetDto } from "./dto/create-asset.dto";
 import { UpdateAssetDto } from "./dto/update-asset.dto";
+import { BlockchainTransactionsService } from "../blockchain-transactions/blockchain-transactions.service";
 
 @Injectable()
 export class AssetsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private blockchainTransactions: BlockchainTransactionsService
+  ) {}
 
   findAll() {
     return this.prisma.asset.findMany({
@@ -23,8 +27,8 @@ export class AssetsService {
     return this.prisma.asset.create({ data: dto });
   }
 
-  createDeployed(dto: CreateAssetDto) {
-    return this.prisma.asset.upsert({
+  async createDeployed(dto: CreateAssetDto) {
+    const asset = await this.prisma.asset.upsert({
       where: { tokenContract: dto.tokenContract },
       update: {
         factoryAssetId: dto.factoryAssetId,
@@ -44,6 +48,25 @@ export class AssetsService {
         lifecycleState: dto.lifecycleState || "ISSUED",
       },
     });
+
+    const metadata =
+      dto.metadata && typeof dto.metadata === "object" && !Array.isArray(dto.metadata)
+        ? (dto.metadata as Record<string, unknown>)
+        : {};
+    if (typeof metadata.txHash === "string" && metadata.txHash) {
+      await this.blockchainTransactions.record({
+        txHash: metadata.txHash,
+        actionType: "TOKEN_DEPLOYED",
+        actorWallet: dto.issuerWallet,
+        entityType: "asset",
+        entityId: asset.id,
+        assetId: asset.id,
+        tokenContract: dto.tokenContract,
+        occurredAt: dto.deployedAt,
+      });
+    }
+
+    return asset;
   }
 
   async apply(dto: any, issuerWallet: string) {

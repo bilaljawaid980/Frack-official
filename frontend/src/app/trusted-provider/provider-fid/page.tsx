@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { getExplorerAccountUrl } from "@/lib/constants";
 import { createAnchorProvider } from "@/lib/anchor";
 import { fetchFactoryStateAccount } from "@/lib/solana";
+import { TransactionToastLink } from "@/lib/solscan";
 import { copyToClipboard } from "@/lib/utils";
 import { IdentityService } from "@/services/identity";
 import { toast } from "sonner";
@@ -101,13 +102,15 @@ export default function ProviderFidPage() {
         signAllTransactions,
       });
       const service = new IdentityService(provider);
-      await service.ensureOwnFid(0, true);
+      const tx = await service.ensureOwnFid(0, true, "provider");
       const fidProgramId = await getActiveFidProgramId();
       const fidPda = deriveFid(publicKey, fidProgramId);
 
       setFidAddress(fidPda.toBase58());
       setFidExists(true);
-      toast.success("Provider FID registered successfully");
+      toast.success("Provider FID registered successfully", {
+        description: tx ? <TransactionToastLink signature={tx} /> : undefined,
+      });
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : "Failed to register FID";

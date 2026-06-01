@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTokenTransferRequestDto } from './dto/create-token-transfer-request.dto';
 import { UpdateTokenTransferRequestDto } from './dto/update-token-transfer-request.dto';
+import { BlockchainTransactionsService } from '../blockchain-transactions/blockchain-transactions.service';
 
 const CLOSED_STATUSES = ['TRANSFERRED', 'REJECTED', 'CANCELLED'];
 const VALID_STATUSES = new Set([
@@ -26,7 +27,10 @@ const VALID_STATUSES = new Set([
 
 @Injectable()
 export class TokenTransferRequestsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly blockchainTransactions: BlockchainTransactionsService,
+  ) {}
 
   private rowSelect() {
     return Prisma.sql`
@@ -43,6 +47,14 @@ export class TokenTransferRequestsService {
       "issuerWallet",
       "preflightFailure",
       "simulationError",
+      "kycClaimTxHash",
+      "kycClaimedAt",
+      "amlClaimTxHash",
+      "amlClaimedAt",
+      "whitelistTxHash",
+      "whitelistedAt",
+      "activationTxHash",
+      "activatedAt",
       "transferTxHash",
       "transferredAt",
       "rejectionReason",
@@ -70,6 +82,9 @@ export class TokenTransferRequestsService {
     `;
 
     if (duplicate.length > 0) {
+      if (status === 'TRANSFERRED' && data.transferTxHash) {
+        return this.updateStatus(duplicate[0].id, data);
+      }
       throw new ConflictException('An open transfer request already exists for this sender, recipient, and token.');
     }
 
@@ -89,6 +104,10 @@ export class TokenTransferRequestsService {
         "issuerWallet",
         "preflightFailure",
         "simulationError",
+        "whitelistTxHash",
+        "whitelistedAt",
+        "activationTxHash",
+        "activatedAt",
         "transferTxHash",
         "transferredAt",
         "updatedAt"
@@ -107,6 +126,10 @@ export class TokenTransferRequestsService {
         ${data.issuerWallet || null},
         ${data.preflightFailure || null},
         ${data.simulationError || null},
+        ${data.whitelistTxHash || null},
+        ${data.whitelistTxHash ? new Date() : null},
+        ${data.activationTxHash || null},
+        ${data.activationTxHash ? new Date() : null},
         ${data.transferTxHash || null},
         ${status === 'TRANSFERRED' ? new Date() : null},
         NOW()
@@ -114,6 +137,7 @@ export class TokenTransferRequestsService {
       RETURNING ${this.rowSelect()}
     `;
 
+    await this.recordLedgerEntries(id, data);
     return rows[0];
   }
 
@@ -152,7 +176,7 @@ export class TokenTransferRequestsService {
   }
 
   async updateStatus(id: string, data: UpdateTokenTransferRequestDto) {
-    await this.findOne(id);
+    const existing = await this.findOne(id);
     const status = data.status;
     if (!status || !VALID_STATUSES.has(status)) {
       throw new ConflictException('Invalid token transfer request status.');
@@ -165,6 +189,22 @@ export class TokenTransferRequestsService {
 
     if (data.preflightFailure !== undefined) updates.push(Prisma.sql`"preflightFailure" = ${data.preflightFailure}`);
     if (data.simulationError !== undefined) updates.push(Prisma.sql`"simulationError" = ${data.simulationError}`);
+    if (data.claimTxHash && existing.status === 'PENDING_KYC') {
+      updates.push(Prisma.sql`"kycClaimTxHash" = ${data.claimTxHash}`);
+      updates.push(Prisma.sql`"kycClaimedAt" = NOW()`);
+    }
+    if (data.claimTxHash && existing.status === 'PENDING_AML') {
+      updates.push(Prisma.sql`"amlClaimTxHash" = ${data.claimTxHash}`);
+      updates.push(Prisma.sql`"amlClaimedAt" = NOW()`);
+    }
+    if (data.whitelistTxHash) {
+      updates.push(Prisma.sql`"whitelistTxHash" = ${data.whitelistTxHash}`);
+      updates.push(Prisma.sql`"whitelistedAt" = NOW()`);
+    }
+    if (data.activationTxHash) {
+      updates.push(Prisma.sql`"activationTxHash" = ${data.activationTxHash}`);
+      updates.push(Prisma.sql`"activatedAt" = NOW()`);
+    }
     if (status === 'TRANSFERRED') {
       updates.push(Prisma.sql`"transferTxHash" = ${data.transferTxHash || null}`);
       updates.push(Prisma.sql`"transferredAt" = NOW()`);
@@ -182,6 +222,41 @@ export class TokenTransferRequestsService {
       RETURNING ${this.rowSelect()}
     `;
 
+    await this.recordLedgerEntries(id, data, existing);
     return rows[0];
+  }
+
+  private async recordLedgerEntries(
+    id: string,
+    data: CreateTokenTransferRequestDto | UpdateTokenTransferRequestDto,
+    existing?: Record<string, unknown>,
+  ) {
+    const ledgerBase = {
+      actorWallet: 'reviewerWallet' in data ? data.reviewerWallet || null : null,
+      entityType: 'token_transfer_request',
+      entityId: id,
+      assetId: data.assetId || String(existing?.assetId || '') || undefined,
+      tokenContract: data.tokenContract || String(existing?.tokenContract || '') || undefined,
+    };
+    const status = String(existing?.status || data.status || '');
+    const claimTxHash = 'claimTxHash' in data ? data.claimTxHash : undefined;
+    const entries = [
+      claimTxHash && status === 'PENDING_KYC'
+        ? { ...ledgerBase, txHash: claimTxHash, actionType: 'TRANSFER_ELIGIBILITY_KYC_CLAIM' }
+        : null,
+      claimTxHash && status === 'PENDING_AML'
+        ? { ...ledgerBase, txHash: claimTxHash, actionType: 'TRANSFER_ELIGIBILITY_AML_CLAIM' }
+        : null,
+      data.whitelistTxHash
+        ? { ...ledgerBase, txHash: data.whitelistTxHash, actionType: 'INVESTOR_WHITELISTED' }
+        : null,
+      data.activationTxHash
+        ? { ...ledgerBase, txHash: data.activationTxHash, actionType: 'IDENTITY_ACTIVATED' }
+        : null,
+      data.transferTxHash
+        ? { ...ledgerBase, txHash: data.transferTxHash, actionType: 'TOKEN_TRANSFER' }
+        : null,
+    ].filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+    await Promise.all(entries.map((entry) => this.blockchainTransactions.record(entry)));
   }
 }

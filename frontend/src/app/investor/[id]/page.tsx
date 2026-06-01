@@ -43,6 +43,7 @@ import { useWallet } from "@/hooks/use-wallet";
 import { useAssetsContext } from "@/contexts/assets-context";
 import { formatCurrency } from "@/lib/utils";
 import { apiFetch } from "@/lib/backend";
+import { TransactionToastLink } from "@/lib/solscan";
 import { parseTokenAmount } from "@/lib/token-utils";
 import {
   RefreshCw,
@@ -54,6 +55,7 @@ import {
   CheckCircle2,
   Send,
   ShieldAlert,
+  Trash2,
 } from "lucide-react";
 import { useAnchorProvider } from "@/hooks/useAnchorProvider";
 import {
@@ -156,6 +158,7 @@ export default function InvestorDashboardPage() {
   const [creatingListing, setCreatingListing] = useState(false);
   const [processingListingId, setProcessingListingId] = useState<string | null>(null);
   const [processingBuyIntentId, setProcessingBuyIntentId] = useState<string | null>(null);
+  const [deletingPurchaseRequestId, setDeletingPurchaseRequestId] = useState<string | null>(null);
   const [directTransferTokenContract, setDirectTransferTokenContract] = useState("");
   const [directTransferRecipient, setDirectTransferRecipient] = useState("");
   const [directTransferAmount, setDirectTransferAmount] = useState("");
@@ -472,7 +475,10 @@ export default function InvestorDashboardPage() {
             : item,
         ),
       );
-      toast.success(`Transfer submitted: ${shortAddress(result.signature)}`, { id: loadingToast });
+      toast.success("Transfer submitted.", {
+        id: loadingToast,
+        description: <TransactionToastLink signature={result.signature} />,
+      });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to complete transfer.", {
         id: loadingToast,
@@ -490,51 +496,56 @@ export default function InvestorDashboardPage() {
     () => holdings.reduce((sum, row) => sum + row.balance, 0),
     [holdings],
   );
-  const assetsByRequestKey = useMemo(() => {
-    const map = new Map<string, (typeof assets)[number]>();
-    assets.forEach((asset) => {
-      map.set(asset.id, asset);
-      map.set(asset.tokenContractAddress, asset);
-      map.set(asset.contractAddress, asset);
-    });
-    return map;
-  }, [assets]);
+  const assetsByRequestKey = new Map<string, (typeof assets)[number]>();
+  for (const asset of assets) {
+    assetsByRequestKey.set(asset.id, asset);
+    assetsByRequestKey.set(asset.tokenContractAddress, asset);
+    assetsByRequestKey.set(asset.contractAddress, asset);
+  }
   const directTransferHolding = useMemo(
     () =>
       holdings.find((holding) => holding.tokenContract === directTransferTokenContract) ??
       null,
     [directTransferTokenContract, holdings],
   );
-  const directTransferAsset = useMemo(
-    () =>
-      directTransferHolding
-        ? assetsByRequestKey.get(directTransferHolding.assetId) ??
-          assetsByRequestKey.get(directTransferHolding.tokenContract) ??
-          null
-        : null,
-    [assetsByRequestKey, directTransferHolding],
-  );
+  const directTransferAsset = directTransferHolding
+    ? assetsByRequestKey.get(directTransferHolding.assetId) ??
+      assetsByRequestKey.get(directTransferHolding.tokenContract) ??
+      null
+    : null;
   const directTransferDecimals = Number(
     directTransferAsset?.metadata?.decimals ?? 6,
   );
-  const directTransferAmountBaseUnits = useMemo(() => {
-    if (!directTransferAmount) return 0n;
+  let directTransferAmountBaseUnits = 0n;
+  if (directTransferAmount) {
     try {
-      return BigInt(parseTokenAmount(directTransferAmount, directTransferDecimals));
+      directTransferAmountBaseUnits = BigInt(
+        parseTokenAmount(directTransferAmount, directTransferDecimals),
+      );
     } catch {
-      return 0n;
+      directTransferAmountBaseUnits = 0n;
     }
-  }, [directTransferAmount, directTransferDecimals]);
+  }
 
   useEffect(() => {
     if (!isOwnInvestorPage) return;
-    if (holdings.length === 0) {
-      setDirectTransferTokenContract("");
-      return;
-    }
-    if (!directTransferTokenContract || !holdings.some((holding) => holding.tokenContract === directTransferTokenContract)) {
-      setDirectTransferTokenContract(holdings[0].tokenContract);
-    }
+    const nextTokenContract =
+      holdings.length === 0
+        ? ""
+        : !directTransferTokenContract ||
+            !holdings.some(
+              (holding) => holding.tokenContract === directTransferTokenContract,
+            )
+          ? holdings[0].tokenContract
+          : directTransferTokenContract;
+
+    if (nextTokenContract === directTransferTokenContract) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setDirectTransferTokenContract(nextTokenContract);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [directTransferTokenContract, holdings, isOwnInvestorPage]);
 
   const openCreateListing = (holding: HoldingRow) => {
@@ -640,7 +651,22 @@ export default function InvestorDashboardPage() {
       if (!result.success) {
         throw new Error(result.error || "Transfer failed.");
       }
-      toast.success(`Transfer submitted: ${shortAddress(result.signature)}`);
+      await apiFetch("/token-transfer-requests", {
+        method: "POST",
+        body: JSON.stringify({
+          assetId: directTransferHolding.assetId,
+          tokenContract: directTransferHolding.tokenContract,
+          fromWallet: address,
+          toWallet: directTransferRecipient,
+          amount: Number(directTransferAmount),
+          status: "TRANSFERRED",
+          requiredClaimTopics: [],
+          transferTxHash: result.signature,
+        }),
+      }).catch(() => null);
+      toast.success("Transfer submitted.", {
+        description: <TransactionToastLink signature={result.signature} />,
+      });
       setDirectTransferRecipient("");
       setDirectTransferAmount("");
       setDirectTransferPreflight(null);
@@ -653,6 +679,7 @@ export default function InvestorDashboardPage() {
   }, [
     address,
     anchorProvider,
+    directTransferAmount,
     directTransferAmountBaseUnits,
     directTransferDecimals,
     directTransferHolding,
@@ -735,6 +762,37 @@ export default function InvestorDashboardPage() {
       toast.error(error instanceof Error ? error.message : "Failed to cancel listing.");
     } finally {
       setProcessingListingId(null);
+    }
+  };
+
+  const deletePurchaseRequest = async (request: TokenPurchaseRequest) => {
+    if (!address || address !== request.investorWallet) {
+      toast.error("Connect the investor wallet that created this request.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Delete this token purchase request? This removes it from your dashboard, the claim provider queue, and the issuer minting queue.",
+    );
+    if (!confirmed) return;
+
+    setDeletingPurchaseRequestId(request.id);
+    try {
+      await apiFetch<TokenPurchaseRequest>(`/token-purchase-requests/${request.id}`, {
+        method: "DELETE",
+      });
+      setPurchaseRequests((current) =>
+        current.filter((item) => item.id !== request.id),
+      );
+      toast.success("Token purchase request deleted.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to delete token purchase request.",
+      );
+    } finally {
+      setDeletingPurchaseRequestId(null);
     }
   };
 
@@ -1213,6 +1271,7 @@ export default function InvestorDashboardPage() {
                     <TableHead>Amount</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Date</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1257,6 +1316,21 @@ export default function InvestorDashboardPage() {
                         </TableCell>
                         <TableCell>
                           {new Date(req.createdAt).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            disabled={deletingPurchaseRequestId === req.id}
+                            onClick={() => void deletePurchaseRequest(req)}
+                          >
+                            {deletingPurchaseRequestId === req.id ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="mr-2 h-4 w-4" />
+                            )}
+                            Delete
+                          </Button>
                         </TableCell>
                       </TableRow>
                     );

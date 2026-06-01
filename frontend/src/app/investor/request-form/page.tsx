@@ -12,6 +12,7 @@ import { useAssetsContext } from "@/contexts/assets-context";
 import { useAnchorProvider } from "@/hooks/useAnchorProvider";
 import { useWallet } from "@/hooks/use-wallet";
 import { apiFetch } from "@/lib/backend";
+import { TransactionToastLink } from "@/lib/solscan";
 import {
   connection,
   fetchFactoryStateAccount,
@@ -44,6 +45,24 @@ type KycProfileFields = {
   country?: string | null;
   idDocumentUrl?: string | null;
   proofOfAddressUrl?: string | null;
+};
+
+type CompliancePreflight = {
+  ok: boolean;
+  canOpenForm: boolean;
+  amountOk: boolean;
+  amountError: string | null;
+  blockingReasons: string[];
+  countryAllowed: boolean;
+  investorCapReached: boolean;
+  countryCapReached: boolean;
+  supplyCapReached: boolean;
+  duplicateActiveRequest: boolean;
+  decimals: number;
+  currentSupply: string;
+  reservedSupply: string;
+  supplyRemaining: string | null;
+  maxRequestableTokens: string | null;
 };
 
 function topicStrings(topics: unknown): string[] {
@@ -196,6 +215,9 @@ function RequestFormContent() {
   const [investorCountry, setInvestorCountry] = useState<number | null>(null);
   const [investorFidRegistered, setInvestorFidRegistered] = useState<boolean | null>(null);
   const [identityLoading, setIdentityLoading] = useState(false);
+  const [compliancePreflight, setCompliancePreflight] = useState<CompliancePreflight | null>(null);
+  const [complianceLoading, setComplianceLoading] = useState(false);
+  const [complianceLoadError, setComplianceLoadError] = useState<string | null>(null);
   const [registeringFid, setRegisteringFid] = useState(false);
   const [fidCountryCode, setFidCountryCode] = useState("840");
   const [formData, setFormData] = useState({
@@ -339,7 +361,7 @@ function RequestFormContent() {
     const loadingToast = toast.loading("Creating investor FID...");
     try {
       const service = new IdentityService(anchorProvider);
-      await service.ensureOwnFid(countryCode, false);
+      const tx = await service.ensureOwnFid(countryCode, false);
       const fid = await service.fetchFid(new PublicKey(walletAddress));
       setInvestorFidRegistered(Boolean(fid && !fid.isIssuer));
       setInvestorCountry(fid && !fid.isIssuer ? Number(fid.country) : countryCode);
@@ -349,6 +371,7 @@ function RequestFormContent() {
       }));
       toast.success("Investor FID created. You can now request tokens.", {
         id: loadingToast,
+        description: tx ? <TransactionToastLink signature={tx} /> : undefined,
       });
     } catch (error) {
       toast.error(
@@ -385,6 +408,78 @@ function RequestFormContent() {
     [asset, effectiveCountry],
   );
 
+  useEffect(() => {
+    if (!asset || !walletAddress || investorFidRegistered !== true || effectiveCountry === null) {
+      const resetTimeout = window.setTimeout(() => {
+        setCompliancePreflight(null);
+        setComplianceLoadError(null);
+        setComplianceLoading(false);
+      }, 0);
+      return () => window.clearTimeout(resetTimeout);
+    }
+
+    let isActive = true;
+    const timeout = window.setTimeout(async () => {
+      setComplianceLoading(true);
+      setComplianceLoadError(null);
+      try {
+        const result = await apiFetch<CompliancePreflight>(
+          "/token-purchase-requests/preflight",
+          {
+            method: "POST",
+            body: JSON.stringify({
+              tokenContract: asset.tokenContractAddress,
+              investorWallet: walletAddress,
+              country: String(effectiveCountry),
+              amount: formData.amount || null,
+            }),
+          },
+        );
+        if (!isActive) return;
+        setCompliancePreflight(result);
+      } catch (error) {
+        if (!isActive) return;
+        setCompliancePreflight(null);
+        setComplianceLoadError(
+          error instanceof Error ? error.message : "Failed to check token compliance.",
+        );
+      } finally {
+        if (isActive) setComplianceLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      isActive = false;
+      window.clearTimeout(timeout);
+    };
+  }, [
+    asset,
+    effectiveCountry,
+    formData.amount,
+    investorFidRegistered,
+    walletAddress,
+  ]);
+
+  const requestAmountReady = formData.amount.trim().length > 0;
+  const formBlockedReasons = compliancePreflight?.blockingReasons ?? [];
+  const formIsBlocked =
+    compliancePreflight !== null &&
+    !compliancePreflight.canOpenForm &&
+    (compliancePreflight.investorCapReached ||
+      compliancePreflight.countryCapReached ||
+      compliancePreflight.supplyCapReached ||
+      !compliancePreflight.countryAllowed);
+  const submitDisabled =
+    submitting ||
+    complianceLoading ||
+    !requestAmountReady ||
+    !compliancePreflight?.canOpenForm ||
+    !compliancePreflight?.amountOk ||
+    Boolean(compliancePreflight?.amountError) ||
+    Boolean(compliancePreflight?.blockingReasons.length) ||
+    Boolean(compliancePreflight?.duplicateActiveRequest) ||
+    Boolean(complianceLoadError);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!walletAddress) {
@@ -404,6 +499,16 @@ function RequestFormContent() {
 
     if (!countryAllowed) {
       toast.error("This wallet country is not allowed by token compliance rules.");
+      return;
+    }
+
+    if (!compliancePreflight?.ok) {
+      toast.error(
+        compliancePreflight?.amountError ||
+          compliancePreflight?.blockingReasons[0] ||
+          complianceLoadError ||
+          "This request does not meet token compliance rules.",
+      );
       return;
     }
 
@@ -642,6 +747,76 @@ function RequestFormContent() {
     );
   }
 
+  if (!compliancePreflight) {
+    return (
+      <div className="p-8 glass-panel rounded-[22px] flex flex-col items-center justify-center min-h-[50vh] text-center space-y-4">
+        {complianceLoadError ? (
+          <AlertTriangle className="h-16 w-16 text-red-500" />
+        ) : (
+          <Loader2 className="h-12 w-12 animate-spin text-[#2A5FA6]" />
+        )}
+        <h2 className="text-2xl font-bold text-slate-700">
+          {complianceLoadError ? "Compliance Check Unavailable" : "Checking Compliance"}
+        </h2>
+        <p className="max-w-xl text-slate-500">
+          {complianceLoadError ||
+            "Reading the token's live compliance modules before opening the purchase request form."}
+        </p>
+        {complianceLoadError ? (
+          <Button variant="outline" onClick={() => router.back()}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Asset
+          </Button>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (formIsBlocked) {
+    return (
+      <div className="p-8 glass-panel rounded-[22px] w-full max-w-4xl mx-auto">
+        <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-4">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Asset
+        </Button>
+        <Card className="border-red-200 bg-red-50/80 shadow-sm">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-red-100 p-3">
+                <AlertTriangle className="h-6 w-6 text-red-700" />
+              </div>
+              <div>
+                <CardTitle className="text-red-900">Purchase Unavailable</CardTitle>
+                <CardDescription className="text-red-700">
+                  This asset cannot accept a new request from this wallet right now.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm text-red-800">
+            {formBlockedReasons.length > 0 ? (
+              <ul className="space-y-2">
+                {formBlockedReasons.map((reason) => (
+                  <li key={reason} className="rounded-xl border border-red-200 bg-white/70 p-3">
+                    {reason}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>This token&apos;s compliance rules currently block new requests.</p>
+            )}
+            <div className="rounded-xl border border-red-200 bg-white/70 p-4">
+              <p className="font-semibold text-red-900">Remaining token capacity</p>
+              <p className="mt-1 font-mono">
+                {compliancePreflight?.supplyRemaining ?? "Unavailable"}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="p-8 glass-panel rounded-[22px] w-full max-w-5xl mx-auto">
       <div className="mb-8">
@@ -660,8 +835,25 @@ function RequestFormContent() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card className="bg-white/90 border-slate-200/70 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-lg">Purchase Details</CardTitle>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle className="text-lg">Purchase Details</CardTitle>
+              <CardDescription>
+                Request amount must satisfy this token&apos;s live compliance modules.
+              </CardDescription>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-right">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                Remaining Tokens
+              </p>
+              <p className="mt-1 font-mono text-sm font-semibold text-slate-900">
+                {complianceLoading && !compliancePreflight
+                  ? "Checking..."
+                  : compliancePreflight?.supplyRemaining ??
+                    compliancePreflight?.maxRequestableTokens ??
+                    "No cap"}
+              </p>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -679,6 +871,42 @@ function RequestFormContent() {
                   onChange={handleChange}
                   className="bg-white"
                 />
+                {compliancePreflight?.maxRequestableTokens ? (
+                  <p className="text-xs text-slate-500">
+                    Maximum request currently allowed:{" "}
+                    <span className="font-mono font-medium text-slate-700">
+                      {compliancePreflight.maxRequestableTokens}
+                    </span>{" "}
+                    tokens.
+                  </p>
+                ) : null}
+                {complianceLoading ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                    Checking live compliance...
+                  </div>
+                ) : null}
+                {compliancePreflight?.amountError ? (
+                  <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                    {compliancePreflight.amountError}
+                  </div>
+                ) : null}
+                {compliancePreflight?.blockingReasons.length ? (
+                  <div className="space-y-2">
+                    {compliancePreflight.blockingReasons.map((reason) => (
+                      <div
+                        key={reason}
+                        className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                      >
+                        {reason}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {complianceLoadError ? (
+                  <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                    {complianceLoadError}
+                  </div>
+                ) : null}
               </div>
             </div>
           </CardContent>
@@ -782,7 +1010,7 @@ function RequestFormContent() {
           <Button type="button" variant="outline" onClick={() => router.back()}>
             Cancel
           </Button>
-          <Button type="submit" disabled={submitting} className="bg-gradient-to-tr from-[#172E7F] to-[#2A5FA6] hover:from-[#13266A] hover:to-[#224D86] text-white rounded-[11px] min-w-[200px] font-medium border-none shadow-md shadow-blue-900/10">
+          <Button type="submit" disabled={submitDisabled} className="bg-gradient-to-tr from-[#172E7F] to-[#2A5FA6] hover:from-[#13266A] hover:to-[#224D86] text-white rounded-[11px] min-w-[200px] font-medium border-none shadow-md shadow-blue-900/10">
             {submitting ? "Submitting..." : "Submit Purchase Request"}
           </Button>
         </div>

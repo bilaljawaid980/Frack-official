@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import * as ISO3166 from "iso-3166-1";
 import { motion } from "framer-motion";
 import { 
   Shield, 
@@ -40,6 +41,7 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -57,6 +59,7 @@ import { generateSalt, isValidPublicKey } from "@/lib/utils";
 import { PublicKey, Keypair } from "@solana/web3.js";
 import { queryCache } from "@/lib/query-cache";
 import { apiFetch } from "@/lib/backend";
+import { TransactionToastLink } from "@/lib/solscan";
 
 async function parseApiResponse(response: Response, fallback: string) {
   const payload = await response.json().catch(() => null);
@@ -165,6 +168,283 @@ type TrustedIssuerRecord = {
   kycAuthorized: boolean;
   amlAuthorized: boolean;
 };
+
+type IsoCountryRecord = {
+  country?: string;
+  name?: string;
+  alpha2?: string;
+  numeric?: string | number;
+};
+
+type CountryOption = {
+  alpha2: string;
+  name: string;
+  numeric: number;
+};
+
+type CountryCapEntry = {
+  countryCode: number;
+  cap: string;
+};
+
+const COUNTRY_OPTIONS: CountryOption[] = (ISO3166.all() as IsoCountryRecord[])
+  .map((country) => {
+    const alpha2 = country.alpha2?.toUpperCase() ?? "";
+    const numeric = Number(country.numeric);
+    const name = country.country ?? country.name ?? "";
+
+    if (!alpha2 || !name || !Number.isInteger(numeric)) return null;
+    return { alpha2, name, numeric };
+  })
+  .filter((country): country is CountryOption => Boolean(country))
+  .sort((left, right) => left.name.localeCompare(right.name));
+
+const COUNTRY_BY_NUMERIC = new Map(
+  COUNTRY_OPTIONS.map((country) => [country.numeric, country]),
+);
+
+function countryFlagUrl(alpha2: string) {
+  return `https://flagcdn.com/w40/${alpha2.toLowerCase()}.png`;
+}
+
+function CountryFlag({ country }: { country: Pick<CountryOption, "alpha2" | "name"> }) {
+  return (
+    <span
+      aria-label={`${country.name} flag`}
+      className="inline-block h-3.5 w-5 shrink-0 overflow-hidden rounded-[2px] bg-slate-100 bg-cover bg-center shadow-sm ring-1 ring-slate-900/10"
+      role="img"
+      style={{ backgroundImage: `url("${countryFlagUrl(country.alpha2)}")` }}
+    />
+  );
+}
+
+function parseCountryList(value: unknown) {
+  return String(value ?? "")
+    .split(",")
+    .map((item) => Number(item.trim()))
+    .filter((item) => Number.isInteger(item) && item > 0);
+}
+
+function serializeCountryList(countries: number[]) {
+  return Array.from(new Set(countries)).join(",");
+}
+
+function parseCountryCapEntries(value: unknown): CountryCapEntry[] {
+  return String(value ?? "")
+    .split(",")
+    .map((entry) => {
+      const [country, cap] = entry.split(":");
+      const countryCode = Number(country?.trim());
+      const normalizedCap = cap?.trim() ?? "";
+      if (!Number.isInteger(countryCode) || countryCode <= 0 || !normalizedCap) {
+        return null;
+      }
+      return { countryCode, cap: normalizedCap };
+    })
+    .filter((entry): entry is CountryCapEntry => Boolean(entry));
+}
+
+function serializeCountryCapEntries(entries: CountryCapEntry[]) {
+  return entries
+    .filter(
+      (entry) =>
+        Number.isInteger(entry.countryCode) &&
+        entry.countryCode > 0 &&
+        /^\d+$/.test(entry.cap) &&
+        Number(entry.cap) > 0,
+    )
+    .map((entry) => `${entry.countryCode}:${entry.cap}`)
+    .join(",");
+}
+
+function CountrySelectValue({ country }: { country?: CountryOption }) {
+  if (!country) return <SelectValue placeholder="Select country" />;
+  return (
+    <span className="flex min-w-0 items-center gap-2 pr-2">
+      <CountryFlag country={country} />
+      <span className="truncate">{country.name}</span>
+      <span className="shrink-0 text-xs text-slate-400">{country.numeric}</span>
+    </span>
+  );
+}
+
+function CountryOptionRow({ country }: { country: CountryOption }) {
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <CountryFlag country={country} />
+      <span className="truncate">{country.name}</span>
+      <span className="shrink-0 text-xs text-slate-400">{country.numeric}</span>
+    </span>
+  );
+}
+
+function AllowedCountriesField({
+  value,
+  onChange,
+}: {
+  value: unknown;
+  onChange: (value: string) => void;
+}) {
+  const selectedCountries = parseCountryList(value);
+  const selectedSet = new Set(selectedCountries);
+
+  return (
+    <div className="space-y-2">
+      <Select
+        value=""
+        onValueChange={(nextValue) => {
+          const countryCode = Number(nextValue);
+          if (!Number.isInteger(countryCode)) return;
+          onChange(serializeCountryList([...selectedCountries, countryCode]));
+        }}
+      >
+        <SelectTrigger className="h-9 bg-white text-sm">
+          <SelectValue placeholder="Add allowed country" />
+        </SelectTrigger>
+        <SelectContent className="max-h-80">
+          <SelectGroup>
+            {COUNTRY_OPTIONS.map((country) => (
+              <SelectItem
+                key={`${country.alpha2}-${country.numeric}`}
+                disabled={selectedSet.has(country.numeric)}
+                textValue={`${country.name} ${country.numeric}`}
+                value={String(country.numeric)}
+              >
+                <CountryOptionRow country={country} />
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+
+      {selectedCountries.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {selectedCountries.map((countryCode) => {
+            const country = COUNTRY_BY_NUMERIC.get(countryCode);
+            return (
+              <button
+                key={countryCode}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                type="button"
+                onClick={() =>
+                  onChange(
+                    serializeCountryList(
+                      selectedCountries.filter((item) => item !== countryCode),
+                    ),
+                  )
+                }
+              >
+                {country ? <CountryFlag country={country} /> : null}
+                {country ? country.name : `Country ${countryCode}`}
+                <span className="text-slate-400">{countryCode}</span>
+                <span className="text-slate-400">x</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CountryCapsField({
+  value,
+  onChange,
+}: {
+  value: unknown;
+  onChange: (value: string) => void;
+}) {
+  const entries = parseCountryCapEntries(value);
+
+  const updateEntries = (nextEntries: CountryCapEntry[]) => {
+    onChange(serializeCountryCapEntries(nextEntries));
+  };
+
+  return (
+    <div className="space-y-2">
+      {entries.map((entry, index) => {
+        const country = COUNTRY_BY_NUMERIC.get(entry.countryCode);
+        return (
+          <div key={`${entry.countryCode}-${index}`} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem_auto]">
+            <Select
+              value={String(entry.countryCode)}
+              onValueChange={(nextValue) => {
+                const countryCode = Number(nextValue);
+                if (!Number.isInteger(countryCode)) return;
+                updateEntries(
+                  entries.map((item, itemIndex) =>
+                    itemIndex === index ? { ...item, countryCode } : item,
+                  ),
+                );
+              }}
+            >
+              <SelectTrigger className="h-9 bg-white text-sm">
+                <CountrySelectValue country={country} />
+              </SelectTrigger>
+              <SelectContent className="max-h-80">
+                <SelectGroup>
+                  {COUNTRY_OPTIONS.map((option) => (
+                    <SelectItem
+                      key={`${option.alpha2}-${option.numeric}`}
+                      disabled={entries.some(
+                        (item, itemIndex) =>
+                          itemIndex !== index && item.countryCode === option.numeric,
+                      )}
+                      textValue={`${option.name} ${option.numeric}`}
+                      value={String(option.numeric)}
+                    >
+                      <CountryOptionRow country={option} />
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <Input
+              className="h-9 bg-white text-sm"
+              inputMode="numeric"
+              min={1}
+              placeholder="Cap"
+              type="number"
+              value={entry.cap}
+              onChange={(event) => {
+                const cap = event.target.value.replace(/\D/g, "");
+                updateEntries(
+                  entries.map((item, itemIndex) =>
+                    itemIndex === index ? { ...item, cap } : item,
+                  ),
+                );
+              }}
+            />
+            <Button
+              className="h-9"
+              type="button"
+              variant="outline"
+              onClick={() => updateEntries(entries.filter((_, itemIndex) => itemIndex !== index))}
+            >
+              Remove
+            </Button>
+          </div>
+        );
+      })}
+
+      <Button
+        className="h-9"
+        type="button"
+        variant="outline"
+        onClick={() => {
+          const firstUnusedCountry =
+            COUNTRY_OPTIONS.find(
+              (country) => !entries.some((entry) => entry.countryCode === country.numeric),
+            ) ?? COUNTRY_OPTIONS[0];
+          if (!firstUnusedCountry) return;
+          updateEntries([...entries, { countryCode: firstUnusedCountry.numeric, cap: "1" }]);
+        }}
+      >
+        Add Country Cap
+      </Button>
+    </div>
+  );
+}
 
 function getAuthorizedTopicValues(issuer: TrustedIssuerRecord) {
   return [
@@ -284,6 +564,16 @@ export function IssuanceForm({
     control: form.control,
     name: "complianceRequirements.trustedIssuers",
   }) || [];
+  const selectedComplianceModules =
+    useWatch({
+      control: form.control,
+      name: "complianceRequirements.selectedModules",
+    }) || [];
+  const complianceModuleParams =
+    (useWatch({
+      control: form.control,
+      name: "complianceRequirements.moduleParams",
+    }) as Record<string, Record<string, unknown>> | undefined) || {};
 
   const configuredPlatformOwner = process.env.NEXT_PUBLIC_PLATFORM_OWNER || "";
   const isConfiguredPlatformOwner =
@@ -672,7 +962,9 @@ export function IssuanceForm({
           }
           queryCache.invalidatePrefix("assets:");
           await onDeployed?.();
-          toast.success("Token suite deployed successfully!");
+          toast.success("Token suite deployed successfully.", {
+            description: <TransactionToastLink signature={sig} />,
+          });
           router.push("/issuer");
         },
         onError: (err: unknown) => {
@@ -1347,9 +1639,8 @@ export function IssuanceForm({
 
                   <div className="grid gap-3 md:grid-cols-2">
                     {COMPLIANCE_MODULES.map((module) => {
-                      const selectedModules = form.watch("complianceRequirements.selectedModules");
                       const moduleId = module.programId.toBase58();
-                      const isSelected = selectedModules.includes(moduleId);
+                      const isSelected = selectedComplianceModules.includes(moduleId);
 
                       return (
                         <div
@@ -1360,8 +1651,8 @@ export function IssuanceForm({
                             form.setValue(
                               "complianceRequirements.selectedModules",
                               isSelected
-                                ? selectedModules.filter((id) => id !== moduleId)
-                                : [...selectedModules, moduleId],
+                                ? selectedComplianceModules.filter((id) => id !== moduleId)
+                                : [...selectedComplianceModules, moduleId],
                             );
                           }}
                           onKeyDown={(event) => {
@@ -1370,8 +1661,8 @@ export function IssuanceForm({
                             form.setValue(
                               "complianceRequirements.selectedModules",
                               isSelected
-                                ? selectedModules.filter((id) => id !== moduleId)
-                                : [...selectedModules, moduleId],
+                                ? selectedComplianceModules.filter((id) => id !== moduleId)
+                                : [...selectedComplianceModules, moduleId],
                             );
                           }}
                           className={`rounded-2xl border p-4 text-left transition-colors ${
@@ -1400,41 +1691,60 @@ export function IssuanceForm({
                               {isSelected ? (
                                 <div className="mt-3 space-y-2" onClick={(event) => event.stopPropagation()}>
                                   {module.fields.map((field) => {
-                                    const moduleParams = form.watch("complianceRequirements.moduleParams") as Record<string, Record<string, unknown>>;
-                                    const value = moduleParams?.[moduleId]?.[field.key] ?? "";
+                                    const value = complianceModuleParams?.[moduleId]?.[field.key] ?? "";
                                     const placeholder =
                                       field.type === "countries"
-                                        ? "840,124"
+                                        ? "Add countries"
                                         : field.type === "country_caps"
-                                          ? "840:100,826:50"
+                                          ? "Add country caps"
                                           : field.type === "timestamp"
                                             ? "0"
                                             : "1000000";
+                                    const updateModuleParam = (nextValue: string) => {
+                                      const current =
+                                        (form.getValues("complianceRequirements.moduleParams") as Record<string, Record<string, unknown>>) ?? {};
+                                      form.setValue("complianceRequirements.moduleParams", {
+                                        ...current,
+                                        [moduleId]: {
+                                          ...(current[moduleId] ?? {}),
+                                          [field.key]: nextValue,
+                                        },
+                                      });
+                                    };
 
                                     return (
                                       <div key={field.key} className="space-y-1">
                                         <Label className="text-[10px] uppercase font-bold text-slate-500">
                                           {field.label}
                                         </Label>
-                                        <Input
-                                          value={String(value)}
-                                          placeholder={placeholder}
-                                          className="h-9 bg-white text-sm"
-                                          onChange={(event) => {
-                                            const current =
-                                              (form.getValues("complianceRequirements.moduleParams") as Record<string, Record<string, unknown>>) ?? {};
-                                            form.setValue("complianceRequirements.moduleParams", {
-                                              ...current,
-                                              [moduleId]: {
-                                                ...(current[moduleId] ?? {}),
-                                                [field.key]: event.target.value,
-                                              },
-                                            });
-                                          }}
-                                        />
+                                        {field.type === "countries" ? (
+                                          <AllowedCountriesField
+                                            value={value}
+                                            onChange={updateModuleParam}
+                                          />
+                                        ) : field.type === "country_caps" ? (
+                                          <CountryCapsField
+                                            value={value}
+                                            onChange={updateModuleParam}
+                                          />
+                                        ) : (
+                                          <Input
+                                            value={String(value)}
+                                            placeholder={placeholder}
+                                            className="h-9 bg-white text-sm"
+                                            onChange={(event) => {
+                                              updateModuleParam(event.target.value);
+                                            }}
+                                          />
+                                        )}
                                         <p className="text-[11px] leading-4 text-slate-500">
                                           {field.description}
                                         </p>
+                                        {field.type === "countries" || field.type === "country_caps" ? (
+                                          <p className="rounded-lg bg-white/70 px-2 py-1 font-mono text-[11px] text-slate-500">
+                                            Contract value: {String(value) || "Not configured"}
+                                          </p>
+                                        ) : null}
                                       </div>
                                     );
                                   })}

@@ -14,4 +14,16 @@ export class UpdateTokenTransferRequestDto extends PartialType(CreateTokenTransf
   @IsOptional()
   @IsString()
   transferTxHash?: string;
+
+  @IsOptional()
+  @IsString()
+  claimTxHash?: string;
+
+  @IsOptional()
+  @IsString()
+  whitelistTxHash?: string;
+
+  @IsOptional()
+  @IsString()
+  activationTxHash?: string;
 }

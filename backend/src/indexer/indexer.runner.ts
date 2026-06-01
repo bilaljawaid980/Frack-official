@@ -10,13 +10,14 @@ async function run() {
   const indexer = app.get(IndexerService);
 
   try {
-    const intervalMs = parseInt(process.env.INDEXER_INTERVAL_MS || "30000", 10);
-    try {
-      await indexer.syncOnce();
-    } catch (error) {
-      console.error("Initial indexer sync failed:", error);
+    const runOnce = process.argv.includes("--once");
+    await indexer.syncOnce();
+
+    if (runOnce) {
+      return;
     }
 
+    const intervalMs = parseInt(process.env.INDEXER_INTERVAL_MS || "30000", 10);
     setInterval(async () => {
       try {
         await indexer.syncOnce();
@@ -25,7 +26,9 @@ async function run() {
       }
     }, intervalMs);
   } finally {
-    // Keep process alive for interval syncs.
+    if (process.argv.includes("--once")) {
+      await app.close();
+    }
   }
 }
 

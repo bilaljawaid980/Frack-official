@@ -43,6 +43,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import { usePermissionsContext } from "@/contexts/permissions-context";
 import { useAnchorProvider } from "@/hooks/useAnchorProvider";
+import { TransactionToastLink } from "@/lib/solscan";
 import { ComplianceService } from "@/services/compliance";
 import type { RWAAsset } from "@/types/rwa";
 import {
@@ -239,8 +240,9 @@ export default function CompliancePage() {
           source: "on-chain",
         },
       }));
-      toast.success(`Supply Cap updated. Tx: ${sig.slice(0, 10)}...`, {
+      toast.success("Supply Cap updated.", {
         id: loadingToast,
+        description: <TransactionToastLink signature={sig} />,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Update failed";
