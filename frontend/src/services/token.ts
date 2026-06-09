@@ -12,8 +12,6 @@ import {
 } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
-  COMPLIANCE_PROGRAM_ID,
-  IRS_PROGRAM_ID,
   MOD_COUNTRY_CAP,
   MOD_COUNTRY_RESTRICT,
   MOD_DAILY_LIMIT,
@@ -32,10 +30,28 @@ import { fetchFactoryStateAccount, type FactoryStateAccount } from "@/lib/solana
 import type { TokenMintHealth, TokenState, OwnerState } from "@/types";
 import TokenIdl from "@/idl/fracks_token.json";
 import ComplianceIdl from "@/idl/fracks_compliance.json";
-import ModDailyLimitIdl from "@/idl/mod_daily_limit.json";
+import ModCountryCapIdl from "@/idl/mod_country_cap.json";
 
 type TokenProgram = Program<Idl>;
 type RemainingAccount = { pubkey: PublicKey; isSigner: boolean; isWritable: boolean };
+type SupportAccountRpcBuilder = {
+  accounts(accounts: Record<string, unknown>): {
+    rpc(options?: { commitment?: "confirmed" }): Promise<string>;
+  };
+};
+type ComplianceProgramAccounts = {
+  complianceState: { fetch(address: PublicKey): Promise<{ modules: PublicKey[] }> };
+};
+type CountryCapProgramAccounts = {
+  investorCountryCapModule: { fetch(address: PublicKey): Promise<{ owner: PublicKey }> };
+};
+type CountryCapProgramMethods = {
+  initializeCountryCount(country: number): SupportAccountRpcBuilder;
+};
+type TokenProgramAccounts = {
+  agentRole: { fetch(address: PublicKey): Promise<{ isActive: boolean }> };
+  frozenWallet: { fetch(address: PublicKey): Promise<unknown> };
+};
 type SuiteProgramIds = {
   token: PublicKey;
   fid: PublicKey;
@@ -313,6 +329,10 @@ export class TokenService {
     );
   }
 
+  private getTokenProgramAccounts(programId: PublicKey): TokenProgramAccounts {
+    return this.getTokenProgram(programId).account as unknown as TokenProgramAccounts;
+  }
+
   // ── PDA Derivation ───────────────────────────────────────────────────────────
 
   /** Seeds: ["token_state", mint] */
@@ -490,8 +510,10 @@ export class TokenService {
    */
   async isAgent(mint: PublicKey, wallet: PublicKey): Promise<boolean> {
     try {
-      const [agentRolePda] = this.findAgentRolePda(mint, wallet);
-      const raw = await (this.program.account as any).agentRole.fetch(agentRolePda);
+      const ids = await this.getProgramIds();
+      const tokenAccounts = this.getTokenProgramAccounts(ids.token);
+      const [agentRolePda] = this.findAgentRolePda(mint, wallet, ids.token);
+      const raw = await tokenAccounts.agentRole.fetch(agentRolePda);
       return raw.isActive;
     } catch {
       return false;
@@ -503,8 +525,14 @@ export class TokenService {
    */
   async isFrozen(mint: PublicKey, wallet: PublicKey): Promise<boolean> {
     try {
-      const [frozenWalletPda] = this.findFrozenWalletPda(mint, wallet);
-      await (this.program.account as any).frozenWallet.fetch(frozenWalletPda);
+      const ids = await this.getProgramIds();
+      const tokenAccounts = this.getTokenProgramAccounts(ids.token);
+      const [frozenWalletPda] = this.findFrozenWalletPda(
+        mint,
+        wallet,
+        ids.token,
+      );
+      await tokenAccounts.frozenWallet.fetch(frozenWalletPda);
       return true;
     } catch {
       return false;
@@ -678,6 +706,11 @@ export class TokenService {
       walletIdentityData,
     } = registry;
 
+    await this.prepareCountryCapCountAccounts(
+      complianceState,
+      [walletIdentityData.country],
+      ids,
+    );
     const verificationAndComplianceAccounts =
       await this.getMintRemainingAccounts(
         walletIdentity,
@@ -685,7 +718,6 @@ export class TokenService {
         ids,
         claimValidation.remainingAccounts,
       );
-    await this.prepareDailyLimitUsageAccounts(mintPubkey, recipient, ids);
     await this.verifySupplyCapForMint(
       complianceState,
       amount,
@@ -1425,15 +1457,11 @@ export class TokenService {
     return info.data.readUInt16LE(72);
   }
 
-  private async prepareDailyLimitUsageAccounts(
-    mintPubkey: PublicKey,
-    wallet: PublicKey,
+  private async prepareCountryCapCountAccounts(
+    complianceState: PublicKey,
+    countries: number[],
     ids: SuiteProgramIds,
   ): Promise<void> {
-    const [complianceStatePda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("compliance_state"), mintPubkey.toBuffer()],
-      ids.compliance
-    );
     const complianceProgram = new Program(
       {
         ...(ComplianceIdl as unknown as Record<string, unknown>),
@@ -1441,55 +1469,70 @@ export class TokenService {
       } as Idl,
       this.provider,
     );
-    const dailyProgram = new Program(ModDailyLimitIdl as unknown as Idl, this.provider);
-    const compliance = await (complianceProgram.account as any).complianceState.fetch(
-      complianceStatePda
+    const countryCapProgram = new Program(
+      {
+        ...(ModCountryCapIdl as unknown as Record<string, unknown>),
+        address: MOD_COUNTRY_CAP.toBase58(),
+      } as Idl,
+      this.provider,
+    );
+    const complianceAccounts =
+      complianceProgram.account as unknown as ComplianceProgramAccounts;
+    const compliance = await complianceAccounts.complianceState.fetch(
+      complianceState,
     );
     const moduleAccounts = compliance.modules as PublicKey[];
     const moduleInfos = await this.provider.connection.getMultipleAccountsInfo(
       moduleAccounts,
-      "confirmed"
+      "confirmed",
     );
+    const uniqueCountries = new Set(countries);
 
     for (const [index, moduleAccount] of moduleAccounts.entries()) {
       const moduleInfo = moduleInfos[index];
-      if (!moduleInfo?.owner.equals(MOD_DAILY_LIMIT)) {
+      if (!moduleInfo?.owner.equals(MOD_COUNTRY_CAP)) {
         continue;
       }
 
-      const [dailyUsage] = PublicKey.findProgramAddressSync(
-        [Buffer.from("daily_usage"), moduleAccount.toBuffer(), wallet.toBuffer()],
-        MOD_DAILY_LIMIT
+      const countryCapAccounts =
+        countryCapProgram.account as unknown as CountryCapProgramAccounts;
+      const moduleStateAccount = await countryCapAccounts.investorCountryCapModule.fetch(
+        moduleAccount,
       );
-      const existingUsage = await this.provider.connection.getAccountInfo(
-        dailyUsage,
-        "confirmed"
-      );
-      if (existingUsage) {
-        continue;
-      }
+      const moduleOwner = moduleStateAccount.owner as PublicKey;
+      for (const country of uniqueCountries) {
+        const [countryCount] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("country_count"),
+            moduleAccount.toBuffer(),
+            this.u16LeBytes(country),
+          ],
+          MOD_COUNTRY_CAP,
+        );
+        const existingCount = await this.provider.connection.getAccountInfo(
+          countryCount,
+          "confirmed",
+        );
+        if (existingCount) {
+          continue;
+        }
 
-      const module = await (dailyProgram.account as any).dailyTransferLimitModule.fetch(
-        moduleAccount
-      );
-      const moduleOwner = module.owner as PublicKey;
-      if (!moduleOwner.equals(this.provider.wallet.publicKey)) {
-        // Older deployed daily-limit modules only let the module owner create
-        // this support PDA. Mint should not be blocked for issuer-owned suites
-        // where the admin initialized modules during deployment; compliance
-        // falls back gracefully if the usage PDA is absent.
-        continue;
+        try {
+          await (countryCapProgram.methods as unknown as CountryCapProgramMethods)
+            .initializeCountryCount(country)
+            .accounts({
+              owner: this.provider.wallet.publicKey,
+              moduleState: moduleAccount,
+              countryCount,
+              systemProgram: SystemProgram.programId,
+            })
+            .rpc({ commitment: "confirmed" });
+        } catch (err) {
+          throw new Error(
+            `Country-cap support account ${countryCount.toBase58()} for country ${country} is missing and could not be initialized by ${this.provider.wallet.publicKey.toBase58()}. Upgrade the country-cap module to allow deterministic support-account creation, or connect module owner ${moduleOwner.toBase58()} once to repair this legacy token. ${formatTransactionError(err)}`,
+          );
+        }
       }
-
-      await (dailyProgram.methods as any)
-        .initializeWalletUsage(wallet)
-        .accounts({
-          owner: this.provider.wallet.publicKey,
-          moduleState: moduleAccount,
-          walletUsage: dailyUsage,
-          systemProgram: SystemProgram.programId,
-        })
-        .rpc({ commitment: "confirmed" });
     }
   }
 
@@ -1711,10 +1754,11 @@ export class TokenService {
     from: PublicKey,
     amount: bigint
   ): Promise<string> {
+    const ids = await this.getProgramIds();
     const authority = this.provider.wallet.publicKey;
-    const [tokenState] = this.findTokenStatePda(mintPubkey);
-    const [ownerState] = this.findOwnerStatePda(mintPubkey);
-    const [agentRole] = this.findAgentRolePda(mintPubkey, authority);
+    const [tokenState] = this.findTokenStatePda(mintPubkey, ids.token);
+    const [ownerState] = this.findOwnerStatePda(mintPubkey, ids.token);
+    const [agentRole] = this.findAgentRolePda(mintPubkey, authority, ids.token);
 
     const ts = await this.fetchTokenState(mintPubkey);
 
@@ -1746,7 +1790,19 @@ export class TokenService {
     const [irsState] = await this._deriveIrsStateFromIrp(irpStatePubkey);
     const [fromWalletIdentityPda] = PublicKey.findProgramAddressSync(
       [SEED_WALLET_IDENTITY, irsState.toBuffer(), from.toBuffer()],
-      IRS_PROGRAM_ID
+      ids.irs
+    );
+    const fromCountry = await this.readWalletIdentityCountry(fromWalletIdentityPda);
+    if (fromCountry === null) {
+      throw new Error("Sender wallet identity is missing or malformed.");
+    }
+    const complianceState = new PublicKey(ts.compliance);
+    await this.prepareCountryCapCountAccounts(complianceState, [fromCountry], ids);
+    const complianceAccounts = await this.getMintRemainingAccounts(
+      fromWalletIdentityPda,
+      complianceState,
+      ids,
+      [],
     );
 
     try {
@@ -1757,14 +1813,15 @@ export class TokenService {
           tokenState,
           ownerState,
           agentRole,
-          complianceState: new PublicKey(ts.compliance),
-          complianceProgram: COMPLIANCE_PROGRAM_ID,
+          complianceState,
+          complianceProgram: ids.compliance,
           irsState,
           fromWalletIdentity: fromWalletIdentityPda,
           tokenMintAccount: mintPubkey,
           sourceTokenAccount,
           tokenProgram: new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"),
         })
+        .remainingAccounts(complianceAccounts)
         .rpc({ commitment: "confirmed" });
       return sig;
     } catch (err) {
@@ -1776,14 +1833,30 @@ export class TokenService {
    * Freezes a wallet for this token.
    */
   async freeze(mintPubkey: PublicKey, wallet: PublicKey): Promise<string> {
+    const ids = await this.getProgramIds();
+    const tokenProgram = this.getTokenProgram(ids.token);
     const authority = this.provider.wallet.publicKey;
-    const [tokenState] = this.findTokenStatePda(mintPubkey);
-    const [ownerState] = this.findOwnerStatePda(mintPubkey);
-    const [agentRole] = this.findAgentRolePda(mintPubkey, authority);
-    const [frozenWallet] = this.findFrozenWalletPda(mintPubkey, wallet);
+    const [tokenState] = this.findTokenStatePda(mintPubkey, ids.token);
+    const [ownerState] = this.findOwnerStatePda(mintPubkey, ids.token);
+    const [agentRole] = this.findAgentRolePda(
+      mintPubkey,
+      authority,
+      ids.token,
+    );
+    const [frozenWallet] = this.findFrozenWalletPda(
+      mintPubkey,
+      wallet,
+      ids.token,
+    );
+
+    const existingFrozenWallet =
+      await this.provider.connection.getAccountInfo(frozenWallet, "confirmed");
+    if (existingFrozenWallet) {
+      throw new Error("Wallet is already frozen for this token.");
+    }
 
     try {
-      const sig = await this.program.methods
+      const sig = await tokenProgram.methods
         .freezeWallet()
         .accounts({
           authority,
@@ -1805,14 +1878,30 @@ export class TokenService {
    * Unfreezes a previously frozen wallet.
    */
   async unfreeze(mintPubkey: PublicKey, wallet: PublicKey): Promise<string> {
+    const ids = await this.getProgramIds();
+    const tokenProgram = this.getTokenProgram(ids.token);
     const authority = this.provider.wallet.publicKey;
-    const [tokenState] = this.findTokenStatePda(mintPubkey);
-    const [ownerState] = this.findOwnerStatePda(mintPubkey);
-    const [agentRole] = this.findAgentRolePda(mintPubkey, authority);
-    const [frozenWallet] = this.findFrozenWalletPda(mintPubkey, wallet);
+    const [tokenState] = this.findTokenStatePda(mintPubkey, ids.token);
+    const [ownerState] = this.findOwnerStatePda(mintPubkey, ids.token);
+    const [agentRole] = this.findAgentRolePda(
+      mintPubkey,
+      authority,
+      ids.token,
+    );
+    const [frozenWallet] = this.findFrozenWalletPda(
+      mintPubkey,
+      wallet,
+      ids.token,
+    );
+
+    const existingFrozenWallet =
+      await this.provider.connection.getAccountInfo(frozenWallet, "confirmed");
+    if (!existingFrozenWallet) {
+      throw new Error("Wallet is not frozen for this token.");
+    }
 
     try {
-      const sig = await this.program.methods
+      const sig = await tokenProgram.methods
         .unfreezeWallet()
         .accounts({
           authority,

@@ -485,6 +485,10 @@ model BlockchainTransaction {
   assetId       String?
   tokenContract String?
   metadata      Json?
+  networkFeeLamports BigInt?
+  rentDepositLamports BigInt?
+  rentRefundLamports BigInt?
+  netSolChangeLamports BigInt?
   occurredAt    DateTime @default(now()) @db.Timestamptz(3)
   createdAt     DateTime @default(now()) @db.Timestamptz(3)
 

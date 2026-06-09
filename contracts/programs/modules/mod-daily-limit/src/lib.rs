@@ -140,8 +140,7 @@ pub struct InitializeWalletUsage<'info> {
     pub owner: Signer<'info>,
     #[account(
         seeds = [b"mod_daily_limit", module_state.token_mint.as_ref()],
-        bump = module_state.bump,
-        has_one = owner @ ModDailyLimitError::NotOwner
+        bump = module_state.bump
     )]
     pub module_state: Account<'info, DailyTransferLimitModule>,
     #[account(

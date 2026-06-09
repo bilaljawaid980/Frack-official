@@ -32,6 +32,10 @@ export class BlockchainTransactionsService {
         "assetId",
         "tokenContract",
         metadata,
+        "networkFeeLamports"::text AS "networkFeeLamports",
+        "rentDepositLamports"::text AS "rentDepositLamports",
+        "rentRefundLamports"::text AS "rentRefundLamports",
+        "netSolChangeLamports"::text AS "netSolChangeLamports",
         "occurredAt",
         "createdAt"
       FROM "BlockchainTransaction"
@@ -63,6 +67,10 @@ export class BlockchainTransactionsService {
         "assetId",
         "tokenContract",
         metadata,
+        "networkFeeLamports",
+        "rentDepositLamports",
+        "rentRefundLamports",
+        "netSolChangeLamports",
         "occurredAt"
       )
       VALUES (
@@ -75,6 +83,10 @@ export class BlockchainTransactionsService {
         ${entry.assetId || null},
         ${entry.tokenContract || null},
         ${metadata}::jsonb,
+        ${entry.networkFeeLamports || null}::bigint,
+        ${entry.rentDepositLamports || null}::bigint,
+        ${entry.rentRefundLamports || null}::bigint,
+        ${entry.netSolChangeLamports || null}::bigint,
         ${occurredAt}
       )
       ON CONFLICT ("txHash") DO UPDATE
@@ -85,8 +97,27 @@ export class BlockchainTransactionsService {
         "entityId" = COALESCE(EXCLUDED."entityId", "BlockchainTransaction"."entityId"),
         "assetId" = COALESCE(EXCLUDED."assetId", "BlockchainTransaction"."assetId"),
         "tokenContract" = COALESCE(EXCLUDED."tokenContract", "BlockchainTransaction"."tokenContract"),
+        "networkFeeLamports" = COALESCE(EXCLUDED."networkFeeLamports", "BlockchainTransaction"."networkFeeLamports"),
+        "rentDepositLamports" = COALESCE(EXCLUDED."rentDepositLamports", "BlockchainTransaction"."rentDepositLamports"),
+        "rentRefundLamports" = COALESCE(EXCLUDED."rentRefundLamports", "BlockchainTransaction"."rentRefundLamports"),
+        "netSolChangeLamports" = COALESCE(EXCLUDED."netSolChangeLamports", "BlockchainTransaction"."netSolChangeLamports"),
         metadata = COALESCE(EXCLUDED.metadata, "BlockchainTransaction".metadata)
-      RETURNING *
+      RETURNING
+        id,
+        "txHash",
+        "actionType",
+        "actorWallet",
+        "entityType",
+        "entityId",
+        "assetId",
+        "tokenContract",
+        metadata,
+        "networkFeeLamports"::text AS "networkFeeLamports",
+        "rentDepositLamports"::text AS "rentDepositLamports",
+        "rentRefundLamports"::text AS "rentRefundLamports",
+        "netSolChangeLamports"::text AS "netSolChangeLamports",
+        "occurredAt",
+        "createdAt"
     `;
 
     return rows[0];

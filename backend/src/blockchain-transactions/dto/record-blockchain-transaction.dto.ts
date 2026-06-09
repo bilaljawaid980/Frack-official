@@ -32,6 +32,22 @@ export class RecordBlockchainTransactionDto {
   metadata?: Record<string, unknown>;
 
   @IsOptional()
+  @IsString()
+  networkFeeLamports?: string;
+
+  @IsOptional()
+  @IsString()
+  rentDepositLamports?: string;
+
+  @IsOptional()
+  @IsString()
+  rentRefundLamports?: string;
+
+  @IsOptional()
+  @IsString()
+  netSolChangeLamports?: string;
+
+  @IsOptional()
   @IsDateString()
   occurredAt?: string;
 }

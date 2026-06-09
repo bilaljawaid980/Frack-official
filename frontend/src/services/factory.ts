@@ -99,6 +99,7 @@ type FactoryDeployBuilder = {
 type FactoryProgramMethods = {
   deployTokenSuite(args: unknown): FactoryDeployBuilder;
   initializeModule(...args: unknown[]): InstructionBuilder;
+  initializeCountryCount(...args: unknown[]): InstructionBuilder;
   setHookAuthority(...args: unknown[]): InstructionBuilder;
 };
 
@@ -447,6 +448,32 @@ export class FactoryService {
       .instruction();
   }
 
+  private getCountryCountPda(moduleState: PublicKey, country: number): PublicKey {
+    const countryBytes = Buffer.alloc(2);
+    countryBytes.writeUInt16LE(country);
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from("country_count"), moduleState.toBuffer(), countryBytes],
+      MOD_COUNTRY_CAP,
+    )[0];
+  }
+
+  private async initializeCountryCount(
+    moduleState: PublicKey,
+    country: number,
+  ): Promise<TransactionInstruction> {
+    const admin = this.provider.wallet.publicKey;
+    const program = this.getModuleProgram(MOD_COUNTRY_CAP);
+    return (program.methods as unknown as FactoryProgramMethods)
+      .initializeCountryCount(country)
+      .accounts({
+        owner: admin,
+        moduleState,
+        countryCount: this.getCountryCountPda(moduleState, country),
+        systemProgram: SystemProgram.programId,
+      })
+      .instruction();
+  }
+
   private async buildComplianceModuleInitializationTransactions(
     moduleProgramIds: string[],
     tokenMint: PublicKey,
@@ -459,6 +486,7 @@ export class FactoryService {
     for (const moduleProgramIdStr of moduleProgramIds) {
       const moduleProgramId = new PublicKey(moduleProgramIdStr);
       const moduleState = this.getModuleStatePda(moduleProgramId, tokenMint);
+      const params = moduleParams[moduleProgramId.toBase58()] ?? {};
       const existingModule = await this.provider.connection.getAccountInfo(
         moduleState,
         "confirmed",
@@ -470,10 +498,28 @@ export class FactoryService {
             moduleProgramId,
             tokenMint,
             moduleState,
-            moduleParams[moduleProgramId.toBase58()] ?? {},
+            params,
             decimals,
           ),
         );
+      }
+
+      if (moduleProgramId.equals(MOD_COUNTRY_CAP)) {
+        const countries = new Set(
+          this.parseCountryCaps(params.country_caps).map(({ country }) => country),
+        );
+        for (const country of countries) {
+          const countryCount = this.getCountryCountPda(moduleState, country);
+          const existingCount = await this.provider.connection.getAccountInfo(
+            countryCount,
+            "confirmed",
+          );
+          if (!existingCount) {
+            instructions.push(
+              await this.initializeCountryCount(moduleState, country),
+            );
+          }
+        }
       }
 
       // Stateful modules must accept CPI mutations from the compliance PDA after binding.
@@ -1351,12 +1397,16 @@ export class FactoryService {
 
   private parseCountryList(value: unknown): number[] {
     if (Array.isArray(value)) {
-      return value.map((item) => Number(item)).filter((item) => Number.isFinite(item));
+      return value
+        .map((item) => Number(item))
+        .filter((item) => Number.isInteger(item) && item >= 0 && item <= 65_535);
     }
     return String(value ?? "")
       .split(",")
-      .map((item) => Number(item.trim()))
-      .filter((item) => Number.isFinite(item));
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item) => Number(item))
+      .filter((item) => Number.isInteger(item) && item >= 0 && item <= 65_535);
   }
 
   private parseCountryCaps(value: unknown): Array<{ country: number; cap: BN }> {
@@ -1366,15 +1416,17 @@ export class FactoryService {
           const record = entry as { country?: unknown; cap?: unknown };
           return { country: Number(record.country), cap: this.toBn(record.cap, new BN(0)) };
         })
-        .filter((entry) => Number.isFinite(entry.country));
+        .filter((entry) => Number.isInteger(entry.country) && entry.country >= 0 && entry.country <= 65_535);
     }
     return String(value ?? "")
       .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean)
       .map((entry) => {
         const [country, cap] = entry.split(":").map((item) => item.trim());
         return { country: Number(country), cap: this.toBn(cap, new BN(0)) };
       })
-      .filter((entry) => Number.isFinite(entry.country));
+      .filter((entry) => Number.isInteger(entry.country) && entry.country >= 0 && entry.country <= 65_535);
   }
 
   private chunkPublicKeys(keys: PublicKey[], size: number): PublicKey[][] {

@@ -221,10 +221,60 @@ describe("fracks-compliance phase 3", () => {
     ).to.equal(true);
   });
 
-  it("updates mutable module state through compliance post-hooks when hook authority is configured", async () => {
+  it("fails closed when daily-limit usage support state is missing", async () => {
     const owner = anchor.web3.Keypair.generate();
+    const trackedWallet = anchor.web3.Keypair.generate();
     const tokenMint = anchor.web3.Keypair.generate().publicKey;
     await airdrop(owner.publicKey);
+
+    const [complianceState] = findCompliancePda(tokenMint);
+    const [dailyLimitState] = findDailyLimitPda(tokenMint);
+
+    await compliance.methods
+      .initializeCompliance(tokenMint)
+      .accounts({ owner: owner.publicKey, complianceState, systemProgram: anchor.web3.SystemProgram.programId })
+      .signers([owner])
+      .rpc();
+
+    await dailyLimit.methods
+      .initializeModule(tokenMint, new BN(100))
+      .accounts({ owner: owner.publicKey, moduleState: dailyLimitState, systemProgram: anchor.web3.SystemProgram.programId })
+      .signers([owner])
+      .rpc();
+
+    await dailyLimit.methods
+      .setHookAuthority(complianceState)
+      .accounts({ owner: owner.publicKey, moduleState: dailyLimitState })
+      .signers([owner])
+      .rpc();
+
+    await compliance.methods
+      .bindModule(dailyLimitState)
+      .accounts({ owner: owner.publicKey, complianceState })
+      .signers([owner])
+      .rpc();
+
+    try {
+      await compliance.methods
+        .transferred(trackedWallet.publicKey, owner.publicKey, new BN(25), new BN(75), new BN(25), 840, 840)
+        .accounts({ complianceState })
+        .remainingAccounts([
+          { pubkey: dailyLimitState, isSigner: false, isWritable: true },
+          { pubkey: dailyLimit.programId, isSigner: false, isWritable: false },
+        ])
+        .rpc();
+      expect.fail("expected missing daily-limit support account failure");
+    } catch (error: any) {
+      expect(String(error)).to.contain("Missing module support account");
+    }
+  });
+
+  it("updates mutable module state through compliance post-hooks when hook authority is configured", async () => {
+    const owner = anchor.web3.Keypair.generate();
+    const supportPayer = anchor.web3.Keypair.generate();
+    const tokenMint = anchor.web3.Keypair.generate().publicKey;
+    await airdrop(owner.publicKey);
+    await airdrop(supportPayer.publicKey);
 
     const [complianceState] = findCompliancePda(tokenMint);
     const [maxInvestorsState] = findMaxInvestorsPda(tokenMint);
@@ -255,12 +305,12 @@ describe("fracks-compliance phase 3", () => {
     await dailyLimit.methods
       .initializeWalletUsage(owner.publicKey)
       .accounts({
-        owner: owner.publicKey,
+        owner: supportPayer.publicKey,
         moduleState: dailyLimitState,
         walletUsage: dailyUsageState,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
-      .signers([owner])
+      .signers([supportPayer])
       .rpc();
 
     await supplyCap.methods
@@ -278,12 +328,12 @@ describe("fracks-compliance phase 3", () => {
     await countryCap.methods
       .initializeCountryCount(840)
       .accounts({
-        owner: owner.publicKey,
+        owner: supportPayer.publicKey,
         moduleState: countryCapState,
         countryCount: usCountryCount,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
-      .signers([owner])
+      .signers([supportPayer])
       .rpc();
 
     await maxInvestors.methods

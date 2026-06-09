@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useCallback, useMemo, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
 import { TrexClient } from '@/lib/trex-client';
 
 interface AppState {
@@ -12,7 +12,7 @@ interface AppState {
   isConnecting: boolean;
   
   // Token state
-  tokenInfo: any | null;
+  tokenInfo: unknown | null;
   userBalance: string;
   totalSupply: string;
   
@@ -27,7 +27,7 @@ interface AppContextType extends AppState {
   clearWalletState: () => void;
   
   // Token actions
-  setTokenData: (info: any, supply: string, balance: string) => void;
+  setTokenData: (info: unknown, supply: string, balance: string) => void;
   clearTokenData: () => void;
   
   // UI actions
@@ -55,6 +55,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Wallet actions
   const setWalletState = useCallback((address: string | null, client: TrexClient | null, balance: string) => {
     setState(prev => {
+      const walletChanged = prev.address !== address;
       const nextIsConnected = !!address;
       if (
         prev.address === address &&
@@ -73,6 +74,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         balance,
         isConnected: nextIsConnected,
         isConnecting: false,
+        tokenInfo: walletChanged ? null : prev.tokenInfo,
+        userBalance: walletChanged ? '0' : prev.userBalance,
+        totalSupply: walletChanged ? '0' : prev.totalSupply,
       };
     });
   }, []);
@@ -112,7 +116,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Token actions
-  const setTokenData = useCallback((info: any, supply: string, balance: string) => {
+  const setTokenData = useCallback((info: unknown, supply: string, balance: string) => {
     setState(prev => ({
       ...prev,
       tokenInfo: info,

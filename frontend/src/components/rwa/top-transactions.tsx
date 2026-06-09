@@ -6,13 +6,16 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   BadgeCheck,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   ExternalLink,
   ShieldCheck,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/backend";
-import { getSolscanTxUrl, shortTx } from "@/lib/solscan";
+import { getSolscanTxUrl } from "@/lib/solscan";
 import type { TokenPurchaseRequest } from "@/types/token-purchase-request";
 
 interface Transaction {
@@ -28,6 +31,7 @@ interface Transaction {
 
 interface TopTransactionsProps {
   limit?: number;
+  pageSize?: number;
 }
 
 type ActivityLog = {
@@ -434,9 +438,16 @@ function buildActivityTransactions(logs: ActivityLog[]): Transaction[] {
 function buildLedgerTransactions(entries: BlockchainTransaction[]): Transaction[] {
   return entries.map((entry) => ({
     hash: entry.txHash,
-    type: entry.actionType.includes("CLAIM") ? "claim" as const : "activity" as const,
+    type: entry.actionType.includes("BURN")
+      ? "burn" as const
+      : entry.actionType.includes("CLAIM")
+        ? "claim" as const
+        : "activity" as const,
     label:
       {
+        TOKENS_BURNED: "Tokens Burned",
+        WALLET_FROZEN: "Wallet Frozen",
+        WALLET_UNFROZEN: "Wallet Unfrozen",
         INVESTOR_FID_CREATED: "Investor FID Created",
         INVESTOR_FID_UPDATED: "Investor FID Updated",
         ISSUER_FID_CREATED: "Issuer FID Created",
@@ -446,15 +457,21 @@ function buildLedgerTransactions(entries: BlockchainTransaction[]): Transaction[
       }[entry.actionType] || entry.actionType.replace(/_/g, " "),
     from: entry.actorWallet || "system",
     to: entry.entityId || entry.entityType || "record",
-    amount: entry.entityType || "On-chain",
+    amount:
+      {
+        TOKENS_BURNED: "Burn",
+        WALLET_FROZEN: "Freeze",
+        WALLET_UNFROZEN: "Unfreeze",
+      }[entry.actionType] || entry.assetId || "On-chain",
     timestamp: new Date(entry.occurredAt),
     asset: entry.assetId || shorten(entry.tokenContract) || "Ledger",
   }));
 }
 
-export function TopTransactions({ limit }: TopTransactionsProps) {
+export function TopTransactions({ limit, pageSize = 10 }: TopTransactionsProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -517,10 +534,22 @@ export function TopTransactions({ limit }: TopTransactionsProps) {
     };
   }, []);
 
+  const sourceTransactions =
+    typeof limit === "number" ? transactions.slice(0, limit) : transactions;
+  const totalPages = Math.max(
+    1,
+    Math.ceil(sourceTransactions.length / pageSize),
+  );
+  const effectivePage = Math.min(page, totalPages - 1);
+  const displayTransactions = sourceTransactions.slice(
+    effectivePage * pageSize,
+    effectivePage * pageSize + pageSize,
+  );
+
   if (loading) {
     return (
       <div className="space-y-3">
-        {[...Array(3)].map((_, i) => (
+        {[...Array(pageSize)].map((_, i) => (
           <div key={i} className="h-16 bg-gray-100 rounded-lg animate-pulse" />
         ))}
       </div>
@@ -544,70 +573,89 @@ export function TopTransactions({ limit }: TopTransactionsProps) {
   }
 
   return (
-    <div className="space-y-3">
-      {(typeof limit === "number" ? transactions.slice(0, limit) : transactions).map((tx, index) => (
-        <motion.div
-          key={tx.hash}
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: index * 0.06 }}
-          className="grid min-h-[76px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-slate-200/80 p-3 transition-colors hover:bg-blue-50/40"
-        >
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="shrink-0 rounded-lg bg-[#2A5FA6]/10 p-2">
-              {tx.type === "claim" ? (
-                <ShieldCheck className="h-4 w-4 text-[#BC953D]" />
-              ) : tx.type === "activity" ? (
-                <BadgeCheck className="h-4 w-4 text-[#2A5FA6]" />
-              ) : tx.type === "burn" ? (
-                <ArrowDownLeft className="h-4 w-4 text-red-600" />
-              ) : (
-                <ArrowUpRight className="h-4 w-4 text-[#2A5FA6]" />
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <p className="max-w-32 truncate text-sm font-medium xl:max-w-40">
+    <div className="flex flex-1 flex-col">
+      <div className="space-y-3">
+        {displayTransactions.map((tx, index) => (
+          <motion.div
+            key={tx.hash}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: index * 0.04 }}
+            className="grid min-h-17 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-lg border border-slate-200/80 px-3 py-2.5 transition-colors hover:bg-blue-50/40"
+          >
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#2A5FA6]/10">
+                {tx.type === "claim" ? (
+                  <ShieldCheck className="h-4 w-4 text-[#BC953D]" />
+                ) : tx.type === "activity" ? (
+                  <BadgeCheck className="h-4 w-4 text-[#2A5FA6]" />
+                ) : tx.type === "burn" ? (
+                  <ArrowDownLeft className="h-4 w-4 text-red-600" />
+                ) : (
+                  <ArrowUpRight className="h-4 w-4 text-[#2A5FA6]" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-slate-900">
                   {tx.label}
                 </p>
-                <span className="min-w-0 truncate text-xs text-gray-500">
-                  {tx.asset}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <span className="min-w-0 truncate">{shorten(tx.from)}</span>
-                <span className="shrink-0">-&gt;</span>
-                <span className="min-w-0 truncate">{shorten(tx.to)}</span>
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <span className="min-w-0 truncate">{shorten(tx.from)}</span>
+                  <span className="shrink-0">-&gt;</span>
+                  <span className="min-w-0 truncate">{shorten(tx.to)}</span>
+                </div>
               </div>
             </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2 text-right">
-            <a
-              href={getSolscanTxUrl(tx.hash)}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-lg border border-slate-200 p-2 text-[#2A5FA6] transition-colors hover:bg-blue-50"
-              aria-label="Open transaction"
-            >
-              <ExternalLink className="h-4 w-4" />
-            </a>
-            <div className="w-32">
-              <p className="truncate text-sm font-semibold">{tx.amount}</p>
+            <div className="flex shrink-0 items-center gap-3 text-right">
+              <div className="min-w-28">
+                <p className="truncate text-sm font-semibold text-slate-900">
+                  {tx.amount}
+                </p>
+                <p className="truncate text-xs text-gray-500">
+                  {formatDistanceToNow(tx.timestamp, { addSuffix: true })}
+                </p>
+              </div>
               <a
-                className="block truncate font-mono text-xs text-[#2A5FA6] underline-offset-2 hover:underline"
                 href={getSolscanTxUrl(tx.hash)}
-                rel="noreferrer"
                 target="_blank"
+                rel="noreferrer"
+                className="rounded-lg border border-slate-200 p-2 text-[#2A5FA6] transition-colors hover:bg-blue-50"
+                aria-label="Open transaction"
               >
-                {shortTx(tx.hash)}
+                <ExternalLink className="h-4 w-4" />
               </a>
-              <p className="text-xs text-gray-500">
-                {formatDistanceToNow(tx.timestamp, { addSuffix: true })}
-              </p>
             </div>
-          </div>
-        </motion.div>
-      ))}
+          </motion.div>
+        ))}
+      </div>
+
+      <div className="mt-4 flex items-center justify-end gap-2">
+        <span className="text-xs text-slate-500">
+          Page {effectivePage + 1} of {totalPages}
+        </span>
+        <Button
+          type="button"
+          size="icon"
+          variant="outline"
+          className="h-8 w-8"
+          disabled={effectivePage === 0}
+          onClick={() => setPage(Math.max(0, effectivePage - 1))}
+          aria-label="Previous transactions page"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant="outline"
+          className="h-8 w-8"
+          disabled={effectivePage >= totalPages - 1}
+          onClick={() => setPage(Math.min(totalPages - 1, effectivePage + 1))}
+          aria-label="Next transactions page"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
     </div>
   );
 }

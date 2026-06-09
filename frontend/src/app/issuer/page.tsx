@@ -7,7 +7,12 @@ import { useConnection, useWallet as useSolanaWallet } from "@solana/wallet-adap
 import { createAnchorProvider } from "@/lib/anchor";
 import { IdentityService } from "@/services/identity";
 import { useActiveTokenHolders } from "@/hooks/useBalance";
-import { useMintTokens } from "@/hooks/useTokenActions";
+import {
+  useBurnTokens,
+  useFreezeWallet,
+  useMintTokens,
+  useUnfreezeWallet,
+} from "@/hooks/useTokenActions";
 import {
   Card,
   CardContent,
@@ -16,6 +21,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -26,7 +32,11 @@ import {
 } from "@/components/ui/table";
 import { apiFetch } from "@/lib/backend";
 import { TransactionToastLink } from "@/lib/solscan";
-import { recordBlockchainTransactionSafely } from "@/lib/blockchain-transactions";
+import {
+  recordBlockchainTransaction,
+  recordBlockchainTransactionWithSolBalanceImpact,
+  recordBlockchainTransactionSafely,
+} from "@/lib/blockchain-transactions";
 import { PublicKey } from "@solana/web3.js";
 import { toast } from "sonner";
 import type { TokenPurchaseRequest } from "@/types/token-purchase-request";
@@ -65,6 +75,7 @@ type TokenTransferRequest = {
   assetId?: string | null;
   tokenContract: string;
   fromWallet: string;
+  sellerWallet?: string;
   toWallet?: string;
   buyerWallet?: string;
   amount?: number;
@@ -119,6 +130,30 @@ function formatHolderAmount(amount: bigint, decimals: number) {
   return `${whole.toLocaleString()}.${fractionText}`;
 }
 
+function parseTokenAmountInput(value: string, decimals: number) {
+  const raw = value.trim();
+  if (!/^\d+(\.\d+)?$/.test(raw)) {
+    throw new Error("Enter a valid burn amount.");
+  }
+
+  const [wholePart, fractionPart = ""] = raw.split(".");
+  if (fractionPart.length > decimals) {
+    throw new Error(`This token supports up to ${decimals} decimal places.`);
+  }
+
+  const scale = BigInt(10) ** BigInt(decimals);
+  const whole = BigInt(wholePart || "0") * scale;
+  const fractionText = fractionPart.padEnd(decimals, "0");
+  const fraction = fractionText ? BigInt(fractionText) : BigInt(0);
+  const amount = whole + fraction;
+
+  if (amount <= BigInt(0)) {
+    throw new Error("Burn amount must be greater than zero.");
+  }
+
+  return amount;
+}
+
 function formatOptionalCurrency(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value)
     ? `$${value.toLocaleString()}`
@@ -127,13 +162,25 @@ function formatOptionalCurrency(value: number | null | undefined) {
 
 function IssuerAssetHoldersTable({
   tokenContract,
+  assetId,
+  issuerWallet,
+  tokenSymbol,
   fallbackBalances,
   loadingFallback,
 }: {
   tokenContract: string;
+  assetId?: string | number | null;
+  issuerWallet?: string | null;
+  tokenSymbol?: string;
   fallbackBalances: IndexedBalance[];
   loadingFallback: boolean;
 }) {
+  const burnTokens = useBurnTokens();
+  const freezeWallet = useFreezeWallet();
+  const unfreezeWallet = useUnfreezeWallet();
+  const [burnAmounts, setBurnAmounts] = useState<Record<string, string>>({});
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const { connection } = useConnection();
   const mint = useMemo(() => {
     try {
       return new PublicKey(tokenContract);
@@ -142,53 +189,287 @@ function IssuerAssetHoldersTable({
     }
   }, [tokenContract]);
   const holdersQuery = useActiveTokenHolders(mint, null);
-  const liveHolders = holdersQuery.data ?? [];
-  const fallbackHolders = fallbackBalances.filter((entry) =>
-    hasNonZeroBalance(entry.balance),
+  const liveHolders = useMemo(
+    () => holdersQuery.data ?? [],
+    [holdersQuery.data],
+  );
+  const fallbackHolders = useMemo(
+    () =>
+      fallbackBalances.filter((entry) => hasNonZeroBalance(entry.balance)),
+    [fallbackBalances],
   );
   const isLoading = holdersQuery.isLoading || loadingFallback;
+  const fallbackDecimals = liveHolders[0]?.decimals ?? 0;
+
+  const holderRows = useMemo(() => {
+    if (liveHolders.length > 0) {
+      return liveHolders.map((holder) => ({
+        wallet: holder.wallet,
+        investorLabel:
+          holder.identityStatus === "active" ? "Active investor" : "Investor",
+        balanceText: formatHolderAmount(holder.amount, holder.decimals),
+        balanceBaseUnits: holder.amount,
+        decimals: holder.decimals,
+      }));
+    }
+
+    return fallbackHolders.map((holder) => {
+      let balanceBaseUnits: bigint | null = null;
+      try {
+        balanceBaseUnits = BigInt(holder.balance);
+      } catch {
+        balanceBaseUnits = null;
+      }
+
+      return {
+        wallet: holder.walletAddress,
+        investorLabel: "Indexed investor",
+        balanceText:
+          balanceBaseUnits !== null
+            ? formatHolderAmount(balanceBaseUnits, fallbackDecimals)
+            : holder.balance,
+        balanceBaseUnits,
+        decimals: fallbackDecimals,
+      };
+    });
+  }, [fallbackDecimals, fallbackHolders, liveHolders]);
+
+  const recordHolderAction = async ({
+    signature,
+    actionType,
+    wallet,
+    amount,
+    displayAmount,
+  }: {
+    signature: string;
+    actionType: string;
+    wallet: string;
+    amount?: bigint;
+    displayAmount?: string;
+  }) => {
+    const input = {
+      txHash: signature,
+      actionType,
+      actorWallet: issuerWallet ?? undefined,
+      entityType: "token_holder",
+      entityId: wallet,
+      assetId:
+        assetId === null || assetId === undefined ? undefined : String(assetId),
+      tokenContract,
+      metadata: {
+        holderWallet: wallet,
+        tokenSymbol,
+        amount: amount?.toString(),
+        displayAmount,
+      },
+    };
+
+    if (issuerWallet) {
+      await recordBlockchainTransactionWithSolBalanceImpact(
+        input,
+        connection,
+        issuerWallet,
+      );
+      return;
+    }
+
+    await recordBlockchainTransaction(input);
+  };
+
+  const handleBurn = async (holder: (typeof holderRows)[number]) => {
+    if (!mint) {
+      toast.error("Invalid token mint.");
+      return;
+    }
+
+    const displayAmount = burnAmounts[holder.wallet]?.trim() ?? "";
+    try {
+      const amount = parseTokenAmountInput(displayAmount, holder.decimals);
+      if (
+        holder.balanceBaseUnits !== null &&
+        amount > holder.balanceBaseUnits
+      ) {
+        toast.error("Burn amount exceeds the holder balance.");
+        return;
+      }
+
+      setBusyAction(`burn:${holder.wallet}`);
+      const signature = await burnTokens.mutateAsync({
+        mint,
+        from: new PublicKey(holder.wallet),
+        amount,
+      });
+
+      try {
+        await recordHolderAction({
+          signature,
+          actionType: "TOKENS_BURNED",
+          wallet: holder.wallet,
+          amount,
+          displayAmount,
+        });
+      } catch {
+        toast.error("Burn succeeded, but failed to save the transaction hash.");
+      }
+      setBurnAmounts((current) => ({ ...current, [holder.wallet]: "" }));
+      await holdersQuery.refetch();
+      toast.success("Tokens burned", {
+        description: <TransactionToastLink signature={signature} />,
+      });
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to burn tokens");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleFreeze = async (holder: (typeof holderRows)[number]) => {
+    if (!mint) {
+      toast.error("Invalid token mint.");
+      return;
+    }
+
+    try {
+      setBusyAction(`freeze:${holder.wallet}`);
+      const signature = await freezeWallet.mutateAsync({
+        mint,
+        wallet: new PublicKey(holder.wallet),
+      });
+      try {
+        await recordHolderAction({
+          signature,
+          actionType: "WALLET_FROZEN",
+          wallet: holder.wallet,
+        });
+      } catch {
+        toast.error("Freeze succeeded, but failed to save the transaction hash.");
+      }
+      await holdersQuery.refetch();
+      toast.success("Wallet frozen", {
+        description: <TransactionToastLink signature={signature} />,
+      });
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to freeze wallet");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleUnfreeze = async (holder: (typeof holderRows)[number]) => {
+    if (!mint) {
+      toast.error("Invalid token mint.");
+      return;
+    }
+
+    try {
+      setBusyAction(`unfreeze:${holder.wallet}`);
+      const signature = await unfreezeWallet.mutateAsync({
+        mint,
+        wallet: new PublicKey(holder.wallet),
+      });
+      try {
+        await recordHolderAction({
+          signature,
+          actionType: "WALLET_UNFROZEN",
+          wallet: holder.wallet,
+        });
+      } catch {
+        toast.error(
+          "Unfreeze succeeded, but failed to save the transaction hash.",
+        );
+      }
+      await holdersQuery.refetch();
+      toast.success("Wallet unfrozen", {
+        description: <TransactionToastLink signature={signature} />,
+      });
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to unfreeze wallet",
+      );
+    } finally {
+      setBusyAction(null);
+    }
+  };
 
   return (
-    <Table>
+    <div className="space-y-3">
+      <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+        Burn, Freeze, and Unfreeze are issuer wallet transactions. Freeze creates
+        a refundable freeze-state account, Unfreeze closes it and returns the
+        rent, and Burn normally only pays the network fee.
+      </div>
+      <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Investor</TableHead>
           <TableHead>Wallet</TableHead>
           <TableHead className="text-right">Balance</TableHead>
+          <TableHead className="text-right">Controls</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        {liveHolders.length > 0 ? (
-          liveHolders.map((holder) => (
+        {holderRows.length > 0 ? (
+          holderRows.map((holder) => (
             <TableRow key={holder.wallet}>
-              <TableCell>
-                {holder.identityStatus === "active"
-                  ? "Active investor"
-                  : "Investor"}
-              </TableCell>
+              <TableCell>{holder.investorLabel}</TableCell>
               <TableCell className="font-mono text-xs">
                 {holder.wallet}
               </TableCell>
               <TableCell className="text-right font-medium">
-                {formatHolderAmount(holder.amount, holder.decimals)}
+                {holder.balanceText}
               </TableCell>
-            </TableRow>
-          ))
-        ) : fallbackHolders.length > 0 ? (
-          fallbackHolders.map((holder) => (
-            <TableRow key={holder.walletAddress}>
-              <TableCell>Indexed investor</TableCell>
-              <TableCell className="font-mono text-xs">
-                {holder.walletAddress}
-              </TableCell>
-              <TableCell className="text-right font-medium">
-                {holder.balance}
+              <TableCell>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <Input
+                    className="h-9 w-28"
+                    inputMode="decimal"
+                    min="0"
+                    placeholder="Amount"
+                    value={burnAmounts[holder.wallet] ?? ""}
+                    onChange={(event) =>
+                      setBurnAmounts((current) => ({
+                        ...current,
+                        [holder.wallet]: event.target.value,
+                      }))
+                    }
+                  />
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={
+                      busyAction !== null || burnTokens.isPending || !mint
+                    }
+                    onClick={() => handleBurn(holder)}
+                  >
+                    Burn
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={
+                      busyAction !== null || freezeWallet.isPending || !mint
+                    }
+                    onClick={() => handleFreeze(holder)}
+                  >
+                    Freeze
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={
+                      busyAction !== null || unfreezeWallet.isPending || !mint
+                    }
+                    onClick={() => handleUnfreeze(holder)}
+                  >
+                    Unfreeze
+                  </Button>
+                </div>
               </TableCell>
             </TableRow>
           ))
         ) : (
           <TableRow>
-            <TableCell colSpan={3} className="text-sm text-slate-500">
+            <TableCell colSpan={4} className="text-sm text-slate-500">
               {isLoading
                 ? "Loading holders..."
                 : "No current token holders found for this asset."}
@@ -196,7 +477,8 @@ function IssuerAssetHoldersTable({
           </TableRow>
         )}
       </TableBody>
-    </Table>
+      </Table>
+    </div>
   );
 }
 
@@ -342,13 +624,13 @@ export default function IssuerPage() {
             ...listingWhitelist.map((request) => ({
               ...request,
               source: "listing" as const,
-              fromWallet: request.fromWallet || (request as any).sellerWallet,
+              fromWallet: request.fromWallet || request.sellerWallet || "",
               toWallet: request.toWallet || request.buyerWallet,
             })),
             ...listingActivation.map((request) => ({
               ...request,
               source: "listing" as const,
-              fromWallet: request.fromWallet || (request as any).sellerWallet,
+              fromWallet: request.fromWallet || request.sellerWallet || "",
               toWallet: request.toWallet || request.buyerWallet,
             })),
           ]);
@@ -475,7 +757,7 @@ export default function IssuerPage() {
               irpOwner: irpOwnerLc,
               agents: agentsLc,
             };
-          } catch (e) {
+          } catch {
             next[key] = {
               loading: false,
               exists: false,
@@ -932,8 +1214,11 @@ export default function IssuerPage() {
                                         [key]: { ...cur[key], exists: true, isActive: false },
                                       }));
                                       toast.success("Investor whitelisted (pending activation)");
-                                    } catch (err: any) {
-                                      const message = err?.message ?? "Failed to register identity";
+                                    } catch (err: unknown) {
+                                      const message =
+                                        err instanceof Error
+                                          ? err.message
+                                          : "Failed to register identity";
                                       if (message.includes("WalletAlreadyRegistered") || message.includes("Wallet is already registered")) {
                                         try {
                                           const mint = new PublicKey(request.tokenContract);
@@ -999,8 +1284,12 @@ export default function IssuerPage() {
                                           [key]: { ...cur[key], isActive: true },
                                         }));
                                         toast.success("Identity activated");
-                                      } catch (err: any) {
-                                        toast.error(err?.message ?? "Failed to activate identity");
+                                      } catch (err: unknown) {
+                                        toast.error(
+                                          err instanceof Error
+                                            ? err.message
+                                            : "Failed to activate identity",
+                                        );
                                       }
                                     }}
                                   >
@@ -1156,6 +1445,9 @@ export default function IssuerPage() {
                     <CardContent>
                       <IssuerAssetHoldersTable
                         tokenContract={asset.tokenContract}
+                        assetId={asset.factoryAssetId ?? asset.id}
+                        issuerWallet={walletAddress}
+                        tokenSymbol={asset.symbol}
                         fallbackBalances={tokenBalances}
                         loadingFallback={loadingBalances}
                       />

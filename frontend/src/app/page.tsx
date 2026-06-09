@@ -348,15 +348,11 @@ export default function Page() {
       <div className="grid grid-cols-1 items-stretch gap-4 pt-4 xl:grid-cols-[minmax(460px,1.08fr)_minmax(380px,0.92fr)]">
         <div className="glass-card flex min-w-0 flex-col rounded-[20px] p-6">
           <h1 className="text-2xl font-semibold mb-6">Tokenized Assets</h1>
-          <div className="h-[1308px] min-h-0 overflow-auto pr-1">
-            <AssetsList assets={assets} loading={loading} />
-          </div>
+          <AssetsList assets={assets} loading={loading} pageSize={8} />
         </div>
         <div className="glass-card flex min-w-0 flex-col rounded-[20px] p-6">
           <h1 className="text-2xl font-semibold mb-6">Top Transactions</h1>
-          <div className="h-[1308px] min-h-0 overflow-auto pr-1">
-            <TopTransactions />
-          </div>
+          <TopTransactions pageSize={10} />
         </div>
       </div>
     </div>

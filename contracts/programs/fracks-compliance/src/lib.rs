@@ -267,32 +267,31 @@ pub mod fracks_compliance {
                     .find(|account| account.key() == *module_info.owner)
                     .cloned()
                     .ok_or_else(|| error!(FracksComplianceError::MissingModuleProgramAccount))?;
-                if let Ok(usage_account) = find_daily_usage_account(
+                let usage_account = find_daily_usage_account(
                     ctx.remaining_accounts,
                     &module_info.key(),
                     module_info.owner,
                     &_from,
-                ) {
-                    let bump_seed = [ctx.accounts.compliance_state.bump];
-                    let signer_seeds: [&[u8]; 3] = [
-                        b"compliance_state",
-                        ctx.accounts.compliance_state.token_mint.as_ref(),
-                        &bump_seed,
-                    ];
-                    mod_daily_limit::cpi::transferred(
-                        CpiContext::new_with_signer(
-                            program,
-                            MutateDailyLimitModule {
-                                authority: ctx.accounts.compliance_state.to_account_info(),
-                                module_state: module_info.clone(),
-                                wallet_usage: usage_account,
-                            },
-                            &[&signer_seeds],
-                        ),
-                        _from,
-                        amount,
-                    )?;
-                }
+                )?;
+                let bump_seed = [ctx.accounts.compliance_state.bump];
+                let signer_seeds: [&[u8]; 3] = [
+                    b"compliance_state",
+                    ctx.accounts.compliance_state.token_mint.as_ref(),
+                    &bump_seed,
+                ];
+                mod_daily_limit::cpi::transferred(
+                    CpiContext::new_with_signer(
+                        program,
+                        MutateDailyLimitModule {
+                            authority: ctx.accounts.compliance_state.to_account_info(),
+                            module_state: module_info.clone(),
+                            wallet_usage: usage_account,
+                        },
+                        &[&signer_seeds],
+                    ),
+                    _from,
+                    amount,
+                )?;
                 continue;
             }
 

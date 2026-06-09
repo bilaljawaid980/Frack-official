@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { PublicKey } from "@solana/web3.js";
 import { toast } from "sonner";
 import {
@@ -134,6 +134,7 @@ function formatBaseUnits(rawAmount: string, decimals: number) {
 
 export default function InvestorDashboardPage() {
   const params = useParams();
+  const router = useRouter();
   const { address, trexClient, connectWallet, isConnected } = useWallet();
   const anchorProvider = useAnchorProvider();
   const routeWallet = typeof params?.id === "string" ? params.id : undefined;
@@ -170,6 +171,11 @@ export default function InvestorDashboardPage() {
   const isOwnInvestorPage = Boolean(
     address && investorWallet && address === investorWallet,
   );
+
+  useEffect(() => {
+    if (!address || !routeWallet || address === routeWallet) return;
+    router.replace(`/investor/${address}`);
+  }, [address, routeWallet, router]);
 
   useEffect(() => {
     let isActive = true;

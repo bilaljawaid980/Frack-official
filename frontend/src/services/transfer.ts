@@ -50,9 +50,38 @@ import TokenIdl from "@/idl/fracks_token.json";
 import FidIdl from "@/idl/fracks_fid.json";
 import ComplianceIdl from "@/idl/fracks_compliance.json";
 import CtrIdl from "@/idl/fracks_ctr.json";
+import ModCountryCapIdl from "@/idl/mod_country_cap.json";
 import ModDailyLimitIdl from "@/idl/mod_daily_limit.json";
 
 type RemainingAccount = { pubkey: PublicKey; isSigner: boolean; isWritable: boolean };
+type SupportAccountRpcBuilder = {
+  accounts(accounts: Record<string, unknown>): {
+    rpc(options?: { commitment?: "confirmed" }): Promise<string>;
+  };
+};
+type ComplianceProgramAccounts = {
+  complianceState: { fetch(address: PublicKey): Promise<{ modules: PublicKey[] }> };
+};
+type DailyLimitProgramAccounts = {
+  dailyTransferLimitModule: { fetch(address: PublicKey): Promise<{ owner: PublicKey }> };
+};
+type CountryCapProgramAccounts = {
+  investorCountryCapModule: { fetch(address: PublicKey): Promise<{ owner: PublicKey }> };
+};
+type TokenProgramAccounts = {
+  tokenState: {
+    fetch(address: PublicKey): Promise<{
+      compliance: PublicKey;
+      identityRegistry: PublicKey;
+    }>;
+  };
+};
+type DailyLimitProgramMethods = {
+  initializeWalletUsage(wallet: PublicKey): SupportAccountRpcBuilder;
+};
+type CountryCapProgramMethods = {
+  initializeCountryCount(country: number): SupportAccountRpcBuilder;
+};
 type TransferInstructions = {
   approveIx: TransactionInstruction;
   transferIx: TransactionInstruction;
@@ -435,7 +464,7 @@ export class TransferService {
     try {
       const ids = await this.getProgramIds();
       await this.prepareRecipientTokenAccount(mint, from, to);
-      await this.prepareTransferSupportAccounts(mint, from, ids);
+      await this.prepareTransferSupportAccounts(mint, from, to, ids);
 
       const { approveIx, transferIx } = await this._buildTransferInstructions(
         mint,
@@ -953,7 +982,9 @@ export class TransferService {
       } as Idl,
       this.provider
     );
-    const compliance = await (complianceProgram.account as any).complianceState.fetch(
+    const complianceAccounts =
+      complianceProgram.account as unknown as ComplianceProgramAccounts;
+    const compliance = await complianceAccounts.complianceState.fetch(
       complianceState
     );
     const moduleAccounts = compliance.modules as PublicKey[];
@@ -1124,17 +1155,23 @@ export class TransferService {
   private async prepareTransferSupportAccounts(
     mint: PublicKey,
     sender: PublicKey,
+    recipient: PublicKey,
     ids: TransferProgramIds
   ): Promise<void> {
     const tokenProgram = this.getTokenProgram(ids.token);
     const tokenState = this.getTokenStatePda(mint, ids.token);
-    const tokenStateAccount = await (tokenProgram.account as any).tokenState.fetch(
+    const tokenProgramAccounts =
+      tokenProgram.account as unknown as TokenProgramAccounts;
+    const tokenStateAccount = await tokenProgramAccounts.tokenState.fetch(
       tokenState
     );
     const complianceState = tokenStateAccount.compliance as PublicKey;
     const complianceProgram = new Program(ComplianceIdl as unknown as Idl, this.provider);
     const dailyProgram = new Program(ModDailyLimitIdl as unknown as Idl, this.provider);
-    const compliance = await (complianceProgram.account as any).complianceState.fetch(
+    const countryCapProgram = new Program(ModCountryCapIdl as unknown as Idl, this.provider);
+    const complianceAccounts =
+      complianceProgram.account as unknown as ComplianceProgramAccounts;
+    const compliance = await complianceAccounts.complianceState.fetch(
       complianceState
     );
     const moduleAccounts = compliance.modules as PublicKey[];
@@ -1142,42 +1179,102 @@ export class TransferService {
       moduleAccounts,
       "confirmed"
     );
+    const irpState = tokenStateAccount.identityRegistry as PublicKey;
+    const irsState = await this.deriveIrsStateFromIrp(irpState);
+    const [senderIdentity, recipientIdentity] = await Promise.all(
+      [sender, recipient].map(async (wallet) => {
+        const [walletIdentity] = PublicKey.findProgramAddressSync(
+          [SEED_WALLET_IDENTITY, irsState.toBuffer(), wallet.toBuffer()],
+          ids.irs,
+        );
+        const info = await this.connection.getAccountInfo(walletIdentity, "confirmed");
+        return info ? parseWalletIdentity(info.data) : null;
+      }),
+    );
 
     for (const [index, moduleAccount] of moduleAccounts.entries()) {
       const moduleInfo = moduleInfos[index];
-      if (!moduleInfo?.owner.equals(MOD_DAILY_LIMIT)) {
+      if (!moduleInfo) {
         continue;
       }
 
-      const [dailyUsage] = PublicKey.findProgramAddressSync(
-        [Buffer.from("daily_usage"), moduleAccount.toBuffer(), sender.toBuffer()],
-        MOD_DAILY_LIMIT
-      );
-      const existingUsage = await this.connection.getAccountInfo(dailyUsage, "confirmed");
-      if (existingUsage) {
-        continue;
+      if (moduleInfo.owner.equals(MOD_DAILY_LIMIT)) {
+        const [dailyUsage] = PublicKey.findProgramAddressSync(
+          [Buffer.from("daily_usage"), moduleAccount.toBuffer(), sender.toBuffer()],
+          MOD_DAILY_LIMIT
+        );
+        const existingUsage = await this.connection.getAccountInfo(dailyUsage, "confirmed");
+        if (existingUsage) {
+          continue;
+        }
+
+        const dailyLimitAccounts =
+          dailyProgram.account as unknown as DailyLimitProgramAccounts;
+        const moduleStateAccount = await dailyLimitAccounts.dailyTransferLimitModule.fetch(
+          moduleAccount
+        );
+        const moduleOwner = moduleStateAccount.owner as PublicKey;
+        try {
+          await (dailyProgram.methods as unknown as DailyLimitProgramMethods)
+            .initializeWalletUsage(sender)
+            .accounts({
+              owner: this.provider.wallet.publicKey,
+              moduleState: moduleAccount,
+              walletUsage: dailyUsage,
+              systemProgram: SystemProgram.programId,
+            })
+            .rpc({ commitment: "confirmed" });
+        } catch (err) {
+          throw new Error(
+            `Daily-limit support account ${dailyUsage.toBase58()} is missing and could not be initialized by ${this.provider.wallet.publicKey.toBase58()}. Upgrade the daily-limit module to allow deterministic support-account creation, or connect module owner ${moduleOwner.toBase58()} once to repair this legacy token. ${formatTransactionError(err)}`,
+          );
+        }
       }
 
-      const module = await (dailyProgram.account as any).dailyTransferLimitModule.fetch(
-        moduleAccount
-      );
-      const moduleOwner = module.owner as PublicKey;
-      if (!moduleOwner.equals(this.provider.wallet.publicKey)) {
-        // Some legacy suites have module state owned by the platform admin
-        // while investors sign transfers themselves. Do not block the transfer;
-        // the compliance program handles missing usage PDAs without failing.
-        continue;
-      }
+      if (moduleInfo.owner.equals(MOD_COUNTRY_CAP)) {
+        const countryCapAccounts =
+          countryCapProgram.account as unknown as CountryCapProgramAccounts;
+        const moduleStateAccount = await countryCapAccounts.investorCountryCapModule.fetch(
+          moduleAccount,
+        );
+        const moduleOwner = moduleStateAccount.owner as PublicKey;
+        const countries = new Set(
+          [senderIdentity?.country, recipientIdentity?.country].filter(
+            (country): country is number => country !== undefined,
+          ),
+        );
+        for (const country of countries) {
+          const countryBytes = Buffer.alloc(2);
+          countryBytes.writeUInt16LE(country);
+          const [countryCount] = PublicKey.findProgramAddressSync(
+            [Buffer.from("country_count"), moduleAccount.toBuffer(), countryBytes],
+            MOD_COUNTRY_CAP,
+          );
+          const existingCount = await this.connection.getAccountInfo(
+            countryCount,
+            "confirmed",
+          );
+          if (existingCount) {
+            continue;
+          }
 
-      await (dailyProgram.methods as any)
-        .initializeWalletUsage(sender)
-        .accounts({
-          owner: this.provider.wallet.publicKey,
-          moduleState: moduleAccount,
-          walletUsage: dailyUsage,
-          systemProgram: SystemProgram.programId,
-        })
-        .rpc({ commitment: "confirmed" });
+          try {
+            await (countryCapProgram.methods as unknown as CountryCapProgramMethods)
+              .initializeCountryCount(country)
+              .accounts({
+                owner: this.provider.wallet.publicKey,
+                moduleState: moduleAccount,
+                countryCount,
+                systemProgram: SystemProgram.programId,
+              })
+              .rpc({ commitment: "confirmed" });
+          } catch (err) {
+            throw new Error(
+              `Country-cap support account ${countryCount.toBase58()} for country ${country} is missing and could not be initialized by ${this.provider.wallet.publicKey.toBase58()}. Upgrade the country-cap module to allow deterministic support-account creation, or connect module owner ${moduleOwner.toBase58()} once to repair this legacy token. ${formatTransactionError(err)}`,
+            );
+          }
+        }
+      }
     }
   }
 

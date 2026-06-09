@@ -230,8 +230,7 @@ pub struct InitializeCountryCount<'info> {
     pub owner: Signer<'info>,
     #[account(
         seeds = [b"mod_country_cap", module_state.token_mint.as_ref()],
-        bump = module_state.bump,
-        has_one = owner @ ModCountryCapError::NotOwner
+        bump = module_state.bump
     )]
     pub module_state: Account<'info, InvestorCountryCapModule>,
     #[account(

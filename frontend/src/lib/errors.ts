@@ -808,6 +808,16 @@ export function parseAnchorError(err: unknown): DecodedError | null {
   const code = extractAnchorErrorCode(err);
   if (code === null) return null;
 
+  if (code === 0) {
+    return {
+      code,
+      name: "AccountAlreadyInUse",
+      message: "Account already in use.",
+      userMessage:
+        "The required on-chain account already exists. Refresh the page and use the matching update action instead.",
+    };
+  }
+
   const entry = lookupErrorCode(code);
   if (!entry) {
     return {

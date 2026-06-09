@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useMemo } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useWallet as useSolanaWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { TrexClient } from '@/lib/trex-client';
@@ -10,11 +10,16 @@ import { queryCache } from '@/lib/query-cache';
 import type { ComplianceConfigResponse } from '@/types/trex-contracts';
 
 let sharedHydrationKey = '';
+let sharedHydrationPromiseKey = '';
 let sharedHydrationPromise: Promise<{
   address: string;
   client: TrexClient;
   balance: string;
 } | null> | null = null;
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
 
 export function useWallet() {
   const {
@@ -39,6 +44,7 @@ export function useWallet() {
     signMessage,
   } = solanaWallet;
   const { setVisible } = useWalletModal();
+  const hydrationRunRef = useRef(0);
   
   // Use a ref for signers to avoid re-triggering hydration when wallet methods change identity
   const walletMethodsRef = useRef({
@@ -59,9 +65,9 @@ export function useWallet() {
     try {
       setIsConnecting(true);
       setVisible(true);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to open wallet modal:', error);
-      toast.error(error?.message || 'Failed to connect wallet');
+      toast.error(getErrorMessage(error, 'Failed to connect wallet'));
       setIsConnecting(false);
     }
   }, [setVisible, setIsConnecting]);
@@ -74,9 +80,9 @@ export function useWallet() {
       await disconnect();
       clearWalletState();
       toast.info('Wallet disconnected');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to disconnect wallet:', error);
-      toast.error(error?.message || 'Failed to disconnect wallet');
+      toast.error(getErrorMessage(error, 'Failed to disconnect wallet'));
     }
   }, [disconnect, clearWalletState]);
 
@@ -92,6 +98,9 @@ export function useWallet() {
   }, [address, trexClient, setWalletState]);
 
   useEffect(() => {
+    const runId = hydrationRunRef.current + 1;
+    hydrationRunRef.current = runId;
+
     const hydrateWallet = async () => {
       const walletAddress = publicKey?.toBase58() || '';
       const hydrateKey = `${connected}:${walletAddress}`;
@@ -99,9 +108,21 @@ export function useWallet() {
       if (!publicKey || !connected) {
         if (sharedHydrationKey !== hydrateKey) {
           sharedHydrationKey = hydrateKey;
+          sharedHydrationPromiseKey = '';
+          sharedHydrationPromise = null;
           clearWalletState();
         }
         return;
+      }
+
+      if (address && address !== walletAddress) {
+        const previousWallet = address.toLowerCase();
+        queryCache.invalidatePrefix(`identity:${previousWallet}`);
+        queryCache.invalidatePrefix(`permissions:${previousWallet}`);
+      }
+
+      if (address !== walletAddress) {
+        setWalletState(walletAddress, null, '0');
       }
 
       if (address === walletAddress && trexClient && sharedHydrationKey === hydrateKey) {
@@ -111,7 +132,8 @@ export function useWallet() {
       try {
         setIsConnecting(true);
 
-        if (!sharedHydrationPromise) {
+        if (!sharedHydrationPromise || sharedHydrationPromiseKey !== hydrateKey) {
+          sharedHydrationPromiseKey = hydrateKey;
           sharedHydrationPromise = (async () => {
             const anchorWallet = {
               publicKey,
@@ -208,24 +230,37 @@ export function useWallet() {
               balance: nativeBal,
             };
           })().finally(() => {
-            sharedHydrationPromise = null;
+            if (sharedHydrationPromiseKey === hydrateKey) {
+              sharedHydrationPromise = null;
+              sharedHydrationPromiseKey = '';
+            }
           });
         }
 
         const hydrated = await sharedHydrationPromise;
-        if (hydrated) {
+        if (hydrated && hydrationRunRef.current === runId) {
           setWalletState(hydrated.address, hydrated.client, hydrated.balance);
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Failed to initialize wallet:', error);
-        toast.error(error?.message || 'Failed to initialize wallet');
+        toast.error(getErrorMessage(error, 'Failed to initialize wallet'));
       } finally {
         setIsConnecting(false);
       }
     };
 
     hydrateWallet();
-  }, [publicKey, connected, wallet, setVisible]);
+  }, [
+    publicKey,
+    connected,
+    wallet,
+    address,
+    trexClient,
+    setVisible,
+    setWalletState,
+    setIsConnecting,
+    clearWalletState,
+  ]);
 
   return {
     address,

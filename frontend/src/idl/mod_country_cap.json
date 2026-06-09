@@ -227,10 +227,7 @@
         {
           "name": "owner",
           "writable": true,
-          "signer": true,
-          "relations": [
-            "module_state"
-          ]
+          "signer": true
         },
         {
           "name": "module_state",
