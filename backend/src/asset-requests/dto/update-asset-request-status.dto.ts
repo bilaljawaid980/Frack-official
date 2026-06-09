@@ -2,7 +2,7 @@ import { IsOptional, IsString } from "class-validator";
 
 export class UpdateAssetRequestStatusDto {
   @IsString()
-  status!: "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "DEPLOYED";
+  status!: "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "DEPLOYED" | "CANCELED";
 
   @IsOptional()
   @IsString()

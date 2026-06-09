@@ -585,7 +585,8 @@ export function IssuanceForm({
   const formSteps = isApplicationMode
     ? [
         { id: 1, label: "Asset Details" },
-        { id: 2, label: "Documents" },
+        { id: 2, label: "Compliance" },
+        { id: 3, label: "Documents" },
       ]
     : [
         { id: 1, label: "Asset Details" },
@@ -768,7 +769,7 @@ export function IssuanceForm({
     }
 
     const fieldsToValidate = isApplicationMode
-      ? [...getStepFields(1), "documents"]
+      ? [...getStepFields(1), ...getStepFields(2), "documents"]
       : ["documents"];
     const isValid = await form.trigger(fieldsToValidate);
     if (!isValid) return;
@@ -1082,7 +1083,14 @@ export function IssuanceForm({
           "assetDetails.isin",
         ];
       }
-      if (step === 2) return ["documents"];
+      if (step === 2) {
+        return [
+          "complianceRequirements.claimTopics",
+          "complianceRequirements.trustedIssuers",
+          "complianceRequirements.selectedModules",
+        ];
+      }
+      if (step === 3) return ["documents"];
       return [];
     }
 
@@ -1513,7 +1521,8 @@ export function IssuanceForm({
             </motion.div>
           )}
           {/* Step 3: Compliance Configuration */}
-          {!isApplicationMode && currentStep === 3 && (
+          {((!isApplicationMode && currentStep === 3) ||
+            (isApplicationMode && currentStep === 2)) && (
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -1763,7 +1772,7 @@ export function IssuanceForm({
 
           {/* Final Step: Admin tokenization or issuer legal documents */}
           {((!isApplicationMode && currentStep === 4) ||
-            (isApplicationMode && currentStep === 2)) && (
+            (isApplicationMode && currentStep === 3)) && (
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}

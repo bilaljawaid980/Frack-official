@@ -60,7 +60,7 @@ type IndexedBalance = {
 
 type AssetRequest = {
   id: string;
-  status: "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "DEPLOYED";
+  status: "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "DEPLOYED" | "CANCELED";
   issuerWallet: string;
   name: string;
   symbol: string;
@@ -815,6 +815,64 @@ export default function IssuerPage() {
     );
   };
 
+  const handleCancelAssetRequest = async (request: AssetRequest) => {
+    try {
+      await apiFetch(`/asset-requests/${request.id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: "CANCELED",
+          reviewedBy: walletAddress,
+        }),
+      });
+      setAssetRequests((current) =>
+        current.map((item) =>
+          item.id === request.id ? { ...item, status: "CANCELED" } : item,
+        ),
+      );
+      toast.success("Tokenization request canceled. You can submit a corrected request now.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to cancel request.");
+    }
+  };
+
+  const handleCancelOnChainOnboarding = async (request: TokenPurchaseRequest) => {
+    try {
+      if (!identityService) throw new Error("Connect issuer wallet first.");
+      const sig = await identityService.cancelOnboardingApplication(
+        new PublicKey(request.tokenContract),
+        new PublicKey(request.investorWallet),
+      );
+      toast.success("On-chain onboarding application canceled.", {
+        description: <TransactionToastLink signature={sig} />,
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to cancel onboarding application.");
+    }
+  };
+
+  const handleRemoveInvestorRegistryIdentity = async (request: TokenPurchaseRequest) => {
+    try {
+      if (!identityService) throw new Error("Connect issuer wallet first.");
+      const mint = new PublicKey(request.tokenContract);
+      const wallet = new PublicKey(request.investorWallet);
+      const sig = await identityService.removeIdentity(mint, wallet);
+      const key = `${request.tokenContract}:${request.investorWallet}`;
+      setWalletIdentityMap((current) => ({
+        ...current,
+        [key]: {
+          ...current[key],
+          exists: false,
+          isActive: false,
+        },
+      }));
+      toast.success("Investor token registry identity removed.", {
+        description: <TransactionToastLink signature={sig} />,
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to remove investor identity.");
+    }
+  };
+
   const handleMintPurchaseRequest = async (request: TokenPurchaseRequest) => {
     try {
       const key = `${request.tokenContract}:${request.investorWallet}`;
@@ -1032,6 +1090,17 @@ export default function IssuerPage() {
                   <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
                     {request.status.replace("_", " ")}
                   </div>
+                  {["PENDING_REVIEW", "APPROVED"].includes(request.status) ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                      onClick={() => void handleCancelAssetRequest(request)}
+                    >
+                      Cancel Request
+                    </Button>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -1119,6 +1188,21 @@ export default function IssuerPage() {
                             Mark Settlement Approved
                           </Button>
                         )}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => void handleCancelOnChainOnboarding(request)}
+                        >
+                          Cancel On-chain App
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                          onClick={() => void handleRemoveInvestorRegistryIdentity(request)}
+                        >
+                          Delete Registry Identity
+                        </Button>
 
                         {/* Identity state/key for this request */}
                         {(() => {

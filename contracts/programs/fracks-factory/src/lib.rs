@@ -16,11 +16,11 @@ use fracks_compliance::cpi::accounts::{
 use fracks_compliance::program::FracksCompliance;
 use fracks_ctr::cpi::accounts::{InitializeCtr, MutateCtr as CtrOwnerAccounts};
 use fracks_ctr::program::FracksCtr;
-use fracks_irp::cpi::accounts::InitializeRegistry;
+use fracks_irp::cpi::accounts::{InitializeRegistry, UpdateRegistryOwner};
 use fracks_irp::program::FracksIrp;
 use fracks_irs::cpi::accounts::{InitializeIrs, UpdateIrsOwnerState as IrsOwnerAccounts};
 use fracks_irs::program::FracksIrs;
-use fracks_tir::cpi::accounts::{AddTrustedIssuer, InitializeTir};
+use fracks_tir::cpi::accounts::{AddTrustedIssuer, InitializeTir, TransferTirOwnership};
 use fracks_tir::program::FracksTir;
 use fracks_token_hook::cpi::accounts::InitializeExtraAccountMetas;
 use fracks_token_hook::program::FracksTokenHook;
@@ -421,12 +421,52 @@ pub mod fracks_factory {
             ),
             args.issuer,
         )?;
+        fracks_ctr::cpi::transfer_ownership(
+            CpiContext::new(
+                ctx.accounts.ctr_program.to_account_info(),
+                CtrOwnerAccounts {
+                    owner: ctx.accounts.admin.to_account_info(),
+                    ctr_state: ctx.accounts.ctr_state.to_account_info(),
+                },
+            ),
+            args.issuer,
+        )?;
+        fracks_tir::cpi::transfer_ownership(
+            CpiContext::new(
+                ctx.accounts.tir_program.to_account_info(),
+                TransferTirOwnership {
+                    owner: ctx.accounts.admin.to_account_info(),
+                    tir_state: ctx.accounts.tir_state.to_account_info(),
+                },
+            ),
+            args.issuer,
+        )?;
+        fracks_irp::cpi::transfer_registry_ownership(
+            CpiContext::new(
+                ctx.accounts.irp_program.to_account_info(),
+                UpdateRegistryOwner {
+                    owner: ctx.accounts.admin.to_account_info(),
+                    registry_state: ctx.accounts.irp_state.to_account_info(),
+                },
+            ),
+            args.issuer,
+        )?;
         fracks_irs::cpi::transfer_ownership(
             CpiContext::new(
                 ctx.accounts.irs_program.to_account_info(),
                 IrsOwnerAccounts {
                     owner: ctx.accounts.admin.to_account_info(),
                     irs_state: ctx.accounts.irs_state.to_account_info(),
+                },
+            ),
+            args.issuer,
+        )?;
+        fracks_compliance::cpi::transfer_ownership(
+            CpiContext::new(
+                ctx.accounts.compliance_program.to_account_info(),
+                ComplianceOwnerAccounts {
+                    owner: ctx.accounts.admin.to_account_info(),
+                    compliance_state: ctx.accounts.compliance_state.to_account_info(),
                 },
             ),
             args.issuer,

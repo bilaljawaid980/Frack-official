@@ -63,6 +63,97 @@
       ]
     },
     {
+      "name": "cancel_onboarding_application",
+      "discriminator": [
+        99,
+        164,
+        145,
+        216,
+        25,
+        199,
+        155,
+        251
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "irs_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  114,
+                  115,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "irs_state.authority_seed",
+                "account": "IdentityRegistryStorageState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "application",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  110,
+                  98,
+                  111,
+                  97,
+                  114,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  97,
+                  112,
+                  112,
+                  108,
+                  105,
+                  99,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "irs_state"
+              },
+              {
+                "kind": "account",
+                "path": "application.wallet",
+                "account": "OnboardingApplication"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "initialize_irs",
       "discriminator": [
         52,
@@ -359,6 +450,90 @@
                 "kind": "account",
                 "path": "wallet_identity.wallet",
                 "account": "WalletIdentity"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "remove_own_identity",
+      "discriminator": [
+        226,
+        130,
+        39,
+        208,
+        179,
+        187,
+        79,
+        174
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "irs_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  114,
+                  115,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "irs_state.authority_seed",
+                "account": "IdentityRegistryStorageState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wallet_identity",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  95,
+                  105,
+                  100,
+                  101,
+                  110,
+                  116,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "irs_state"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
               }
             ]
           }
@@ -1018,6 +1193,19 @@
   ],
   "events": [
     {
+      "name": "ApplicationCancelled",
+      "discriminator": [
+        86,
+        109,
+        21,
+        30,
+        91,
+        51,
+        148,
+        1
+      ]
+    },
+    {
       "name": "ApplicationReviewed",
       "discriminator": [
         224,
@@ -1220,9 +1408,42 @@
       "code": 12040,
       "name": "FidCountryMismatch",
       "msg": "FID country does not match the IRS identity country."
+    },
+    {
+      "code": 12041,
+      "name": "UnauthorizedApplicationCancel",
+      "msg": "Only the applicant or IRS owner can cancel this onboarding application."
     }
   ],
   "types": [
+    {
+      "name": "ApplicationCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "applicant",
+            "type": "pubkey"
+          },
+          {
+            "name": "cancelled_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "irs",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
     {
       "name": "ApplicationReviewed",
       "type": {

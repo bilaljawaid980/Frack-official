@@ -70,7 +70,7 @@ type IssuanceAsset = {
 
 type AssetRequest = {
   id: string;
-  status: "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "DEPLOYED";
+  status: "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "DEPLOYED" | "CANCELED";
   issuerWallet: string;
   legalOwner?: string | null;
   referenceId?: string | null;
@@ -88,6 +88,7 @@ type AssetRequest = {
   trustedIssuers?: unknown;
   complianceModules?: string[] | null;
   documents?: unknown;
+  metadata?: Record<string, unknown> | string | null;
   createdAt: string;
 };
 
@@ -328,6 +329,12 @@ export default function IssuancePage() {
 
   const selectedRequestValues = useMemo<Partial<IssuanceFormValues> | undefined>(() => {
     if (!selectedRequest) return undefined;
+    const requestMetadata = parseMetadata(selectedRequest.metadata ?? null);
+    const complianceModuleParams =
+      requestMetadata.complianceModuleParams &&
+      typeof requestMetadata.complianceModuleParams === "object"
+        ? (requestMetadata.complianceModuleParams as Record<string, Record<string, unknown>>)
+        : {};
     const trustedIssuers = Array.isArray(selectedRequest.trustedIssuers)
       ? selectedRequest.trustedIssuers.map((issuer: unknown) => {
           const record =
@@ -365,7 +372,7 @@ export default function IssuancePage() {
             : ["1"],
         trustedIssuers,
         selectedModules: selectedRequest.complianceModules || [],
-        moduleParams: {},
+        moduleParams: complianceModuleParams,
       },
       tokenDetails: {
         decimals: selectedRequest.decimals ?? 6,

@@ -219,6 +219,7 @@ function RequestFormContent() {
   const [complianceLoading, setComplianceLoading] = useState(false);
   const [complianceLoadError, setComplianceLoadError] = useState<string | null>(null);
   const [registeringFid, setRegisteringFid] = useState(false);
+  const [resettingOnChainState, setResettingOnChainState] = useState(false);
   const [fidCountryCode, setFidCountryCode] = useState("840");
   const [formData, setFormData] = useState({
     amount: "",
@@ -380,6 +381,59 @@ function RequestFormContent() {
       );
     } finally {
       setRegisteringFid(false);
+    }
+  };
+
+  const handleCancelOnChainApplication = async () => {
+    if (!anchorProvider || !walletAddress || !asset) {
+      toast.error("Connect your investor wallet and select a token first.");
+      return;
+    }
+
+    setResettingOnChainState(true);
+    const loadingToast = toast.loading("Canceling on-chain onboarding application...");
+    try {
+      const service = new IdentityService(anchorProvider);
+      const sig = await service.cancelOnboardingApplication(
+        new PublicKey(asset.tokenContractAddress),
+        new PublicKey(walletAddress),
+      );
+      toast.success("On-chain onboarding application canceled. You can submit a fresh request.", {
+        id: loadingToast,
+        description: <TransactionToastLink signature={sig} />,
+      });
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to cancel on-chain application.",
+        { id: loadingToast },
+      );
+    } finally {
+      setResettingOnChainState(false);
+    }
+  };
+
+  const handleRemoveOwnRegistryIdentity = async () => {
+    if (!anchorProvider || !asset) {
+      toast.error("Connect your investor wallet and select a token first.");
+      return;
+    }
+
+    setResettingOnChainState(true);
+    const loadingToast = toast.loading("Deleting token-specific registry identity...");
+    try {
+      const service = new IdentityService(anchorProvider);
+      const sig = await service.removeOwnIdentity(new PublicKey(asset.tokenContractAddress));
+      toast.success("Token-specific identity deleted. Ask providers/issuer to approve the new request.", {
+        id: loadingToast,
+        description: <TransactionToastLink signature={sig} />,
+      });
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to delete token registry identity.",
+        { id: loadingToast },
+      );
+    } finally {
+      setResettingOnChainState(false);
     }
   };
 
@@ -1003,6 +1057,35 @@ function RequestFormContent() {
                 />
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-amber-200 bg-amber-50/70 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-base text-amber-950">Need to restart this token request?</CardTitle>
+            <CardDescription className="text-amber-800">
+              Use these only when a previous on-chain onboarding or token registry entry is stale and blocks a corrected request.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 sm:flex-row">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={resettingOnChainState}
+              onClick={handleCancelOnChainApplication}
+              className="border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+            >
+              Cancel On-chain Application
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={resettingOnChainState}
+              onClick={handleRemoveOwnRegistryIdentity}
+              className="border-red-200 bg-white text-red-700 hover:bg-red-50"
+            >
+              Delete My Token Registry Identity
+            </Button>
           </CardContent>
         </Card>
 

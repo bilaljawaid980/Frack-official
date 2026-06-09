@@ -81,12 +81,23 @@ export default function SubmitAssetRequestPage() {
         assetType: data.assetDetails.assetType,
         currency: data.assetDetails.currency,
         location: data.assetDetails.location,
+        underlyingValue: data.assetDetails.underlyingValue,
+        totalSupply: data.assetDetails.totalSupply,
+        decimals: data.tokenDetails.decimals,
+        initialPrice: data.tokenDetails.initialPrice,
+        claimTopics: data.complianceRequirements.claimTopics,
+        trustedIssuers: data.complianceRequirements.trustedIssuers.map((issuer) => ({
+          ...issuer,
+          topics: issuer.topics.map((topic) => topic.toString()),
+        })),
+        complianceModules: data.complianceRequirements.selectedModules,
         documents,
         metadata: {
           submittedFrom: "issuer/submit-request",
           documentFolder: documents[0]?.path
             ? documents[0].path.split("/").slice(0, 2).join("/")
             : null,
+          complianceModuleParams: data.complianceRequirements.moduleParams,
         },
       }),
     });

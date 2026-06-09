@@ -939,6 +939,30 @@ export class IdentityService {
       .rpc();
   }
 
+  async cancelOnboardingApplication(
+    mint: PublicKey,
+    wallet: PublicKey
+  ): Promise<string> {
+    const ids = await this.getProgramIds();
+    const irsProgram = this.getIrsProgram(ids.irs);
+    const irpState = await this.fetchIrpState(mint);
+    const irsStatePubkey = new PublicKey(irpState.irsAccount);
+    const [application] = this.findOnboardingApplicationPda(
+      irsStatePubkey,
+      wallet,
+      ids.irs,
+    );
+
+    return await (irsProgram.methods as any)
+      .cancelOnboardingApplication()
+      .accounts({
+        authority: this.provider.wallet.publicKey,
+        irsState: irsStatePubkey,
+        application,
+      })
+      .rpc();
+  }
+
   async registerIdentity(
     mint: PublicKey,
     wallet: PublicKey,
@@ -971,6 +995,53 @@ export class IdentityService {
     return await this.provider.sendAndConfirm(new Transaction().add(ix), [], {
       commitment: "confirmed",
     });
+  }
+
+  async removeIdentity(
+    mint: PublicKey,
+    wallet: PublicKey
+  ): Promise<string> {
+    const ids = await this.getProgramIds();
+    const irpState = await this.fetchIrpState(mint);
+    const irsStatePubkey = new PublicKey(irpState.irsAccount);
+    const [registryState] = this.findIrpStatePda(mint, ids.irp);
+    const [walletIdentity] = this.findWalletIdentityPda(
+      irsStatePubkey,
+      wallet,
+      ids.irs,
+    );
+    const irsProgram = this.getIrsProgram(ids.irs);
+
+    return await (irsProgram.methods as any)
+      .removeIdentity()
+      .accounts({
+        authority: this.provider.wallet.publicKey,
+        irsState: irsStatePubkey,
+        registryState,
+        walletIdentity,
+      })
+      .rpc();
+  }
+
+  async removeOwnIdentity(mint: PublicKey): Promise<string> {
+    const ids = await this.getProgramIds();
+    const irpState = await this.fetchIrpState(mint);
+    const irsStatePubkey = new PublicKey(irpState.irsAccount);
+    const [walletIdentity] = this.findWalletIdentityPda(
+      irsStatePubkey,
+      this.provider.wallet.publicKey,
+      ids.irs,
+    );
+    const irsProgram = this.getIrsProgram(ids.irs);
+
+    return await (irsProgram.methods as any)
+      .removeOwnIdentity()
+      .accounts({
+        owner: this.provider.wallet.publicKey,
+        irsState: irsStatePubkey,
+        walletIdentity,
+      })
+      .rpc();
   }
 
   /**

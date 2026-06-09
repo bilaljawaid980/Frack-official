@@ -192,6 +192,25 @@ pub mod fracks_irs {
         Ok(())
     }
 
+    pub fn cancel_onboarding_application(ctx: Context<CancelOnboardingApplication>) -> Result<()> {
+        let application = &ctx.accounts.application;
+        let authority = ctx.accounts.authority.key();
+        require!(
+            authority == application.applicant || authority == ctx.accounts.irs_state.owner,
+            FracksIrsError::UnauthorizedApplicationCancel
+        );
+
+        emit!(ApplicationCancelled {
+            wallet: application.wallet,
+            applicant: application.applicant,
+            cancelled_by: authority,
+            irs: application.irs,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+
+        Ok(())
+    }
+
     pub fn set_identity_activation(
         ctx: Context<SetIdentityActivation>,
         active: bool,
@@ -266,6 +285,24 @@ pub mod fracks_irs {
         emit!(IdentityRemoved {
             wallet,
             by_agent: ctx.accounts.authority.key(),
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+
+        Ok(())
+    }
+
+    pub fn remove_own_identity(ctx: Context<RemoveOwnIdentity>) -> Result<()> {
+        let wallet = ctx.accounts.wallet_identity.wallet;
+        ctx.accounts.irs_state.registered_count = ctx
+            .accounts
+            .irs_state
+            .registered_count
+            .checked_sub(1)
+            .ok_or_else(|| error!(FracksIrsError::ArithmeticOverflow))?;
+
+        emit!(IdentityRemoved {
+            wallet,
+            by_agent: ctx.accounts.owner.key(),
             timestamp: Clock::get()?.unix_timestamp,
         });
 
@@ -374,6 +411,25 @@ pub struct ReviewOnboardingApplication<'info> {
 }
 
 #[derive(Accounts)]
+pub struct CancelOnboardingApplication<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    #[account(
+        seeds = [b"irs_state", irs_state.authority_seed.as_ref()],
+        bump = irs_state.bump
+    )]
+    pub irs_state: Account<'info, IdentityRegistryStorageState>,
+    #[account(
+        mut,
+        close = authority,
+        seeds = [b"onboarding_application", irs_state.key().as_ref(), application.wallet.as_ref()],
+        bump = application.bump,
+        constraint = application.irs == irs_state.key() @ FracksIrsError::InvalidApplication
+    )]
+    pub application: Account<'info, OnboardingApplication>,
+}
+
+#[derive(Accounts)]
 pub struct MutateWalletIdentity<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -430,6 +486,27 @@ pub struct RemoveIdentity<'info> {
         seeds = [b"wallet_identity", irs_state.key().as_ref(), wallet_identity.wallet.as_ref()],
         bump = wallet_identity.bump,
         constraint = wallet_identity.irs == irs_state.key() @ FracksIrsError::WalletNotRegistered
+    )]
+    pub wallet_identity: Account<'info, WalletIdentity>,
+}
+
+#[derive(Accounts)]
+pub struct RemoveOwnIdentity<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"irs_state", irs_state.authority_seed.as_ref()],
+        bump = irs_state.bump
+    )]
+    pub irs_state: Account<'info, IdentityRegistryStorageState>,
+    #[account(
+        mut,
+        close = owner,
+        seeds = [b"wallet_identity", irs_state.key().as_ref(), owner.key().as_ref()],
+        bump = wallet_identity.bump,
+        constraint = wallet_identity.irs == irs_state.key() @ FracksIrsError::WalletNotRegistered,
+        constraint = wallet_identity.wallet == owner.key() @ FracksIrsError::WalletNotRegistered
     )]
     pub wallet_identity: Account<'info, WalletIdentity>,
 }
@@ -511,6 +588,15 @@ pub struct ApplicationReviewed {
 }
 
 #[event]
+pub struct ApplicationCancelled {
+    pub wallet: Pubkey,
+    pub applicant: Pubkey,
+    pub cancelled_by: Pubkey,
+    pub irs: Pubkey,
+    pub timestamp: i64,
+}
+
+#[event]
 pub struct IdentityActivationChanged {
     pub wallet: Pubkey,
     pub active: bool,
@@ -577,6 +663,8 @@ pub enum FracksIrsError {
     InvalidInvestorFid = 6039,
     #[msg("FID country does not match the IRS identity country.")]
     FidCountryMismatch = 6040,
+    #[msg("Only the applicant or IRS owner can cancel this onboarding application.")]
+    UnauthorizedApplicationCancel = 6041,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]

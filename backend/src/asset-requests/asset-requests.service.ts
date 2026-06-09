@@ -9,6 +9,7 @@ const ASSET_REQUEST_STATUSES = new Set([
   "APPROVED",
   "REJECTED",
   "DEPLOYED",
+  "CANCELED",
 ]);
 
 @Injectable()
