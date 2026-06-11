@@ -85,11 +85,8 @@ export default function SubmitAssetRequestPage() {
         totalSupply: data.assetDetails.totalSupply,
         decimals: data.tokenDetails.decimals,
         initialPrice: data.tokenDetails.initialPrice,
-        claimTopics: data.complianceRequirements.claimTopics,
-        trustedIssuers: data.complianceRequirements.trustedIssuers.map((issuer) => ({
-          ...issuer,
-          topics: issuer.topics.map((topic) => topic.toString()),
-        })),
+        claimTopics: [],
+        trustedIssuers: [],
         complianceModules: data.complianceRequirements.selectedModules,
         documents,
         metadata: {

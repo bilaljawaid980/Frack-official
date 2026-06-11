@@ -270,21 +270,9 @@ export default function IssuancePage() {
     [assets, pendingRequests.length],
   );
 
-  const handleApprove = async (request: AssetRequest) => {
-    try {
-      await apiFetch(`/asset-requests/${request.id}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          status: "APPROVED",
-          reviewedBy: address,
-        }),
-      });
-      toast.success("Request approved. Deployment form is ready.");
-      router.push(`/issuance?requestId=${request.id}`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      toast.error(`Approval failed: ${message}`);
-    }
+  const handleApprove = (request: AssetRequest) => {
+    toast.success("Deployment form is ready. The request stays pending until the token is deployed.");
+    router.push(`/issuance?requestId=${request.id}`);
   };
 
   const handleReject = async (request: AssetRequest) => {
@@ -431,11 +419,12 @@ export default function IssuancePage() {
           {selectedRequest && (
             <Card className="border-amber-200 bg-amber-50/70">
               <CardHeader>
-                <CardTitle className="text-base">Approved Request Loaded</CardTitle>
+                <CardTitle className="text-base">Deploying Issuer Request</CardTitle>
                 <CardDescription>
                   Deploying {selectedRequest.name} for issuer{" "}
                   {selectedRequest.issuerWallet.slice(0, 6)}...
-                  {selectedRequest.issuerWallet.slice(-4)}.
+                  {selectedRequest.issuerWallet.slice(-4)}. This request stays in
+                  Pending Applications until the token is deployed.
                 </CardDescription>
               </CardHeader>
             </Card>

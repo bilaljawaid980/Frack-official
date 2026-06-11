@@ -1084,11 +1084,7 @@ export function IssuanceForm({
         ];
       }
       if (step === 2) {
-        return [
-          "complianceRequirements.claimTopics",
-          "complianceRequirements.trustedIssuers",
-          "complianceRequirements.selectedModules",
-        ];
+        return ["complianceRequirements.selectedModules"];
       }
       if (step === 3) return ["documents"];
       return [];
@@ -1197,7 +1193,7 @@ export function IssuanceForm({
       {/* Step Indicator */}
       {isApplicationMode ? (
         <div className="mb-8 rounded-2xl border border-slate-200 bg-slate-50/70 p-3 shadow-sm">
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {formSteps.map((step, index) => {
               const isActive = currentStep === step.id;
               const isDone = currentStep > step.id;
@@ -1530,11 +1526,20 @@ export function IssuanceForm({
             >
               <h3 className="text-lg font-bold flex items-center gap-2 text-slate-900">
                 <Shield className="h-5 w-5 text-[#172E7F]" />
-                Compliance & Trusted Framework
+                {isApplicationMode ? "Compliance Modules" : "Compliance & Trusted Framework"}
               </h3>
 
               <div className="space-y-6">
-                {/* Claim Topics */}
+                {isApplicationMode ? (
+                  <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-5">
+                    <h4 className="text-sm font-bold text-slate-900">Compliance Module Request</h4>
+                    <p className="mt-1 text-xs leading-5 text-slate-600">
+                      Select the compliance modules you want for this asset. The platform admin will configure required identity claims and trusted claim issuers during review.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Claim Topics */}
                 <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
                   <div>
                     <h4 className="text-sm font-bold text-slate-900">Required Identity Claims</h4>
@@ -1636,6 +1641,9 @@ export function IssuanceForm({
                     </div>
                   )}
                 </div>
+
+                  </>
+                )}
 
                 {/* Compliance Modules */}
                 <div className="space-y-4">
