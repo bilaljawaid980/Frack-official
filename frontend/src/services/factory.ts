@@ -39,6 +39,10 @@ import {
   MOD_COUNTRY_CAP,
   SEED_FACTORY_STATE,
   SEED_DEPLOYMENT,
+  SEED_PLATFORM_AUTHORITY,
+  SEED_CUSTODY_MANDATE,
+  SEED_CUSTODY_ATTESTATION,
+  TOPIC_CUSTODIAN_AUTHORITY,
 } from "@/lib/constants";
 import { ROLE_WALLETS } from "@/lib/zigchain-config";
 import { formatTransactionError, parseAnchorError } from "@/lib/errors";
@@ -98,6 +102,10 @@ type FactoryDeployBuilder = {
 };
 type FactoryProgramMethods = {
   deployTokenSuite(args: unknown): FactoryDeployBuilder;
+  approvePlatformAuthority(authorityFid: PublicKey, topic: BN): InstructionBuilder;
+  createCustodyMandate(assetId: BN, issuerFid: PublicKey, custodian: PublicKey, custodianFid: PublicKey): InstructionBuilder;
+  acceptCustodyMandate(): InstructionBuilder;
+  attestCustody(documentHash: number[], attestationHash: number[], validitySeconds: BN): InstructionBuilder;
   initializeModule(...args: unknown[]): InstructionBuilder;
   initializeCountryCount(...args: unknown[]): InstructionBuilder;
   setHookAuthority(...args: unknown[]): InstructionBuilder;
@@ -111,6 +119,7 @@ type FactoryProgramMethods = {
 const DEPLOYMENT_DISCRIMINATOR = Buffer.from([
   253, 218, 24, 4, 169, 51, 36, 214,
 ]);
+const DEFAULT_CUSTODY_VALIDITY_SECONDS = new BN(365 * 24 * 60 * 60);
 
 /**
  * Maps each compliance module program ID to the PDA seed used by that module.
@@ -206,6 +215,34 @@ export class FactoryService {
   getDeploymentPda(issuer: PublicKey, salt: Uint8Array): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [SEED_DEPLOYMENT, issuer.toBuffer(), Buffer.from(salt)],
+      FACTORY_PROGRAM_ID,
+    );
+  }
+
+  getFidPda(wallet: PublicKey, fidProgramId: PublicKey): [PublicKey, number] {
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from("fid"), wallet.toBuffer()],
+      fidProgramId,
+    );
+  }
+
+  getPlatformAuthorityPda(authorityFid: PublicKey, topic: BN): [PublicKey, number] {
+    return PublicKey.findProgramAddressSync(
+      [SEED_PLATFORM_AUTHORITY, authorityFid.toBuffer(), topic.toArrayLike(Buffer, "le", 8)],
+      FACTORY_PROGRAM_ID,
+    );
+  }
+
+  getCustodyMandatePda(assetId: BN): [PublicKey, number] {
+    return PublicKey.findProgramAddressSync(
+      [SEED_CUSTODY_MANDATE, assetId.toArrayLike(Buffer, "le", 8)],
+      FACTORY_PROGRAM_ID,
+    );
+  }
+
+  getCustodyAttestationPda(custodyMandate: PublicKey): [PublicKey, number] {
+    return PublicKey.findProgramAddressSync(
+      [SEED_CUSTODY_ATTESTATION, custodyMandate.toBuffer()],
       FACTORY_PROGRAM_ID,
     );
   }
@@ -557,6 +594,145 @@ export class FactoryService {
     return transactions;
   }
 
+  private fixedHash(seed: string, tokenMint: PublicKey, assetId: BN): number[] {
+    const input = Buffer.concat([
+      Buffer.from(seed),
+      tokenMint.toBuffer(),
+      assetId.toArrayLike(Buffer, "le", 8),
+    ]);
+    const out = Buffer.alloc(32);
+    for (let index = 0; index < input.length; index += 1) {
+      out[index % 32] ^= input[index];
+      out[(index * 7) % 32] = (out[(index * 7) % 32] + input[index]) & 0xff;
+    }
+    return Array.from(out);
+  }
+
+  private async ensureCustodyGate(input: {
+    assetId: BN;
+    issuer: PublicKey;
+    custodian: PublicKey;
+    tokenMint: PublicKey;
+    factoryState: PublicKey;
+    fidProgramId: PublicKey;
+  }): Promise<{
+    issuerFid: PublicKey;
+    custodianFid: PublicKey;
+    custodyMandate: PublicKey;
+    custodyAttestation: PublicKey;
+  }> {
+    const admin = this.provider.wallet.publicKey;
+    const [issuerFid] = this.getFidPda(input.issuer, input.fidProgramId);
+    const [custodianFid] = this.getFidPda(input.custodian, input.fidProgramId);
+    const custodianAuthorityTopic = new BN(TOPIC_CUSTODIAN_AUTHORITY);
+    const [platformAuthority] = this.getPlatformAuthorityPda(
+      custodianFid,
+      custodianAuthorityTopic,
+    );
+    const [custodyMandate] = this.getCustodyMandatePda(input.assetId);
+    const [custodyAttestation] = this.getCustodyAttestationPda(custodyMandate);
+
+    const [issuerFidInfo, custodianFidInfo] = await this.provider.connection.getMultipleAccountsInfo(
+      [issuerFid, custodianFid],
+      "confirmed",
+    );
+    if (!issuerFidInfo) {
+      throw new Error(
+        `Issuer wallet ${input.issuer.toBase58()} must register FID before token deployment.`,
+      );
+    }
+    if (!custodianFidInfo) {
+      throw new Error(
+        `Custodian wallet ${input.custodian.toBase58()} must register FID before custody attestation.`,
+      );
+    }
+    if (issuerFid.equals(custodianFid)) {
+      throw new Error("Custodian cannot be the same FID as the issuer.");
+    }
+
+    const setupInstructions: TransactionInstruction[] = [];
+    const platformAuthorityInfo = await this.provider.connection.getAccountInfo(
+      platformAuthority,
+      "confirmed",
+    );
+    if (!platformAuthorityInfo) {
+      setupInstructions.push(
+        await (this.program.methods as unknown as FactoryProgramMethods)
+          .approvePlatformAuthority(custodianFid, custodianAuthorityTopic)
+          .accounts({
+            admin,
+            factoryState: input.factoryState,
+            platformAuthority,
+            systemProgram: SystemProgram.programId,
+          })
+          .instruction(),
+      );
+    }
+
+    const mandateInfo = await this.provider.connection.getAccountInfo(custodyMandate, "confirmed");
+    if (!mandateInfo) {
+      setupInstructions.push(
+        await (this.program.methods as unknown as FactoryProgramMethods)
+          .createCustodyMandate(input.assetId, issuerFid, input.custodian, custodianFid)
+          .accounts({
+            authority: admin,
+            factoryState: input.factoryState,
+            issuer: input.issuer,
+            issuerFidAccount: issuerFid,
+            custodianFidAccount: custodianFid,
+            custodianAuthority: platformAuthority,
+            custodyMandate,
+            systemProgram: SystemProgram.programId,
+          })
+          .instruction(),
+      );
+    }
+
+    if (setupInstructions.length > 0) {
+      await this.sendInstructionsInBatches(setupInstructions);
+    }
+
+    let attestationInfo = await this.provider.connection.getAccountInfo(
+      custodyAttestation,
+      "confirmed",
+    );
+    if (!attestationInfo) {
+      if (!admin.equals(input.custodian)) {
+        throw new Error(
+          `Custody mandate is ready, but custodian ${input.custodian.toBase58()} must connect and sign custody attestation before admin can deploy.`,
+        );
+      }
+      const acceptIx = await (this.program.methods as unknown as FactoryProgramMethods)
+        .acceptCustodyMandate()
+        .accounts({
+          custodian: admin,
+          custodyMandate,
+          custodianFidAccount: custodianFid,
+        })
+        .instruction();
+      const attestIx = await (this.program.methods as unknown as FactoryProgramMethods)
+        .attestCustody(
+          this.fixedHash("custody-document", input.tokenMint, input.assetId),
+          this.fixedHash("custody-attestation", input.tokenMint, input.assetId),
+          DEFAULT_CUSTODY_VALIDITY_SECONDS,
+        )
+        .accounts({
+          custodian: admin,
+          custodyMandate,
+          custodyAttestation,
+          systemProgram: SystemProgram.programId,
+        })
+        .instruction();
+      await this.sendInstructionsInBatches([acceptIx, attestIx]);
+      attestationInfo = await this.provider.connection.getAccountInfo(custodyAttestation, "confirmed");
+      if (!attestationInfo) {
+        throw new Error("Custody attestation was not created. Retry after confirming the custodian transaction.");
+      }
+    }
+
+    return { issuerFid, custodianFid, custodyMandate, custodyAttestation };
+  }
+
   /**
    * Full two-step deployment targeting the devnet-deployed factory:
    * 1. Create the SPL Token-2022 mint directly via spl-token instructions
@@ -580,12 +756,15 @@ export class FactoryService {
     }
     const issuer = new PublicKey(args.issuer);
     const tokenMint = new PublicKey(args.tokenMint);
+    const custodian = new PublicKey(args.custodian);
+    const assetId = new BN(args.assetId.toString());
 
     // ── Derive PDAs ────────────────────────────────────────────────────────────
     const [factoryState] = this.getFactoryStatePda();
 
     const factory = await this.fetchFactoryState();
     const tokenProgramId = new PublicKey(factory.tokenProgramId);
+    const fidProgramId = new PublicKey(factory.fidProgramId);
     const irpProgramId = new PublicKey(factory.irpProgramId);
     const irsProgramId = new PublicKey(factory.irsProgramId);
     const tirProgramId = new PublicKey(factory.tirProgramId);
@@ -604,6 +783,14 @@ export class FactoryService {
     }
 
     const [deploymentPda] = this.getDeploymentPda(issuer, args.salt);
+    const custodyGate = await this.ensureCustodyGate({
+      assetId,
+      issuer,
+      custodian,
+      tokenMint,
+      factoryState,
+      fidProgramId,
+    });
 
     const [tokenState] = PublicKey.findProgramAddressSync(
       [Buffer.from("token_state"), tokenMint.toBuffer()],
@@ -682,6 +869,7 @@ export class FactoryService {
     }));
 
     const ixArgs = {
+      assetId,
       issuer,
       tokenMint,
       tokenName: args.tokenName,
@@ -712,6 +900,8 @@ export class FactoryService {
           FACTORY_PROGRAM_ID.toBase58(),
           factoryState.toBase58(),
           deploymentPda.toBase58(),
+          custodyGate.custodyMandate.toBase58(),
+          custodyGate.custodyAttestation.toBase58(),
           tokenProgramId.toBase58(),
           irpProgramId.toBase58(),
           irsProgramId.toBase58(),
@@ -945,6 +1135,8 @@ export class FactoryService {
           factoryState,
           issuer,
           deployment: deploymentPda,
+          custodyMandate: custodyGate.custodyMandate,
+          custodyAttestation: custodyGate.custodyAttestation,
 
           tokenState,
           ownerState,
@@ -974,6 +1166,8 @@ export class FactoryService {
         { name: "factory_state", pubkey: factoryState, writable: true },
         { name: "issuer", pubkey: issuer, writable: false },
         { name: "deployment", pubkey: deploymentPda, writable: true },
+        { name: "custody_mandate", pubkey: custodyGate.custodyMandate, writable: false },
+        { name: "custody_attestation", pubkey: custodyGate.custodyAttestation, writable: false },
         { name: "token_state", pubkey: tokenState, writable: true },
         { name: "owner_state", pubkey: ownerState, writable: true },
         { name: "irs_state", pubkey: irsState, writable: true },
@@ -1912,6 +2106,7 @@ export class FactoryService {
     return {
       deploymentId: BigInt(raw.deploymentId.toString()),
       deploymentPda: derivedPda.toBase58(),
+      assetId: BigInt(raw.assetId?.toString?.() ?? "0"),
       issuer: issuerPubkey.toBase58(),
       salt,
       tokenMint: (raw.tokenMint as PublicKey).toBase58(),
@@ -1922,6 +2117,8 @@ export class FactoryService {
       tirState: (raw.tirState as PublicKey).toBase58(),
       ctrState: (raw.ctrState as PublicKey).toBase58(),
       complianceState: (raw.complianceState as PublicKey).toBase58(),
+      custodyMandate: (raw.custodyMandate as PublicKey | undefined)?.toBase58?.() ?? "",
+      custodyAttestation: (raw.custodyAttestation as PublicKey | undefined)?.toBase58?.() ?? "",
       deployedAt: Number(raw.deployedAt.toString()),
       bump: raw.bump,
     };

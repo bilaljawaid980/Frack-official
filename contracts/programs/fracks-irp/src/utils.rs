@@ -83,18 +83,16 @@ pub fn verify_claim_for_topic(
             continue;
         }
 
-        let issuer_entry = match find_issuer_entry(remaining_accounts, tir_state, &claim.issuer_fid) {
+        let issuer_entry = match find_issuer_entry(remaining_accounts, tir_state, &claim.issuer_fid)
+        {
             Ok(entry) => entry,
             Err(_) => continue,
         };
         if !issuer_entry.is_active || !issuer_entry.allowed_topics.contains(&topic) {
             continue;
         }
-        let expected_issuer_fid = Pubkey::find_program_address(
-            &[b"fid", claim.signer_key.as_ref()],
-            &fracks_fid::id(),
-        )
-        .0;
+        let expected_issuer_fid =
+            Pubkey::find_program_address(&[b"fid", claim.signer_key.as_ref()], &fracks_fid::id()).0;
         if claim.issuer_fid == expected_issuer_fid {
             return Ok(true);
         }
@@ -120,7 +118,10 @@ fn find_issuer_entry(
                 &fracks_tir::id(),
             )
             .0;
-            if account.key() == expected_entry && entry.tir == *tir_state && entry.issuer_fid == *issuer_fid {
+            if account.key() == expected_entry
+                && entry.tir == *tir_state
+                && entry.issuer_fid == *issuer_fid
+            {
                 return Ok(entry);
             }
         }
@@ -129,7 +130,10 @@ fn find_issuer_entry(
     err!(FracksIrpError::TrustedIssuerNotFound)
 }
 
-pub fn ensure_bound_registry(irs_state: &IdentityRegistryStorageStateView, irp: &Pubkey) -> Result<()> {
+pub fn ensure_bound_registry(
+    irs_state: &IdentityRegistryStorageStateView,
+    irp: &Pubkey,
+) -> Result<()> {
     require!(
         irs_state.bound_registries.contains(irp),
         FracksIrpError::InvalidRegistryReference
@@ -140,15 +144,28 @@ pub fn ensure_bound_registry(irs_state: &IdentityRegistryStorageStateView, irp: 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anchor_lang::AnchorSerialize;
     use anchor_lang::solana_program::clock::Epoch;
+    use anchor_lang::AnchorSerialize;
 
-    fn account_info_with_data(key: Pubkey, owner: Pubkey, payload: Vec<u8>) -> AccountInfo<'static> {
+    fn account_info_with_data(
+        key: Pubkey,
+        owner: Pubkey,
+        payload: Vec<u8>,
+    ) -> AccountInfo<'static> {
         let key = Box::leak(Box::new(key));
         let owner = Box::leak(Box::new(owner));
         let lamports = Box::leak(Box::new(0u64));
         let data = Box::leak(payload.into_boxed_slice());
-        AccountInfo::new(key, false, false, lamports, data, owner, false, Epoch::default())
+        AccountInfo::new(
+            key,
+            false,
+            false,
+            lamports,
+            data,
+            owner,
+            false,
+            Epoch::default(),
+        )
     }
 
     fn serialize_account<T: AnchorSerialize>(value: &T) -> Vec<u8> {
@@ -172,7 +189,8 @@ mod tests {
             activated_at: 1,
             bump: 0,
         };
-        let account = account_info_with_data(wrong_key, fracks_irs::id(), serialize_account(&identity));
+        let account =
+            account_info_with_data(wrong_key, fracks_irs::id(), serialize_account(&identity));
 
         let resolved = find_wallet_identity(&wallet, &irs, &account).expect("find_wallet_identity");
         assert!(resolved.is_none());
@@ -195,10 +213,12 @@ mod tests {
             revoked: false,
             bump: 0,
         };
-        let fake_claim = account_info_with_data(fake_claim_key, fracks_fid::id(), serialize_account(&claim));
+        let fake_claim =
+            account_info_with_data(fake_claim_key, fracks_fid::id(), serialize_account(&claim));
 
-        let verified = verify_claim_for_topic(holder_fid, 1, &Pubkey::new_unique(), &[fake_claim], 10)
-            .expect("verify_claim_for_topic");
+        let verified =
+            verify_claim_for_topic(holder_fid, 1, &Pubkey::new_unique(), &[fake_claim], 10)
+                .expect("verify_claim_for_topic");
         assert!(!verified);
     }
 }

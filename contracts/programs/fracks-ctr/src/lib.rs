@@ -24,7 +24,10 @@ pub mod fracks_ctr {
             !ctr_state.topics.contains(&topic_id),
             FracksCtrError::TopicAlreadyExists
         );
-        require!(ctr_state.topics.len() < MAX_TOPICS, FracksCtrError::MaxTopicsReached);
+        require!(
+            ctr_state.topics.len() < MAX_TOPICS,
+            FracksCtrError::MaxTopicsReached
+        );
 
         ctr_state.topics.push(topic_id);
 

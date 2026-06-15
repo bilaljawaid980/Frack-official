@@ -476,6 +476,72 @@ const FRACKS_COMMON_ERRORS: Record<number, Omit<DecodedError, "code">> = {
     userMessage: "A required compliance module support account is missing.",
   },
   // ── Factory ───────────────────────────────────────────────────────────────
+
+  6077: {
+    name: "InvalidCustodian",
+    message: "Invalid custodian wallet.",
+    userMessage: "Select a valid custodian wallet for this asset.",
+  },
+  6078: {
+    name: "InvalidIssuerFid",
+    message: "Issuer FID account is invalid.",
+    userMessage: "Issuer wallet must register FID before token deployment.",
+  },
+  6079: {
+    name: "InvalidCustodianFid",
+    message: "Custodian FID account is invalid.",
+    userMessage: "Custodian wallet must register FID before custody attestation.",
+  },
+  6080: {
+    name: "CustodianCannotEqualIssuer",
+    message: "Custodian cannot equal issuer.",
+    userMessage: "Choose a custodian wallet that is different from the issuer wallet.",
+  },
+  6082: {
+    name: "UnauthorizedCustodyMandate",
+    message: "Only issuer or platform admin can create custody mandate.",
+    userMessage: "Only the issuer or platform admin can create this custody mandate.",
+  },
+  6083: {
+    name: "UnauthorizedCustodian",
+    message: "Only the mandated custodian can perform this custody action.",
+    userMessage: "Connect the selected custodian wallet to accept or attest custody.",
+  },
+  6084: {
+    name: "InvalidCustodyMandate",
+    message: "Custody mandate does not match this asset.",
+    userMessage: "Custody mandate does not match this asset deployment. Refresh and retry.",
+  },
+  6085: {
+    name: "CustodyMandateInactive",
+    message: "Custody mandate is inactive or not accepted.",
+    userMessage: "Custody mandate must be accepted by the custodian before deployment.",
+  },
+  6086: {
+    name: "CustodyAttestationMissing",
+    message: "Active custody attestation is missing for this asset.",
+    userMessage: "Custodian must attest custody before the token suite can be deployed.",
+  },
+  6087: {
+    name: "CustodyAttestationExpired",
+    message: "Custody attestation is expired.",
+    userMessage: "Custody attestation expired. Custodian must submit a fresh attestation.",
+  },
+  6088: {
+    name: "InvalidAttestationValidity",
+    message: "Invalid attestation validity period.",
+    userMessage: "Custody attestation validity must be greater than zero and within one year.",
+  },
+  6089: {
+    name: "InvalidReserveRatio",
+    message: "Reserve ratio is invalid.",
+    userMessage: "Reserve ratio must be between 0 and 10000 basis points.",
+  },
+  6091: {
+    name: "PlatformAuthorityMissing",
+    message: "Custodian platform authority is missing.",
+    userMessage: "Platform admin must approve this custodian authority before deployment.",
+  },
   12060: {
     name: "DeploymentAlreadyExists",
     message: "Deployment already exists for this issuer and salt.",

@@ -1,0 +1,921 @@
+{
+  "address": "8W8ghNUHsMkeLZjwi6dNk99ij5kbxPSXGGuDnpxv5h44",
+  "metadata": {
+    "name": "fracks_trade_escrow",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "cancel_trade",
+      "discriminator": [
+        124,
+        66,
+        91,
+        59,
+        175,
+        107,
+        208,
+        120
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "trade_escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade_escrow.trade_id",
+                "account": "TradeEscrow"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "reason_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "confirm_buyer_payment",
+      "discriminator": [
+        241,
+        167,
+        29,
+        109,
+        150,
+        144,
+        33,
+        212
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "trade_escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade_escrow.trade_id",
+                "account": "TradeEscrow"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "payment_reference_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "grant_institution_role",
+      "discriminator": [
+        172,
+        114,
+        15,
+        100,
+        79,
+        184,
+        220,
+        48
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "institution_role",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  115,
+                  116,
+                  105,
+                  116,
+                  117,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "token_mint"
+              },
+              {
+                "kind": "arg",
+                "path": "institution_wallet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "token_mint",
+          "type": "pubkey"
+        },
+        {
+          "name": "institution_wallet",
+          "type": "pubkey"
+        },
+        {
+          "name": "max_balance_override",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initiate_trade",
+      "discriminator": [
+        138,
+        205,
+        116,
+        0,
+        70,
+        9,
+        151,
+        173
+      ],
+      "accounts": [
+        {
+          "name": "seller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "trade_escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "args.trade_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "InitiateTradeArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "lock_tokens",
+      "discriminator": [
+        136,
+        11,
+        32,
+        232,
+        161,
+        117,
+        54,
+        211
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "trade_escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade_escrow.trade_id",
+                "account": "TradeEscrow"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "revoke_institution_role",
+      "discriminator": [
+        12,
+        56,
+        100,
+        58,
+        73,
+        61,
+        168,
+        133
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true
+        },
+        {
+          "name": "institution_role",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "settle_trade",
+      "discriminator": [
+        252,
+        176,
+        98,
+        248,
+        73,
+        123,
+        8,
+        157
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "trade_escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trade_escrow.trade_id",
+                "account": "TradeEscrow"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "settlement_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "InstitutionRole",
+      "discriminator": [
+        200,
+        111,
+        141,
+        41,
+        18,
+        242,
+        61,
+        115
+      ]
+    },
+    {
+      "name": "TradeEscrow",
+      "discriminator": [
+        251,
+        124,
+        237,
+        23,
+        18,
+        126,
+        198,
+        49
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "InstitutionRoleGranted",
+      "discriminator": [
+        151,
+        179,
+        148,
+        158,
+        107,
+        55,
+        77,
+        123
+      ]
+    },
+    {
+      "name": "InstitutionRoleRevoked",
+      "discriminator": [
+        119,
+        91,
+        171,
+        44,
+        135,
+        203,
+        216,
+        163
+      ]
+    },
+    {
+      "name": "TradeCancelled",
+      "discriminator": [
+        228,
+        218,
+        59,
+        27,
+        43,
+        158,
+        22,
+        227
+      ]
+    },
+    {
+      "name": "TradeInitiated",
+      "discriminator": [
+        82,
+        23,
+        81,
+        244,
+        193,
+        165,
+        18,
+        185
+      ]
+    },
+    {
+      "name": "TradePaymentConfirmed",
+      "discriminator": [
+        227,
+        21,
+        171,
+        99,
+        201,
+        61,
+        173,
+        174
+      ]
+    },
+    {
+      "name": "TradeSettled",
+      "discriminator": [
+        22,
+        119,
+        166,
+        225,
+        175,
+        53,
+        93,
+        216
+      ]
+    },
+    {
+      "name": "TradeTokensLocked",
+      "discriminator": [
+        35,
+        41,
+        237,
+        88,
+        137,
+        24,
+        189,
+        129
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "UnauthorizedOwner",
+      "msg": "Signer is not the token owner."
+    },
+    {
+      "code": 6001,
+      "name": "InvalidTokenAmount",
+      "msg": "Token amount must be greater than zero."
+    },
+    {
+      "code": 6002,
+      "name": "InvalidPrice",
+      "msg": "Price per token must be greater than zero."
+    },
+    {
+      "code": 6003,
+      "name": "UnauthorizedSeller",
+      "msg": "Signer is not the seller."
+    },
+    {
+      "code": 6004,
+      "name": "InvalidTradeStatus",
+      "msg": "Trade is not in the required status."
+    },
+    {
+      "code": 6005,
+      "name": "UnauthorizedPaymentConfirmer",
+      "msg": "Signer cannot confirm buyer payment."
+    },
+    {
+      "code": 6006,
+      "name": "UnauthorizedSettlement",
+      "msg": "Signer cannot settle this trade."
+    },
+    {
+      "code": 6007,
+      "name": "UnauthorizedCancellation",
+      "msg": "Signer cannot cancel this trade."
+    }
+  ],
+  "types": [
+    {
+      "name": "InitiateTradeArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade_id",
+            "type": "u64"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_amount",
+            "type": "u64"
+          },
+          {
+            "name": "price_per_token",
+            "type": "u64"
+          },
+          {
+            "name": "payment_reference_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "quick_exit",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "InstitutionRole",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "institution_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "max_balance_override",
+            "type": "u64"
+          },
+          {
+            "name": "is_active",
+            "type": "bool"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "InstitutionRoleGranted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "institution_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "max_balance_override",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "InstitutionRoleRevoked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "institution_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade",
+            "type": "pubkey"
+          },
+          {
+            "name": "trade_id",
+            "type": "u64"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "reason_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeEscrow",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade_id",
+            "type": "u64"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_amount",
+            "type": "u64"
+          },
+          {
+            "name": "price_per_token",
+            "type": "u64"
+          },
+          {
+            "name": "payment_reference_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "settlement_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "cancellation_reason_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "quick_exit",
+            "type": "bool"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "locked_at",
+            "type": "i64"
+          },
+          {
+            "name": "payment_confirmed_at",
+            "type": "i64"
+          },
+          {
+            "name": "settled_at",
+            "type": "i64"
+          },
+          {
+            "name": "cancelled_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeInitiated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade",
+            "type": "pubkey"
+          },
+          {
+            "name": "trade_id",
+            "type": "u64"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_amount",
+            "type": "u64"
+          },
+          {
+            "name": "price_per_token",
+            "type": "u64"
+          },
+          {
+            "name": "quick_exit",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradePaymentConfirmed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade",
+            "type": "pubkey"
+          },
+          {
+            "name": "trade_id",
+            "type": "u64"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "payment_reference_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeSettled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade",
+            "type": "pubkey"
+          },
+          {
+            "name": "trade_id",
+            "type": "u64"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "settlement_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeTokensLocked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade",
+            "type": "pubkey"
+          },
+          {
+            "name": "trade_id",
+            "type": "u64"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          }
+        ]
+      }
+    }
+  ]
+}

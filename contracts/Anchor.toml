@@ -5,6 +5,9 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
+fracks_governance = "4zh7CCxi31GZ48kX2owTUfYvJam18N6rjGS6q7qRgdMP"
+fracks_trade_escrow = "8W8ghNUHsMkeLZjwi6dNk99ij5kbxPSXGGuDnpxv5h44"
+fracks_asset_registry = "3xoAnJ9DqMxj22XfeUYQdwAy6dbKXHHeXxcLBxAY2Pdx"
 fracks_compliance = "9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d"
 fracks_ctr = "B15EFQKwnfbNHXHhPVvVcw18PaBeTDsRLNRno3QS8Yna"
 fracks_factory = "6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe"
@@ -24,6 +27,9 @@ mod_max_transfer = "Ee6RXC46Nb4Bo2BTQcXBHfuxLZdzbKtPmb3sGf2Egiqh"
 mod_supply_cap = "EkgX6pGFCFT7FuNWuBAAMePy43iU9oETLDota4nTA3x8"
 
 [programs.testnet]
+fracks_governance = "4zh7CCxi31GZ48kX2owTUfYvJam18N6rjGS6q7qRgdMP"
+fracks_trade_escrow = "8W8ghNUHsMkeLZjwi6dNk99ij5kbxPSXGGuDnpxv5h44"
+fracks_asset_registry = "3xoAnJ9DqMxj22XfeUYQdwAy6dbKXHHeXxcLBxAY2Pdx"
 fracks_compliance = "9XYxZzDfU17BBpN1qhdu7RDCCrV6uebDgi5xse7Jbz5d"
 fracks_ctr = "B15EFQKwnfbNHXHhPVvVcw18PaBeTDsRLNRno3QS8Yna"
 fracks_factory = "6cGkK5skWBrpFWUvaerXvUejNa7etrWHisgrNjwPjdNe"
@@ -43,6 +49,9 @@ mod_max_transfer = "Ee6RXC46Nb4Bo2BTQcXBHfuxLZdzbKtPmb3sGf2Egiqh"
 mod_supply_cap = "EkgX6pGFCFT7FuNWuBAAMePy43iU9oETLDota4nTA3x8"
 
 [programs.devnet]
+fracks_governance = "4zh7CCxi31GZ48kX2owTUfYvJam18N6rjGS6q7qRgdMP"
+fracks_trade_escrow = "8W8ghNUHsMkeLZjwi6dNk99ij5kbxPSXGGuDnpxv5h44"
+fracks_asset_registry = "3xoAnJ9DqMxj22XfeUYQdwAy6dbKXHHeXxcLBxAY2Pdx"
 fracks_compliance = "HnJiNrmDeVFZksgEXaQwyVqHXQLRcyqXEksbYhkiPFFV"
 fracks_ctr = "8MuWrtbZ1zPzrDhSKPjDd78SMQAMtBuprPnc1Zam1Gig"
 fracks_factory = "FtrzQ1hhjL7vbEPAxLBeLgrmomanSVj9UpV6LLJ5TYFS"
@@ -69,7 +78,7 @@ cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [workspace]
-members = ["programs/fracks-factory", "programs/fracks-token", "programs/fracks-token-hook", "programs/fracks-fid", "programs/fracks-irp", "programs/fracks-irs", "programs/fracks-tir", "programs/fracks-ctr", "programs/fracks-compliance", "programs/modules/mod-max-investors", "programs/modules/mod-country-restrict", "programs/modules/mod-max-balance", "programs/modules/mod-max-transfer", "programs/modules/mod-lockup", "programs/modules/mod-daily-limit", "programs/modules/mod-supply-cap", "programs/modules/mod-country-cap"]
+members = ["programs/fracks-asset-registry", "programs/fracks-governance", "programs/fracks-trade-escrow", "programs/fracks-factory", "programs/fracks-token", "programs/fracks-token-hook", "programs/fracks-fid", "programs/fracks-irp", "programs/fracks-irs", "programs/fracks-tir", "programs/fracks-ctr", "programs/fracks-compliance", "programs/modules/mod-max-investors", "programs/modules/mod-country-restrict", "programs/modules/mod-max-balance", "programs/modules/mod-max-transfer", "programs/modules/mod-lockup", "programs/modules/mod-daily-limit", "programs/modules/mod-supply-cap", "programs/modules/mod-country-cap"]
 
 [scripts]
 test = "yarn ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

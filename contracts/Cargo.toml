@@ -1,5 +1,8 @@
 [workspace]
 members = [
+  "programs/fracks-asset-registry",
+  "programs/fracks-trade-escrow",
+  "programs/fracks-governance",
   "programs/fracks-factory",
   "programs/fracks-token",
   "programs/fracks-token-hook",

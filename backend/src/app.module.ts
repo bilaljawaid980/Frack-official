@@ -18,6 +18,7 @@ import { TokenTransferRequestsModule } from './token-transfer-requests/token-tra
 import { TokenListingsModule } from './token-listings/token-listings.module';
 import { TrustedIssuersModule } from './trusted-issuers/trusted-issuers.module';
 import { BlockchainTransactionsModule } from './blockchain-transactions/blockchain-transactions.module';
+import { SandboxModule } from './sandbox/sandbox.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { BlockchainTransactionsModule } from './blockchain-transactions/blockcha
     TokenListingsModule,
     TrustedIssuersModule,
     BlockchainTransactionsModule,
+    SandboxModule,
   ],
 })
 export class AppModule {}

@@ -14,7 +14,10 @@ pub mod mod_country_restrict {
         token_mint: Pubkey,
         allowed_countries: Vec<u16>,
     ) -> Result<()> {
-        require!(allowed_countries.len() <= MAX_COUNTRIES, ModCountryRestrictError::TooManyCountries);
+        require!(
+            allowed_countries.len() <= MAX_COUNTRIES,
+            ModCountryRestrictError::TooManyCountries
+        );
         let module = &mut ctx.accounts.module_state;
         module.owner = ctx.accounts.owner.key();
         module.token_mint = token_mint;
@@ -28,8 +31,16 @@ pub mod mod_country_restrict {
         from_country: u16,
         to_country: u16,
     ) -> Result<bool> {
-        Ok(ctx.accounts.module_state.allowed_countries.contains(&from_country)
-            && ctx.accounts.module_state.allowed_countries.contains(&to_country))
+        Ok(ctx
+            .accounts
+            .module_state
+            .allowed_countries
+            .contains(&from_country)
+            && ctx
+                .accounts
+                .module_state
+                .allowed_countries
+                .contains(&to_country))
     }
 
     pub fn transferred(_ctx: Context<ReadModule>) -> Result<()> {

@@ -15,18 +15,17 @@ use anchor_spl::token_2022::spl_token_2022::{
 use fracks_compliance::instruction as compliance_instruction;
 use solana_program::hash::hash;
 use spl_tlv_account_resolution::{
-    account::ExtraAccountMeta,
-    pubkey_data::PubkeyData,
-    seeds::Seed,
-    state::ExtraAccountMetaList,
+    account::ExtraAccountMeta, pubkey_data::PubkeyData, seeds::Seed, state::ExtraAccountMetaList,
 };
 use spl_transfer_hook_interface::instruction::ExecuteInstruction;
 
 declare_id!("9JrgWtW4UrQoC3tVQRxWBBEQPjDJ2QFDzAVAvSzGtPJ5");
 
 const FRACKS_TOKEN_PROGRAM_ID: Pubkey = pubkey!("6Naj8HsuNdUJQyyzmPssm1mZRDF7F5VMQ91n9QyMoyGj");
-const FRACKS_COMPLIANCE_PROGRAM_ID: Pubkey = pubkey!("HnJiNrmDeVFZksgEXaQwyVqHXQLRcyqXEksbYhkiPFFV");
-const MOD_MAX_INVESTORS_PROGRAM_ID: Pubkey = pubkey!("2zfQv7RxmL5BAgXXFagZXBNby4Q41YGH6hnSJAcsXQeU");
+const FRACKS_COMPLIANCE_PROGRAM_ID: Pubkey =
+    pubkey!("HnJiNrmDeVFZksgEXaQwyVqHXQLRcyqXEksbYhkiPFFV");
+const MOD_MAX_INVESTORS_PROGRAM_ID: Pubkey =
+    pubkey!("2zfQv7RxmL5BAgXXFagZXBNby4Q41YGH6hnSJAcsXQeU");
 const MOD_DAILY_LIMIT_PROGRAM_ID: Pubkey = pubkey!("5dfHskP5MijaDY2gYsE44CPAuomt1vWgbPdGi62cquoT");
 const MOD_COUNTRY_CAP_PROGRAM_ID: Pubkey = pubkey!("EcLffdKdSsCpNczazKsSeRw7FCN6vVjKAEMH5CZGBndr");
 const TRANSFER_APPROVAL_SPACE: usize = 8 + (32 * 6) + (8 * 3) + (2 * 2) + 1 + 1 + 1 + 1;
@@ -500,11 +499,7 @@ fn read_token_state(account: &AccountInfo) -> Result<TokenStateView> {
     })
 }
 
-fn validate_owner_state(
-    account: &AccountInfo,
-    owner: Pubkey,
-    token_mint: Pubkey,
-) -> Result<()> {
+fn validate_owner_state(account: &AccountInfo, owner: Pubkey, token_mint: Pubkey) -> Result<()> {
     require_keys_eq!(
         *account.owner,
         FRACKS_TOKEN_PROGRAM_ID,
@@ -527,7 +522,11 @@ fn validate_owner_state(
             .map_err(|_| error!(FracksTokenHookError::InvalidOwnerState))?,
     );
     require_keys_eq!(stored_owner, owner, FracksTokenHookError::NotOwner);
-    require_keys_eq!(stored_mint, token_mint, FracksTokenHookError::InvalidOwnerState);
+    require_keys_eq!(
+        stored_mint,
+        token_mint,
+        FracksTokenHookError::InvalidOwnerState
+    );
     Ok(())
 }
 
@@ -557,7 +556,11 @@ fn validate_compliance_state(
             .try_into()
             .map_err(|_| error!(FracksTokenHookError::InvalidCompliance))?,
     );
-    require_keys_eq!(stored_mint, token_mint, FracksTokenHookError::InvalidCompliance);
+    require_keys_eq!(
+        stored_mint,
+        token_mint,
+        FracksTokenHookError::InvalidCompliance
+    );
     Ok(())
 }
 
@@ -695,10 +698,7 @@ fn push_module_metas(
     Ok(())
 }
 
-fn push_compliance_module_meta(
-    metas: &mut Vec<ExtraAccountMeta>,
-    index: usize,
-) -> Result<()> {
+fn push_compliance_module_meta(metas: &mut Vec<ExtraAccountMeta>, index: usize) -> Result<()> {
     metas.push(
         ExtraAccountMeta::new_with_pubkey_data(
             &PubkeyData::AccountData {

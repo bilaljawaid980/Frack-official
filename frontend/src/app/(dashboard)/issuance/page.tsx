@@ -112,6 +112,17 @@ function numberValue(value: unknown, fallback = 0) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
+function positiveIntValue(value: unknown, fallback: number) {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isInteger(parsed) && parsed > 0) return parsed;
+  }
+  return fallback;
+}
+
 function formatDocumentType(value?: string) {
   if (!value) return "Document";
   return value
@@ -351,6 +362,14 @@ export default function IssuancePage() {
         location: selectedRequest.location || "",
         currency: selectedRequest.currency,
         issuerWallet: selectedRequest.issuerWallet,
+        custodianWallet: stringValue(
+          requestMetadata.custodianWallet,
+          selectedRequest.issuerWallet,
+        ),
+        factoryAssetId: positiveIntValue(
+          requestMetadata.factoryAssetId,
+          Math.floor(Date.now() / 1000),
+        ),
         isin: selectedRequest.referenceId || selectedRequest.symbol,
       },
       complianceRequirements: {

@@ -70,6 +70,15 @@ export const TIR_PROGRAM_ID = new PublicKey(
 export const CTR_PROGRAM_ID = new PublicKey(
   process.env.NEXT_PUBLIC_CTR_PROGRAM_ID ?? "8MuWrtbZ1zPzrDhSKPjDd78SMQAMtBuprPnc1Zam1Gig"
 );
+export const ASSET_REGISTRY_PROGRAM_ID = new PublicKey(
+  process.env.NEXT_PUBLIC_ASSET_REGISTRY_PROGRAM_ID ?? "3xoAnJ9DqMxj22XfeUYQdwAy6dbKXHHeXxcLBxAY2Pdx"
+);
+export const GOVERNANCE_PROGRAM_ID = new PublicKey(
+  process.env.NEXT_PUBLIC_GOVERNANCE_PROGRAM_ID ?? "4zh7CCxi31GZ48kX2owTUfYvJam18N6rjGS6q7qRgdMP"
+);
+export const TRADE_ESCROW_PROGRAM_ID = new PublicKey(
+  process.env.NEXT_PUBLIC_TRADE_ESCROW_PROGRAM_ID ?? "8W8ghNUHsMkeLZjwi6dNk99ij5kbxPSXGGuDnpxv5h44"
+);
 
 // ─── Governance / Deployment PDAs ────────────────────────────────────────────
 
@@ -129,6 +138,9 @@ export const SEED_AGENT = Buffer.from("agent");
 export const SEED_COMPLIANCE_STATE = Buffer.from("compliance_state");
 export const SEED_FACTORY_STATE = Buffer.from("factory_state");
 export const SEED_DEPLOYMENT = Buffer.from("deployment");
+export const SEED_PLATFORM_AUTHORITY = Buffer.from("platform_authority");
+export const SEED_CUSTODY_MANDATE = Buffer.from("custody_mandate");
+export const SEED_CUSTODY_ATTESTATION = Buffer.from("custody_attestation");
 export const SEED_IRP_STATE = Buffer.from("irp_state");
 export const SEED_IRS_STATE = Buffer.from("irs_state");
 export const SEED_TIR_STATE = Buffer.from("tir_state");
@@ -143,6 +155,42 @@ export const SEED_FROZEN_WALLET = Buffer.from("frozen_wallet");
 export const SEED_PARTIAL_FREEZE = Buffer.from("partial_freeze");
 export const SEED_DAILY_USAGE = Buffer.from("daily_usage");
 export const SEED_COUNTRY_COUNT = Buffer.from("country_count");
+
+// ─── Sandbox Claim Topics ────────────────────────────────────────────────────
+
+export const TOPIC_CUSTODIAN_AUTHORITY = 4;
+export const TOPIC_VALUATION_AUTHORITY = 5;
+export const TOPIC_CONSTRUCTION_AUTHORITY = 6;
+export const TOPIC_SHARIAH_AUTHORITY = 7;
+export const TOPIC_PROPERTY_MANAGER_AUTHORITY = 8;
+
+export const SANDBOX_AUTHORITY_TOPICS = [
+  {
+    id: TOPIC_CUSTODIAN_AUTHORITY,
+    label: "Custodian Authority",
+    description: "Custody mandate, title document custody, and reserve attestations.",
+  },
+  {
+    id: TOPIC_VALUATION_AUTHORITY,
+    label: "Valuation Authority",
+    description: "NAV and periodic valuation attestations.",
+  },
+  {
+    id: TOPIC_CONSTRUCTION_AUTHORITY,
+    label: "Construction Authority",
+    description: "Milestone and progress attestations for under-construction assets.",
+  },
+  {
+    id: TOPIC_SHARIAH_AUTHORITY,
+    label: "Shariah Authority",
+    description: "Shariah review and compliance attestations.",
+  },
+  {
+    id: TOPIC_PROPERTY_MANAGER_AUTHORITY,
+    label: "Property Manager Authority",
+    description: "Rental, occupancy, and operating performance attestations.",
+  },
+] as const;
 
 // ─── Compliance Modules Registry ─────────────────────────────────────────────
 

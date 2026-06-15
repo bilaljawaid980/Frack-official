@@ -152,6 +152,8 @@ export interface TokenDeployment {
   issuer: string;
   /** 32-byte salt used to derive this deployment's PDAs. */
   salt: Uint8Array;
+  /** Factory-level asset/custody identifier. */
+  assetId: bigint;
   /** Token-2022 mint address (base-58). */
   tokenMint: string;
   /** fracks_token TokenState PDA (base-58). */
@@ -168,6 +170,10 @@ export interface TokenDeployment {
   ctrState: string;
   /** fracks_compliance ComplianceState PDA (base-58). */
   complianceState: string;
+  /** Custody mandate PDA required by the sandbox deployment gate. */
+  custodyMandate: string;
+  /** Latest custody attestation PDA required by the sandbox deployment gate. */
+  custodyAttestation: string;
   /** Unix timestamp of deployment (seconds). */
   deployedAt: number;
   /** PDA bump seed. */
@@ -178,10 +184,14 @@ export interface TokenDeployment {
  * Arguments passed to the fracks_factory deploy_token_suite instruction.
  */
 export interface DeployTokenSuiteArgs {
+  /** Factory-level asset/custody identifier. */
+  assetId: bigint;
   /** Issuer wallet that becomes final owner of the deployed suite. */
   issuer: string;
   /** Pre-generated Token-2022 mint keypair public key (base-58). */
   tokenMint: string;
+  /** Custodian wallet that signs custody/reserve attestations. */
+  custodian: string;
   /** Token name (max 32 chars). */
   tokenName: string;
   /** Token symbol (max 8 chars). */

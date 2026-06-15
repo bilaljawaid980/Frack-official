@@ -70,10 +70,7 @@ pub mod fracks_irs {
         Ok(())
     }
 
-    pub fn transfer_ownership(
-        ctx: Context<UpdateIrsOwnerState>,
-        new_owner: Pubkey,
-    ) -> Result<()> {
+    pub fn transfer_ownership(ctx: Context<UpdateIrsOwnerState>, new_owner: Pubkey) -> Result<()> {
         require_keys_neq!(new_owner, Pubkey::default(), FracksIrsError::InvalidOwner);
         ctx.accounts.irs_state.owner = new_owner;
         Ok(())
@@ -693,11 +690,7 @@ fn validate_investor_fid(
     fid: &Pubkey,
     country: u16,
 ) -> Result<()> {
-    require_keys_eq!(
-        fid_account.key(),
-        *fid,
-        FracksIrsError::InvalidFidAccount
-    );
+    require_keys_eq!(fid_account.key(), *fid, FracksIrsError::InvalidFidAccount);
     require_keys_eq!(
         fid_account.owner,
         *wallet,

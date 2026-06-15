@@ -7,14 +7,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import * as ISO3166 from "iso-3166-1";
 import { motion } from "framer-motion";
-import { 
-  Shield, 
-  Trash2, 
-  Loader2, 
-  Rocket, 
-  FileText, 
-  Upload, 
-  ChevronLeft, 
+import {
+  Shield,
+  Trash2,
+  Loader2,
+  Rocket,
+  FileText,
+  Upload,
+  ChevronLeft,
   ChevronRight,
   CheckCircle,
   AlertCircle,
@@ -54,7 +54,7 @@ import {
   useDeployTokenSuite,
   useFactoryState,
 } from "@/hooks/useFactory";
-import { COMPLIANCE_MODULES, FACTORY_PROGRAM_ID } from "@/lib/constants";
+import { COMPLIANCE_MODULES, FACTORY_PROGRAM_ID, SANDBOX_AUTHORITY_TOPICS } from "@/lib/constants";
 import { generateSalt, isValidPublicKey } from "@/lib/utils";
 import { PublicKey, Keypair } from "@solana/web3.js";
 import { queryCache } from "@/lib/query-cache";
@@ -110,6 +110,8 @@ const issuanceSchema = z.object({
     location: z.string().min(2, "Location is required"),
     currency: z.string(),
     issuerWallet: z.string().refine(isValidPublicKey, "Enter a valid wallet address"),
+    custodianWallet: z.string().refine(isValidPublicKey, "Enter a valid custodian wallet"),
+    factoryAssetId: z.coerce.number().int().positive("Asset ID must be positive"),
     isin: z.string().min(1, "ISIN is required").max(12, "Max 12 characters").transform((v) => v.toUpperCase()),
   }),
   complianceRequirements: z.object({
@@ -159,6 +161,11 @@ const DOCUMENT_TYPE_OPTIONS = [
 const CLAIM_TOPIC_OPTIONS = [
   { value: "1", label: "KYC", description: "Know Your Customer verification" },
   { value: "2", label: "AML", description: "Anti-Money Laundering screening" },
+  ...SANDBOX_AUTHORITY_TOPICS.map((topic) => ({
+    value: String(topic.id),
+    label: topic.label,
+    description: topic.description,
+  })),
 ];
 
 type TrustedIssuerRecord = {
@@ -541,6 +548,8 @@ export function IssuanceForm({
         location: "",
         currency: "USD",
         issuerWallet: address || "",
+        custodianWallet: address || "",
+        factoryAssetId: Math.floor(Date.now() / 1000),
         isin: "",
       },
       complianceRequirements: {
@@ -599,6 +608,9 @@ export function IssuanceForm({
   useEffect(() => {
     if (address && !form.getValues("assetDetails.issuerWallet")) {
       form.setValue("assetDetails.issuerWallet", address);
+    }
+    if (address && !form.getValues("assetDetails.custodianWallet")) {
+      form.setValue("assetDetails.custodianWallet", address);
     }
   }, [address, form]);
 
@@ -886,8 +898,10 @@ export function IssuanceForm({
     deployTokenSuite(
       {
         mintKeypair,
+        assetId: BigInt(data.assetDetails.factoryAssetId),
         issuer: data.assetDetails.issuerWallet,
         tokenMint: mintKeypair.publicKey.toBase58(),
+        custodian: data.assetDetails.custodianWallet,
         tokenName: data.assetDetails.name,
         tokenSymbol: data.assetDetails.symbol,
         decimals: data.tokenDetails.decimals,
@@ -926,6 +940,8 @@ export function IssuanceForm({
                 paymentMint: null,
                 decimals: data.tokenDetails.decimals,
                 isin: data.assetDetails.isin,
+                factoryAssetId: data.assetDetails.factoryAssetId,
+                custodianWallet: data.assetDetails.custodianWallet,
                 claimTopics: data.complianceRequirements.claimTopics,
                 trustedIssuers: trustedIssuers.map((issuer) => ({
                   ...issuer,
@@ -1338,6 +1354,48 @@ export function IssuanceForm({
                     </FormItem>
                   )}
                 />
+
+                {!isApplicationMode ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <FormField
+                      control={form.control}
+                      name="assetDetails.factoryAssetId"
+                      render={({ field }: { field: any }) => (
+                        <FormItem>
+                          <FormLabel>Factory Asset ID</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              {...field}
+                              onChange={(event) => field.onChange(Number(event.target.value))}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Used to derive the custody mandate PDA for this deployment.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="assetDetails.custodianWallet"
+                      render={({ field }: { field: any }) => (
+                        <FormItem>
+                          <FormLabel>Custodian Wallet</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Custodian wallet address" {...field} />
+                          </FormControl>
+                          <FormDescription>
+                            Must have a registered FID and signs the custody attestation.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                ) : null}
 
                 <FormField
                   control={form.control}
@@ -2071,8 +2129,8 @@ export function IssuanceForm({
             </Button>
 
             {currentStep < finalStep ? (
-              <Button 
-                type="button" 
+              <Button
+                type="button"
                 className="h-11 px-8 bg-gradient-to-r from-[#172E7F] to-[#2A5FA6] text-white hover:shadow-lg transition-all"
                 onClick={() => void nextStep()}
                 disabled={uploadingDocuments}
@@ -2081,8 +2139,8 @@ export function IssuanceForm({
                 <ChevronRight className="h-4 w-4 ml-2" />
               </Button>
             ) : (
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 className="h-11 px-10 bg-gradient-to-r from-[#172E7F] to-[#2A5FA6] text-white hover:shadow-lg transition-all"
                 disabled={
                   deploying ||

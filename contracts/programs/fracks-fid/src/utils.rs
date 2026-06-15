@@ -70,7 +70,10 @@ fn verify_ed25519_data(
 ) -> Result<()> {
     let data = instruction.data.as_slice();
 
-    require!(data.len() >= ED25519_HEADER_SIZE, FracksFidError::InvalidClaimSignature);
+    require!(
+        data.len() >= ED25519_HEADER_SIZE,
+        FracksFidError::InvalidClaimSignature
+    );
     require!(data[0] == 1, FracksFidError::InvalidClaimSignature);
 
     let signature_offset = read_u16(data, 2)? as usize;
@@ -96,7 +99,10 @@ fn verify_ed25519_data(
     let signature = slice(data, signature_offset, ED25519_SIGNATURE_SIZE)?;
     let message = slice(data, message_data_offset, message_data_size)?;
 
-    require!(public_key == expected_pubkey.as_ref(), FracksFidError::InvalidClaimSignature);
+    require!(
+        public_key == expected_pubkey.as_ref(),
+        FracksFidError::InvalidClaimSignature
+    );
     require!(
         signature == expected_signature.as_slice(),
         FracksFidError::InvalidClaimSignature

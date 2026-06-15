@@ -772,6 +772,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 
 [[package]]
+name = "fracks-asset-registry"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "fracks-fid",
+ "fracks-tir",
+]
+
+[[package]]
 name = "fracks-compliance"
 version = "0.1.0"
 dependencies = [
@@ -812,6 +821,13 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "solana-program",
+]
+
+[[package]]
+name = "fracks-governance"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
 ]
 
 [[package]]
@@ -865,6 +881,13 @@ dependencies = [
  "solana-program",
  "spl-tlv-account-resolution",
  "spl-transfer-hook-interface",
+]
+
+[[package]]
+name = "fracks-trade-escrow"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
 ]
 
 [[package]]

@@ -7,6 +7,698 @@
   },
   "instructions": [
     {
+      "name": "accept_custody_mandate",
+      "discriminator": [
+        42,
+        105,
+        124,
+        166,
+        212,
+        48,
+        135,
+        19
+      ],
+      "accounts": [
+        {
+          "name": "custodian",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "custody_mandate",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  115,
+                  116,
+                  111,
+                  100,
+                  121,
+                  95,
+                  109,
+                  97,
+                  110,
+                  100,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "custody_mandate.asset_id",
+                "account": "CustodyMandate"
+              }
+            ]
+          }
+        },
+        {
+          "name": "custodian_fid_account",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "custodian"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                216,
+                187,
+                119,
+                80,
+                47,
+                4,
+                68,
+                176,
+                232,
+                243,
+                235,
+                214,
+                199,
+                114,
+                250,
+                248,
+                212,
+                91,
+                16,
+                233,
+                236,
+                175,
+                195,
+                252,
+                230,
+                88,
+                49,
+                103,
+                142,
+                11,
+                49,
+                231
+              ]
+            }
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "approve_platform_authority",
+      "discriminator": [
+        140,
+        146,
+        189,
+        4,
+        101,
+        222,
+        84,
+        131
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "factory_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "platform_authority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  116,
+                  102,
+                  111,
+                  114,
+                  109,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "authority_fid"
+              },
+              {
+                "kind": "arg",
+                "path": "topic"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "authority_fid",
+          "type": "pubkey"
+        },
+        {
+          "name": "topic",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "attest_custody",
+      "discriminator": [
+        254,
+        29,
+        125,
+        248,
+        142,
+        129,
+        59,
+        82
+      ],
+      "accounts": [
+        {
+          "name": "custodian",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "custody_mandate",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  115,
+                  116,
+                  111,
+                  100,
+                  121,
+                  95,
+                  109,
+                  97,
+                  110,
+                  100,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "custody_mandate.asset_id",
+                "account": "CustodyMandate"
+              }
+            ]
+          }
+        },
+        {
+          "name": "custody_attestation",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  115,
+                  116,
+                  111,
+                  100,
+                  121,
+                  95,
+                  97,
+                  116,
+                  116,
+                  101,
+                  115,
+                  116,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "custody_mandate"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "document_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "attestation_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "validity_seconds",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "attest_reserve",
+      "discriminator": [
+        67,
+        148,
+        114,
+        40,
+        247,
+        214,
+        157,
+        238
+      ],
+      "accounts": [
+        {
+          "name": "custodian",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "custody_mandate",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  115,
+                  116,
+                  111,
+                  100,
+                  121,
+                  95,
+                  109,
+                  97,
+                  110,
+                  100,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "custody_mandate.asset_id",
+                "account": "CustodyMandate"
+              }
+            ]
+          }
+        },
+        {
+          "name": "custody_attestation",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  115,
+                  116,
+                  111,
+                  100,
+                  121,
+                  95,
+                  97,
+                  116,
+                  116,
+                  101,
+                  115,
+                  116,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "custody_mandate"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "reserve_ratio_bps",
+          "type": "u16"
+        },
+        {
+          "name": "attestation_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "validity_seconds",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "create_custody_mandate",
+      "discriminator": [
+        121,
+        225,
+        189,
+        63,
+        105,
+        0,
+        147,
+        72
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "factory_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "issuer"
+        },
+        {
+          "name": "issuer_fid_account",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "issuer"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                216,
+                187,
+                119,
+                80,
+                47,
+                4,
+                68,
+                176,
+                232,
+                243,
+                235,
+                214,
+                199,
+                114,
+                250,
+                248,
+                212,
+                91,
+                16,
+                233,
+                236,
+                175,
+                195,
+                252,
+                230,
+                88,
+                49,
+                103,
+                142,
+                11,
+                49,
+                231
+              ]
+            }
+          }
+        },
+        {
+          "name": "custodian_fid_account",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "custodian"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                216,
+                187,
+                119,
+                80,
+                47,
+                4,
+                68,
+                176,
+                232,
+                243,
+                235,
+                214,
+                199,
+                114,
+                250,
+                248,
+                212,
+                91,
+                16,
+                233,
+                236,
+                175,
+                195,
+                252,
+                230,
+                88,
+                49,
+                103,
+                142,
+                11,
+                49,
+                231
+              ]
+            }
+          }
+        },
+        {
+          "name": "custodian_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  116,
+                  102,
+                  111,
+                  114,
+                  109,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "custodian_fid"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  4,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "custody_mandate",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  115,
+                  116,
+                  111,
+                  100,
+                  121,
+                  95,
+                  109,
+                  97,
+                  110,
+                  100,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "asset_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "asset_id",
+          "type": "u64"
+        },
+        {
+          "name": "issuer_fid",
+          "type": "pubkey"
+        },
+        {
+          "name": "custodian",
+          "type": "pubkey"
+        },
+        {
+          "name": "custodian_fid",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "create_token_mint",
       "discriminator": [
         35,
@@ -126,6 +818,72 @@
               {
                 "kind": "arg",
                 "path": "args.salt"
+              }
+            ]
+          }
+        },
+        {
+          "name": "custody_mandate",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  115,
+                  116,
+                  111,
+                  100,
+                  121,
+                  95,
+                  109,
+                  97,
+                  110,
+                  100,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "args.asset_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "custody_attestation",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  115,
+                  116,
+                  111,
+                  100,
+                  121,
+                  95,
+                  97,
+                  116,
+                  116,
+                  101,
+                  115,
+                  116,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "custody_mandate"
               }
             ]
           }
@@ -290,6 +1048,301 @@
       "args": []
     },
     {
+      "name": "release_custody_mandate",
+      "discriminator": [
+        29,
+        50,
+        152,
+        59,
+        221,
+        125,
+        111,
+        101
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "factory_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "custody_mandate",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  115,
+                  116,
+                  111,
+                  100,
+                  121,
+                  95,
+                  109,
+                  97,
+                  110,
+                  100,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "custody_mandate.asset_id",
+                "account": "CustodyMandate"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "reason_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "revoke_platform_authority",
+      "discriminator": [
+        7,
+        7,
+        103,
+        233,
+        134,
+        154,
+        157,
+        153
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "factory_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "platform_authority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  116,
+                  102,
+                  111,
+                  114,
+                  109,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "authority_fid"
+              },
+              {
+                "kind": "arg",
+                "path": "topic"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "authority_fid",
+          "type": "pubkey"
+        },
+        {
+          "name": "topic",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "sign_redemption_event",
+      "discriminator": [
+        235,
+        238,
+        140,
+        90,
+        52,
+        127,
+        109,
+        155
+      ],
+      "accounts": [
+        {
+          "name": "custodian",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "custody_mandate",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  115,
+                  116,
+                  111,
+                  100,
+                  121,
+                  95,
+                  109,
+                  97,
+                  110,
+                  100,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "custody_mandate.asset_id",
+                "account": "CustodyMandate"
+              }
+            ]
+          }
+        },
+        {
+          "name": "redemption_signature",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  100,
+                  101,
+                  109,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  115,
+                  105,
+                  103,
+                  110,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "custody_mandate"
+              },
+              {
+                "kind": "arg",
+                "path": "redemption_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "redemption_id",
+          "type": "u64"
+        },
+        {
+          "name": "attestation_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "transfer_factory_ownership",
       "discriminator": [
         134,
@@ -406,6 +1459,32 @@
   ],
   "accounts": [
     {
+      "name": "CustodyAttestation",
+      "discriminator": [
+        187,
+        79,
+        157,
+        75,
+        164,
+        102,
+        193,
+        156
+      ]
+    },
+    {
+      "name": "CustodyMandate",
+      "discriminator": [
+        249,
+        29,
+        24,
+        241,
+        38,
+        28,
+        28,
+        188
+      ]
+    },
+    {
       "name": "FactoryState",
       "discriminator": [
         91,
@@ -416,6 +1495,45 @@
         112,
         102,
         7
+      ]
+    },
+    {
+      "name": "FidAccount",
+      "discriminator": [
+        25,
+        188,
+        177,
+        154,
+        173,
+        195,
+        222,
+        72
+      ]
+    },
+    {
+      "name": "PlatformAuthority",
+      "discriminator": [
+        146,
+        90,
+        212,
+        219,
+        178,
+        134,
+        58,
+        195
+      ]
+    },
+    {
+      "name": "RedemptionSignature",
+      "discriminator": [
+        205,
+        220,
+        72,
+        153,
+        239,
+        26,
+        12,
+        67
       ]
     },
     {
@@ -433,6 +1551,110 @@
     }
   ],
   "events": [
+    {
+      "name": "CustodyAttested",
+      "discriminator": [
+        170,
+        95,
+        72,
+        234,
+        38,
+        141,
+        147,
+        208
+      ]
+    },
+    {
+      "name": "CustodyMandateAccepted",
+      "discriminator": [
+        195,
+        13,
+        195,
+        60,
+        84,
+        165,
+        1,
+        159
+      ]
+    },
+    {
+      "name": "CustodyMandateCreated",
+      "discriminator": [
+        72,
+        160,
+        10,
+        70,
+        160,
+        237,
+        94,
+        40
+      ]
+    },
+    {
+      "name": "CustodyMandateReleased",
+      "discriminator": [
+        135,
+        191,
+        154,
+        132,
+        56,
+        222,
+        37,
+        87
+      ]
+    },
+    {
+      "name": "PlatformAuthorityApproved",
+      "discriminator": [
+        229,
+        100,
+        231,
+        107,
+        122,
+        145,
+        66,
+        138
+      ]
+    },
+    {
+      "name": "PlatformAuthorityRevoked",
+      "discriminator": [
+        99,
+        18,
+        106,
+        247,
+        222,
+        46,
+        204,
+        38
+      ]
+    },
+    {
+      "name": "RedemptionEventSigned",
+      "discriminator": [
+        153,
+        214,
+        78,
+        135,
+        5,
+        215,
+        239,
+        38
+      ]
+    },
+    {
+      "name": "ReserveAttested",
+      "discriminator": [
+        223,
+        244,
+        97,
+        196,
+        46,
+        168,
+        163,
+        229
+      ]
+    },
     {
       "name": "TokenSuiteDeployed",
       "discriminator": [
@@ -542,9 +1764,319 @@
       "code": 12076,
       "name": "IrsAlreadyInitialized",
       "msg": "IRS state is already initialized for this token suite."
+    },
+    {
+      "code": 12077,
+      "name": "InvalidCustodian",
+      "msg": "Custodian wallet is invalid."
+    },
+    {
+      "code": 12078,
+      "name": "InvalidIssuerFid",
+      "msg": "Issuer FID account is invalid for this mandate."
+    },
+    {
+      "code": 12079,
+      "name": "InvalidCustodianFid",
+      "msg": "Custodian FID account is invalid for this mandate."
+    },
+    {
+      "code": 12080,
+      "name": "CustodianCannotEqualIssuer",
+      "msg": "Custodian FID must be different from issuer FID."
+    },
+    {
+      "code": 12081,
+      "name": "CustodianRoleMissing",
+      "msg": "Custodian does not have the required custodian authority topic."
+    },
+    {
+      "code": 12082,
+      "name": "UnauthorizedCustodyMandate",
+      "msg": "Only the issuer or platform admin can create this custody mandate."
+    },
+    {
+      "code": 12083,
+      "name": "UnauthorizedCustodian",
+      "msg": "Only the mandated custodian can perform this custody action."
+    },
+    {
+      "code": 12084,
+      "name": "InvalidCustodyMandate",
+      "msg": "Custody mandate is invalid for this asset."
+    },
+    {
+      "code": 12085,
+      "name": "CustodyMandateInactive",
+      "msg": "Custody mandate is not active and accepted."
+    },
+    {
+      "code": 12086,
+      "name": "CustodyAttestationMissing",
+      "msg": "Active custody attestation is missing for this asset."
+    },
+    {
+      "code": 12087,
+      "name": "CustodyAttestationExpired",
+      "msg": "Custody attestation has expired."
+    },
+    {
+      "code": 12088,
+      "name": "InvalidAttestationValidity",
+      "msg": "Custody attestation validity window is invalid."
+    },
+    {
+      "code": 12089,
+      "name": "InvalidReserveRatio",
+      "msg": "Reserve ratio must be between 0 and 10000 basis points."
+    },
+    {
+      "code": 12090,
+      "name": "UnauthorizedCustodyRelease",
+      "msg": "Only the custodian or platform admin can release this custody mandate."
+    },
+    {
+      "code": 12091,
+      "name": "PlatformAuthorityMissing",
+      "msg": "The custodian is not approved as a platform authority for the required topic."
     }
   ],
   "types": [
+    {
+      "name": "CustodyAttestation",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "custody_mandate",
+            "type": "pubkey"
+          },
+          {
+            "name": "custodian",
+            "type": "pubkey"
+          },
+          {
+            "name": "custodian_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "document_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "attestation_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "reserve_ratio_bps",
+            "type": "u16"
+          },
+          {
+            "name": "attested_at",
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CustodyAttested",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "custody_mandate",
+            "type": "pubkey"
+          },
+          {
+            "name": "custodian",
+            "type": "pubkey"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CustodyMandate",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "issuer_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "custodian",
+            "type": "pubkey"
+          },
+          {
+            "name": "custodian_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "accepted",
+            "type": "bool"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "accepted_at",
+            "type": "i64"
+          },
+          {
+            "name": "released_at",
+            "type": "i64"
+          },
+          {
+            "name": "release_notice_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CustodyMandateAccepted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "custodian",
+            "type": "pubkey"
+          },
+          {
+            "name": "custodian_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CustodyMandateCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "issuer_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "custodian",
+            "type": "pubkey"
+          },
+          {
+            "name": "custodian_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CustodyMandateReleased",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "custody_mandate",
+            "type": "pubkey"
+          },
+          {
+            "name": "released_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "reason_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
     {
       "name": "DeployTokenSuiteArgs",
       "type": {
@@ -553,6 +2085,10 @@
           {
             "name": "issuer",
             "type": "pubkey"
+          },
+          {
+            "name": "asset_id",
+            "type": "u64"
           },
           {
             "name": "token_mint",
@@ -663,6 +2199,110 @@
       }
     },
     {
+      "name": "FidAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "management_key",
+            "type": "pubkey"
+          },
+          {
+            "name": "signer_key",
+            "type": "pubkey"
+          },
+          {
+            "name": "claim_count",
+            "type": "u32"
+          },
+          {
+            "name": "is_issuer",
+            "type": "bool"
+          },
+          {
+            "name": "country",
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PlatformAuthority",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "topic",
+            "type": "u64"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PlatformAuthorityApproved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "topic",
+            "type": "u64"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PlatformAuthorityRevoked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "topic",
+            "type": "u64"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
       "name": "ProgramIds",
       "type": {
         "kind": "struct",
@@ -699,12 +2339,113 @@
       }
     },
     {
+      "name": "RedemptionEventSigned",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "redemption_id",
+            "type": "u64"
+          },
+          {
+            "name": "custodian",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RedemptionSignature",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "redemption_id",
+            "type": "u64"
+          },
+          {
+            "name": "custody_mandate",
+            "type": "pubkey"
+          },
+          {
+            "name": "custodian",
+            "type": "pubkey"
+          },
+          {
+            "name": "attestation_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "signed_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReserveAttested",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "custody_mandate",
+            "type": "pubkey"
+          },
+          {
+            "name": "custodian",
+            "type": "pubkey"
+          },
+          {
+            "name": "reserve_ratio_bps",
+            "type": "u16"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "TokenDeployment",
       "type": {
         "kind": "struct",
         "fields": [
           {
             "name": "deployment_id",
+            "type": "u64"
+          },
+          {
+            "name": "asset_id",
             "type": "u64"
           },
           {
@@ -753,6 +2494,14 @@
             "type": "pubkey"
           },
           {
+            "name": "custody_mandate",
+            "type": "pubkey"
+          },
+          {
+            "name": "custody_attestation",
+            "type": "pubkey"
+          },
+          {
             "name": "deployed_at",
             "type": "i64"
           },
@@ -774,6 +2523,10 @@
           },
           {
             "name": "deployment_id",
+            "type": "u64"
+          },
+          {
+            "name": "asset_id",
             "type": "u64"
           },
           {
@@ -802,6 +2555,14 @@
           },
           {
             "name": "compliance_state",
+            "type": "pubkey"
+          },
+          {
+            "name": "custody_mandate",
+            "type": "pubkey"
+          },
+          {
+            "name": "custody_attestation",
             "type": "pubkey"
           },
           {

@@ -54,16 +54,21 @@ pub mod mod_supply_cap {
             .total_supply
             .checked_add(amount)
             .ok_or_else(|| error!(ModSupplyCapError::ArithmeticOverflow))?;
-        require!(new_total <= module.max_supply, ModSupplyCapError::MaxSupplyExceeded);
+        require!(
+            new_total <= module.max_supply,
+            ModSupplyCapError::MaxSupplyExceeded
+        );
         module.total_supply = new_total;
         Ok(())
     }
 
     pub fn destroyed(ctx: Context<MutateModule>, amount: u64) -> Result<()> {
-        ctx.accounts.module_state.total_supply =
-            ctx.accounts.module_state.total_supply
-                .checked_sub(amount)
-                .ok_or_else(|| error!(ModSupplyCapError::ArithmeticOverflow))?;
+        ctx.accounts.module_state.total_supply = ctx
+            .accounts
+            .module_state
+            .total_supply
+            .checked_sub(amount)
+            .ok_or_else(|| error!(ModSupplyCapError::ArithmeticOverflow))?;
         Ok(())
     }
 }

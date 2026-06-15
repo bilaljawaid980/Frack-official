@@ -21,11 +21,7 @@ pub mod mod_max_balance {
         Ok(())
     }
 
-    pub fn can_transfer(
-        ctx: Context<ReadModule>,
-        amount: u64,
-        to_balance: u64,
-    ) -> Result<bool> {
+    pub fn can_transfer(ctx: Context<ReadModule>, amount: u64, to_balance: u64) -> Result<bool> {
         Ok(to_balance.saturating_add(amount) <= ctx.accounts.module_state.max_balance)
     }
 

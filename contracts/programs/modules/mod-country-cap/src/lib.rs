@@ -15,7 +15,10 @@ pub mod mod_country_cap {
         token_mint: Pubkey,
         country_caps: Vec<CountryCapEntry>,
     ) -> Result<()> {
-        require!(country_caps.len() <= MAX_COUNTRY_CAPS, ModCountryCapError::TooManyCountryCaps);
+        require!(
+            country_caps.len() <= MAX_COUNTRY_CAPS,
+            ModCountryCapError::TooManyCountryCaps
+        );
         let module = &mut ctx.accounts.module_state;
         module.owner = ctx.accounts.owner.key();
         module.token_mint = token_mint;
@@ -48,7 +51,8 @@ pub mod mod_country_cap {
             .country_caps
             .iter()
             .find(|entry| entry.country == to_country)
-            .map(|entry| entry.cap) else {
+            .map(|entry| entry.cap)
+        else {
             return Ok(true);
         };
         Ok(ctx.accounts.country_count.count < cap)
@@ -84,7 +88,10 @@ pub mod mod_country_cap {
                     ctx.accounts.module_state.key(),
                     from_country,
                 );
-                ctx.accounts.from_country_count.count = ctx.accounts.from_country_count.count
+                ctx.accounts.from_country_count.count = ctx
+                    .accounts
+                    .from_country_count
+                    .count
                     .checked_sub(1)
                     .ok_or_else(|| error!(ModCountryCapError::ArithmeticOverflow))?;
             } else if receiver_enters && !sender_exits {
@@ -93,7 +100,10 @@ pub mod mod_country_cap {
                     ctx.accounts.module_state.key(),
                     to_country,
                 );
-                ctx.accounts.to_country_count.count = ctx.accounts.to_country_count.count
+                ctx.accounts.to_country_count.count = ctx
+                    .accounts
+                    .to_country_count
+                    .count
                     .checked_add(1)
                     .ok_or_else(|| error!(ModCountryCapError::ArithmeticOverflow))?;
             }
@@ -101,14 +111,28 @@ pub mod mod_country_cap {
         }
 
         if sender_exits {
-            initialize_count_if_needed(&mut ctx.accounts.from_country_count, ctx.accounts.module_state.key(), from_country);
-            ctx.accounts.from_country_count.count = ctx.accounts.from_country_count.count
+            initialize_count_if_needed(
+                &mut ctx.accounts.from_country_count,
+                ctx.accounts.module_state.key(),
+                from_country,
+            );
+            ctx.accounts.from_country_count.count = ctx
+                .accounts
+                .from_country_count
+                .count
                 .checked_sub(1)
                 .ok_or_else(|| error!(ModCountryCapError::ArithmeticOverflow))?;
         }
         if receiver_enters {
-            initialize_count_if_needed(&mut ctx.accounts.to_country_count, ctx.accounts.module_state.key(), to_country);
-            ctx.accounts.to_country_count.count = ctx.accounts.to_country_count.count
+            initialize_count_if_needed(
+                &mut ctx.accounts.to_country_count,
+                ctx.accounts.module_state.key(),
+                to_country,
+            );
+            ctx.accounts.to_country_count.count = ctx
+                .accounts
+                .to_country_count
+                .count
                 .checked_add(1)
                 .ok_or_else(|| error!(ModCountryCapError::ArithmeticOverflow))?;
         }
@@ -122,8 +146,15 @@ pub mod mod_country_cap {
         to_country: u16,
     ) -> Result<()> {
         if amount > 0 && to_balance_after == amount {
-            initialize_count_if_needed(&mut ctx.accounts.country_count, ctx.accounts.module_state.key(), to_country);
-            ctx.accounts.country_count.count = ctx.accounts.country_count.count
+            initialize_count_if_needed(
+                &mut ctx.accounts.country_count,
+                ctx.accounts.module_state.key(),
+                to_country,
+            );
+            ctx.accounts.country_count.count = ctx
+                .accounts
+                .country_count
+                .count
                 .checked_add(1)
                 .ok_or_else(|| error!(ModCountryCapError::ArithmeticOverflow))?;
         }
@@ -137,8 +168,15 @@ pub mod mod_country_cap {
         from_country: u16,
     ) -> Result<()> {
         if amount > 0 && from_balance_after == 0 {
-            initialize_count_if_needed(&mut ctx.accounts.country_count, ctx.accounts.module_state.key(), from_country);
-            ctx.accounts.country_count.count = ctx.accounts.country_count.count
+            initialize_count_if_needed(
+                &mut ctx.accounts.country_count,
+                ctx.accounts.module_state.key(),
+                from_country,
+            );
+            ctx.accounts.country_count.count = ctx
+                .accounts
+                .country_count
+                .count
                 .checked_sub(1)
                 .ok_or_else(|| error!(ModCountryCapError::ArithmeticOverflow))?;
         }

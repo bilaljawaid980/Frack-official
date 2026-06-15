@@ -35,7 +35,9 @@ pub mod mod_daily_limit {
     pub fn can_transfer(ctx: Context<CheckUsage>, amount: u64) -> Result<bool> {
         let usage = &ctx.accounts.wallet_usage;
         let now = Clock::get()?.unix_timestamp;
-        let used = if usage.wallet == Pubkey::default() || now.saturating_sub(usage.window_started_at) >= DAY_SECONDS {
+        let used = if usage.wallet == Pubkey::default()
+            || now.saturating_sub(usage.window_started_at) >= DAY_SECONDS
+        {
             0
         } else {
             usage.volume
@@ -64,8 +66,14 @@ pub mod mod_daily_limit {
             ctx.accounts.module_state.key(),
             ModDailyLimitError::InvalidUsageAccount
         );
-        require_keys_eq!(usage.wallet, wallet, ModDailyLimitError::InvalidUsageAccount);
-        if usage.window_started_at == 0 || now.saturating_sub(usage.window_started_at) >= DAY_SECONDS {
+        require_keys_eq!(
+            usage.wallet,
+            wallet,
+            ModDailyLimitError::InvalidUsageAccount
+        );
+        if usage.window_started_at == 0
+            || now.saturating_sub(usage.window_started_at) >= DAY_SECONDS
+        {
             usage.window_started_at = now;
             usage.volume = 0;
         }
