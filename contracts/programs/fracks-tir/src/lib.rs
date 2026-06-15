@@ -5,7 +5,8 @@ declare_id!("9bgANehpsEDdgyo5DwpY36wmnPdpCihSiAP9TLoBBf4L");
 const MAX_TOPICS_PER_ISSUER: usize = 20;
 const MAX_LABEL_LENGTH: usize = 64;
 const TIR_SPACE: usize = 8 + 32 + 32 + 4 + 1;
-const ISSUER_ENTRY_SPACE: usize = 8 + 32 + 32 + 4 + (8 * MAX_TOPICS_PER_ISSUER) + 1 + 4 + MAX_LABEL_LENGTH + 1;
+const ISSUER_ENTRY_SPACE: usize =
+    8 + 32 + 32 + 4 + (8 * MAX_TOPICS_PER_ISSUER) + 1 + 4 + MAX_LABEL_LENGTH + 1;
 
 #[program]
 pub mod fracks_tir {
@@ -320,11 +321,17 @@ fn validate_topics(topics: &[u64]) -> Result<()> {
     let mut deduped = topics.to_vec();
     deduped.sort_unstable();
     deduped.dedup();
-    require!(deduped.len() == topics.len(), FracksTirError::DuplicateTopic);
+    require!(
+        deduped.len() == topics.len(),
+        FracksTirError::DuplicateTopic
+    );
     Ok(())
 }
 
 fn validate_label(label: &str) -> Result<()> {
-    require!(label.len() <= MAX_LABEL_LENGTH, FracksTirError::LabelTooLong);
+    require!(
+        label.len() <= MAX_LABEL_LENGTH,
+        FracksTirError::LabelTooLong
+    );
     Ok(())
 }

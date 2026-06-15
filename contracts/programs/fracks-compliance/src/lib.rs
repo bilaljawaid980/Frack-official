@@ -1,5 +1,8 @@
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::{instruction::{AccountMeta, Instruction}, program::invoke};
+use anchor_lang::solana_program::{
+    instruction::{AccountMeta, Instruction},
+    program::invoke,
+};
 use mod_country_cap::cpi::accounts::{
     UpdateCountryCounts as MutateCountryCountsModule,
     UpdateSingleCountryCount as MutateSingleCountryCountModule,
@@ -33,7 +36,10 @@ pub mod fracks_compliance {
 
     pub fn bind_module(ctx: Context<UpdateComplianceOwner>, module_pubkey: Pubkey) -> Result<()> {
         let state = &mut ctx.accounts.compliance_state;
-        require!(state.modules.len() < MAX_MODULES, FracksComplianceError::MaxModulesReached);
+        require!(
+            state.modules.len() < MAX_MODULES,
+            FracksComplianceError::MaxModulesReached
+        );
         require!(
             !state.modules.contains(&module_pubkey),
             FracksComplianceError::ModuleAlreadyBound
@@ -53,10 +59,7 @@ pub mod fracks_compliance {
         Ok(())
     }
 
-    pub fn set_modules_paused(
-        ctx: Context<UpdateComplianceOwner>,
-        paused: bool,
-    ) -> Result<()> {
+    pub fn set_modules_paused(ctx: Context<UpdateComplianceOwner>, paused: bool) -> Result<()> {
         ctx.accounts.compliance_state.modules_paused = paused;
         Ok(())
     }
@@ -384,13 +387,19 @@ pub mod fracks_compliance {
 
             if is_account_type(module_info, "MaxTransferModule")? {
                 let module = deserialize_view::<MaxTransferModuleView>(module_info)?;
-                require!(amount <= module.max_amount, FracksComplianceError::ComplianceCheckFailed);
+                require!(
+                    amount <= module.max_amount,
+                    FracksComplianceError::ComplianceCheckFailed
+                );
                 continue;
             }
 
             if is_account_type(module_info, "LockupModule")? {
                 let module = deserialize_view::<LockupModuleView>(module_info)?;
-                require!(now >= module.lockup_end, FracksComplianceError::ComplianceCheckFailed);
+                require!(
+                    now >= module.lockup_end,
+                    FracksComplianceError::ComplianceCheckFailed
+                );
                 continue;
             }
 
@@ -964,12 +973,25 @@ mod tests {
         data
     }
 
-    fn account_info_with_data(key: Pubkey, owner: Pubkey, payload: Vec<u8>) -> AccountInfo<'static> {
+    fn account_info_with_data(
+        key: Pubkey,
+        owner: Pubkey,
+        payload: Vec<u8>,
+    ) -> AccountInfo<'static> {
         let key = Box::leak(Box::new(key));
         let owner = Box::leak(Box::new(owner));
         let lamports = Box::leak(Box::new(0u64));
         let data = Box::leak(payload.into_boxed_slice());
-        AccountInfo::new(key, false, false, lamports, data, owner, false, Epoch::default())
+        AccountInfo::new(
+            key,
+            false,
+            false,
+            lamports,
+            data,
+            owner,
+            false,
+            Epoch::default(),
+        )
     }
 
     #[test]
@@ -988,8 +1010,8 @@ mod tests {
         );
         let fake_count = account_info_with_data(Pubkey::new_unique(), module_program, payload);
 
-        let count =
-            read_country_count(&[fake_count], &module, &module_program, country).expect("read_country_count");
+        let count = read_country_count(&[fake_count], &module, &module_program, country)
+            .expect("read_country_count");
         assert_eq!(count, 0);
     }
 }

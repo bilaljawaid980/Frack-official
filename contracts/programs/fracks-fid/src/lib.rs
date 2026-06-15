@@ -17,7 +17,10 @@ pub mod fracks_fid {
         let fid_pubkey = ctx.accounts.fid.key();
         let fid = &mut ctx.accounts.fid;
 
-        require!(fid.owner == Pubkey::default(), FracksFidError::FidAlreadyExists);
+        require!(
+            fid.owner == Pubkey::default(),
+            FracksFidError::FidAlreadyExists
+        );
         validate_country(is_issuer, country)?;
 
         fid.owner = ctx.accounts.owner.key();
@@ -100,7 +103,11 @@ pub mod fracks_fid {
             ctx.program_id,
         )
         .0;
-        require_keys_eq!(issuer_fid, expected_issuer_fid, FracksFidError::InvalidIssuerFid);
+        require_keys_eq!(
+            issuer_fid,
+            expected_issuer_fid,
+            FracksFidError::InvalidIssuerFid
+        );
 
         let target_fid = &mut ctx.accounts.target_fid;
         let claim = &mut ctx.accounts.claim;

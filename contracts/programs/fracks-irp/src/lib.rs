@@ -59,26 +59,17 @@ pub mod fracks_irp {
         Ok(())
     }
 
-    pub fn update_irs_reference(
-        ctx: Context<UpdateRegistryOwner>,
-        new_irs: Pubkey,
-    ) -> Result<()> {
+    pub fn update_irs_reference(ctx: Context<UpdateRegistryOwner>, new_irs: Pubkey) -> Result<()> {
         ctx.accounts.registry_state.irs_account = new_irs;
         Ok(())
     }
 
-    pub fn update_tir_reference(
-        ctx: Context<UpdateRegistryOwner>,
-        new_tir: Pubkey,
-    ) -> Result<()> {
+    pub fn update_tir_reference(ctx: Context<UpdateRegistryOwner>, new_tir: Pubkey) -> Result<()> {
         ctx.accounts.registry_state.tir_account = new_tir;
         Ok(())
     }
 
-    pub fn update_ctr_reference(
-        ctx: Context<UpdateRegistryOwner>,
-        new_ctr: Pubkey,
-    ) -> Result<()> {
+    pub fn update_ctr_reference(ctx: Context<UpdateRegistryOwner>, new_ctr: Pubkey) -> Result<()> {
         ctx.accounts.registry_state.ctr_account = new_ctr;
         Ok(())
     }
@@ -105,99 +96,101 @@ pub mod fracks_irp {
 }
 
 fn evaluate_verification(ctx: Context<IsVerified>, wallet: Pubkey) -> Result<VerificationStatus> {
-        let registry = &ctx.accounts.registry_state;
-        let irs_state = deserialize_view::<IdentityRegistryStorageStateView>(&ctx.accounts.irs_state)?;
-        let tir_state = deserialize_view::<TrustedIssuersStateView>(&ctx.accounts.tir_state)?;
-        let ctr_state = deserialize_view::<ClaimTopicsStateView>(&ctx.accounts.ctr_state)?;
+    let registry = &ctx.accounts.registry_state;
+    let irs_state = deserialize_view::<IdentityRegistryStorageStateView>(&ctx.accounts.irs_state)?;
+    let tir_state = deserialize_view::<TrustedIssuersStateView>(&ctx.accounts.tir_state)?;
+    let ctr_state = deserialize_view::<ClaimTopicsStateView>(&ctx.accounts.ctr_state)?;
 
-        require_keys_eq!(
-            ctx.accounts.irs_state.key(),
-            registry.irs_account,
-            FracksIrpError::InvalidRegistryReference
-        );
-        require_keys_eq!(
-            ctx.accounts.tir_state.key(),
-            registry.tir_account,
-            FracksIrpError::InvalidRegistryReference
-        );
-        require_keys_eq!(
-            ctx.accounts.ctr_state.key(),
-            registry.ctr_account,
-            FracksIrpError::InvalidRegistryReference
-        );
-        require_keys_eq!(
-            irs_state.owner,
-            registry.owner,
-            FracksIrpError::InvalidRegistryReference
-        );
-        require_keys_eq!(
-            tir_state.token_mint,
-            registry.token_mint,
-            FracksIrpError::InvalidRegistryReference
-        );
-        require_keys_eq!(
-            ctr_state.token_mint,
-            registry.token_mint,
-            FracksIrpError::InvalidRegistryReference
-        );
-        ensure_bound_registry(&irs_state, &registry.key())?;
+    require_keys_eq!(
+        ctx.accounts.irs_state.key(),
+        registry.irs_account,
+        FracksIrpError::InvalidRegistryReference
+    );
+    require_keys_eq!(
+        ctx.accounts.tir_state.key(),
+        registry.tir_account,
+        FracksIrpError::InvalidRegistryReference
+    );
+    require_keys_eq!(
+        ctx.accounts.ctr_state.key(),
+        registry.ctr_account,
+        FracksIrpError::InvalidRegistryReference
+    );
+    require_keys_eq!(
+        irs_state.owner,
+        registry.owner,
+        FracksIrpError::InvalidRegistryReference
+    );
+    require_keys_eq!(
+        tir_state.token_mint,
+        registry.token_mint,
+        FracksIrpError::InvalidRegistryReference
+    );
+    require_keys_eq!(
+        ctr_state.token_mint,
+        registry.token_mint,
+        FracksIrpError::InvalidRegistryReference
+    );
+    ensure_bound_registry(&irs_state, &registry.key())?;
 
-        let wallet_identity = match find_wallet_identity(
-            &wallet,
-            &ctx.accounts.irs_state.key(),
-            &ctx.accounts.wallet_identity,
-        )? {
-            Some(identity) if identity.wallet == wallet && identity.irs == ctx.accounts.irs_state.key() => {
-                identity
-            }
-            _ => {
-                return Ok(VerificationStatus {
-                    verified: false,
-                    reason: VerificationReason::MissingIdentity,
-                    missing_topic: 0,
-                })
-            }
-        };
-
-        if !wallet_identity.is_active {
+    let wallet_identity = match find_wallet_identity(
+        &wallet,
+        &ctx.accounts.irs_state.key(),
+        &ctx.accounts.wallet_identity,
+    )? {
+        Some(identity)
+            if identity.wallet == wallet && identity.irs == ctx.accounts.irs_state.key() =>
+        {
+            identity
+        }
+        _ => {
             return Ok(VerificationStatus {
                 verified: false,
-                reason: VerificationReason::IdentityInactive,
+                reason: VerificationReason::MissingIdentity,
                 missing_topic: 0,
-            });
+            })
         }
+    };
 
-        if ctr_state.topics.is_empty() {
-            return Ok(VerificationStatus {
-                verified: true,
-                reason: VerificationReason::Verified,
-                missing_topic: 0,
-            });
-        }
+    if !wallet_identity.is_active {
+        return Ok(VerificationStatus {
+            verified: false,
+            reason: VerificationReason::IdentityInactive,
+            missing_topic: 0,
+        });
+    }
 
-        let now = Clock::get()?.unix_timestamp;
-        for topic in ctr_state.topics {
-            let found_valid = verify_claim_for_topic(
-                wallet_identity.fid,
-                topic,
-                &ctx.accounts.tir_state.key(),
-                ctx.remaining_accounts,
-                now,
-            )?;
-            if !found_valid {
-                return Ok(VerificationStatus {
-                    verified: false,
-                    reason: VerificationReason::MissingRequiredClaim,
-                    missing_topic: topic,
-                });
-            }
-        }
-
-        Ok(VerificationStatus {
+    if ctr_state.topics.is_empty() {
+        return Ok(VerificationStatus {
             verified: true,
             reason: VerificationReason::Verified,
             missing_topic: 0,
-        })
+        });
+    }
+
+    let now = Clock::get()?.unix_timestamp;
+    for topic in ctr_state.topics {
+        let found_valid = verify_claim_for_topic(
+            wallet_identity.fid,
+            topic,
+            &ctx.accounts.tir_state.key(),
+            ctx.remaining_accounts,
+            now,
+        )?;
+        if !found_valid {
+            return Ok(VerificationStatus {
+                verified: false,
+                reason: VerificationReason::MissingRequiredClaim,
+                missing_topic: topic,
+            });
+        }
+    }
+
+    Ok(VerificationStatus {
+        verified: true,
+        reason: VerificationReason::Verified,
+        missing_topic: 0,
+    })
 }
 
 #[derive(Accounts)]

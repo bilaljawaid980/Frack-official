@@ -9,25 +9,24 @@ use anchor_lang::InstructionData;
 use anchor_spl::token_2022::spl_token_2022::{
     self,
     extension::{
-        permanent_delegate::PermanentDelegate,
-        transfer_hook::TransferHook,
+        permanent_delegate::PermanentDelegate, transfer_hook::TransferHook,
         BaseStateWithExtensions, StateWithExtensions,
     },
 };
 use anchor_spl::token_2022::Token2022;
 use fracks_compliance::{
-    instruction as compliance_instruction,
-    ComplianceState, CountryInvestorCountView, CountryRestrictModuleView, DailyTransferLimitModuleView,
-    DailyWalletUsageView, InvestorCountryCapModuleView, LockupModuleView, MaxBalanceModuleView,
-    MaxInvestorsModuleView, MaxTransferModuleView,
+    instruction as compliance_instruction, ComplianceState, CountryInvestorCountView,
+    CountryRestrictModuleView, DailyTransferLimitModuleView, DailyWalletUsageView,
+    InvestorCountryCapModuleView, LockupModuleView, MaxBalanceModuleView, MaxInvestorsModuleView,
+    MaxTransferModuleView,
 };
 use fracks_irp::utils::{
     deserialize_view as irp_deserialize_view, ensure_bound_registry, find_wallet_identity,
     verify_claim_for_topic,
 };
 use fracks_irp::{
-    ClaimTopicsStateView, IdentityRegistryState, IdentityRegistryStorageStateView, TrustedIssuersStateView,
-    WalletIdentityView,
+    ClaimTopicsStateView, IdentityRegistryState, IdentityRegistryStorageStateView,
+    TrustedIssuersStateView, WalletIdentityView,
 };
 use fracks_irs::program::FracksIrs;
 use fracks_token_hook::program::FracksTokenHook;
@@ -143,8 +142,14 @@ pub mod fracks_token {
         )?;
         let source = read_token_account(&ctx.accounts.source_token_account)?;
         let destination = read_token_account(&ctx.accounts.destination_token_account)?;
-        require!(source.amount == from_balance, FracksTokenError::InvalidTokenAccount);
-        require!(destination.amount == to_balance, FracksTokenError::InvalidTokenAccount);
+        require!(
+            source.amount == from_balance,
+            FracksTokenError::InvalidTokenAccount
+        );
+        require!(
+            destination.amount == to_balance,
+            FracksTokenError::InvalidTokenAccount
+        );
         validate_token_account(
             &ctx.accounts.source_token_account,
             &source,
@@ -158,8 +163,13 @@ pub mod fracks_token {
             &ctx.accounts.to_wallet.key(),
         )?;
 
-        let evaluation =
-            evaluate_transfer(&ctx.accounts, &ctx.remaining_accounts, amount, from_balance, to_balance)?;
+        let evaluation = evaluate_transfer(
+            &ctx.accounts,
+            &ctx.remaining_accounts,
+            amount,
+            from_balance,
+            to_balance,
+        )?;
         approve_hook_transfer(
             &ctx.accounts.hook_program,
             ctx.accounts.from_wallet.to_account_info(),
@@ -197,7 +207,10 @@ pub mod fracks_token {
             &ctx.accounts.owner_state.to_account_info(),
             &ctx.accounts.agent_role.to_account_info(),
         )?;
-        require!(!ctx.accounts.token_state.paused, FracksTokenError::TokenPaused);
+        require!(
+            !ctx.accounts.token_state.paused,
+            FracksTokenError::TokenPaused
+        );
         ensure_wallet_not_frozen(
             &ctx.accounts.to_frozen,
             &to,
@@ -285,7 +298,10 @@ pub mod fracks_token {
         to_balance_after: u64,
     ) -> Result<()> {
         require!(amount > 0, FracksTokenError::PaymentRequired);
-        require!(!ctx.accounts.token_state.paused, FracksTokenError::TokenPaused);
+        require!(
+            !ctx.accounts.token_state.paused,
+            FracksTokenError::TokenPaused
+        );
 
         let buyer = ctx.accounts.buyer.key();
         ensure_wallet_not_frozen(
@@ -407,12 +423,12 @@ pub mod fracks_token {
         Ok(())
     }
 
-    pub fn deposit_subscription(
-        ctx: Context<DepositSubscription>,
-        amount: u64,
-    ) -> Result<()> {
+    pub fn deposit_subscription(ctx: Context<DepositSubscription>, amount: u64) -> Result<()> {
         require!(amount > 0, FracksTokenError::PaymentRequired);
-        require!(!ctx.accounts.token_state.paused, FracksTokenError::TokenPaused);
+        require!(
+            !ctx.accounts.token_state.paused,
+            FracksTokenError::TokenPaused
+        );
 
         let offering_terms = read_offering_terms(&ctx.accounts.offering_terms)?;
         require!(offering_terms.active, FracksTokenError::OfferingInactive);
@@ -441,7 +457,10 @@ pub mod fracks_token {
         );
 
         let escrow = &mut ctx.accounts.subscription_escrow;
-        require!(!escrow.settled, FracksTokenError::SubscriptionAlreadySettled);
+        require!(
+            !escrow.settled,
+            FracksTokenError::SubscriptionAlreadySettled
+        );
         escrow.investor = ctx.accounts.investor.key();
         escrow.token_mint = ctx.accounts.token_state.token_mint;
         escrow.issuer = ctx.accounts.issuer.key();
@@ -484,12 +503,18 @@ pub mod fracks_token {
             &ctx.accounts.owner_state.to_account_info(),
             &ctx.accounts.agent_role.to_account_info(),
         )?;
-        require!(!ctx.accounts.token_state.paused, FracksTokenError::TokenPaused);
+        require!(
+            !ctx.accounts.token_state.paused,
+            FracksTokenError::TokenPaused
+        );
 
         let investor = ctx.accounts.subscription_escrow.investor;
         let amount = ctx.accounts.subscription_escrow.amount;
         let paid_lamports = ctx.accounts.subscription_escrow.paid_lamports;
-        require!(!ctx.accounts.subscription_escrow.settled, FracksTokenError::SubscriptionAlreadySettled);
+        require!(
+            !ctx.accounts.subscription_escrow.settled,
+            FracksTokenError::SubscriptionAlreadySettled
+        );
         require!(
             ctx.accounts.subscription_escrow.token_mint == ctx.accounts.token_state.token_mint,
             FracksTokenError::InvalidSubscriptionEscrow
@@ -498,7 +523,10 @@ pub mod fracks_token {
             ctx.accounts.subscription_escrow.issuer == ctx.accounts.issuer.key(),
             FracksTokenError::InvalidIssuer
         );
-        require!(amount > 0 && paid_lamports > 0, FracksTokenError::PaymentRequired);
+        require!(
+            amount > 0 && paid_lamports > 0,
+            FracksTokenError::PaymentRequired
+        );
 
         ensure_wallet_not_frozen(
             &ctx.accounts.to_frozen,
@@ -548,8 +576,16 @@ pub mod fracks_token {
             receiver_identity.country,
         )?;
 
-        **ctx.accounts.subscription_escrow.to_account_info().try_borrow_mut_lamports()? -= paid_lamports;
-        **ctx.accounts.issuer.to_account_info().try_borrow_mut_lamports()? += paid_lamports;
+        **ctx
+            .accounts
+            .subscription_escrow
+            .to_account_info()
+            .try_borrow_mut_lamports()? -= paid_lamports;
+        **ctx
+            .accounts
+            .issuer
+            .to_account_info()
+            .try_borrow_mut_lamports()? += paid_lamports;
         ctx.accounts.subscription_escrow.settled = true;
 
         invoke_compliance_created(
@@ -600,7 +636,10 @@ pub mod fracks_token {
             &ctx.accounts.owner_state.to_account_info(),
             &ctx.accounts.agent_role.to_account_info(),
         )?;
-        require!(!ctx.accounts.token_state.paused, FracksTokenError::TokenPaused);
+        require!(
+            !ctx.accounts.token_state.paused,
+            FracksTokenError::TokenPaused
+        );
         let sender_identity = require_wallet_identity(
             &ctx.accounts.from_wallet_identity,
             &from,
@@ -673,7 +712,10 @@ pub mod fracks_token {
             &ctx.accounts.owner_state.to_account_info(),
             &ctx.accounts.agent_role.to_account_info(),
         )?;
-        require!(!ctx.accounts.token_state.paused, FracksTokenError::TokenPaused);
+        require!(
+            !ctx.accounts.token_state.paused,
+            FracksTokenError::TokenPaused
+        );
         ensure_wallet_not_frozen(
             &ctx.accounts.to_frozen,
             &to,
@@ -702,8 +744,14 @@ pub mod fracks_token {
         )?;
         let source = read_token_account(&ctx.accounts.source_token_account)?;
         let destination = read_token_account(&ctx.accounts.destination_token_account)?;
-        require!(source.amount == from_balance, FracksTokenError::InvalidTokenAccount);
-        require!(destination.amount == to_balance, FracksTokenError::InvalidTokenAccount);
+        require!(
+            source.amount == from_balance,
+            FracksTokenError::InvalidTokenAccount
+        );
+        require!(
+            destination.amount == to_balance,
+            FracksTokenError::InvalidTokenAccount
+        );
         validate_token_account(
             &ctx.accounts.source_token_account,
             &source,
@@ -804,8 +852,14 @@ pub mod fracks_token {
             &ctx.accounts.owner_state.to_account_info(),
             &ctx.accounts.agent_role.to_account_info(),
         )?;
-        require!(!ctx.accounts.token_state.paused, FracksTokenError::TokenPaused);
-        require!(lost_wallet != new_wallet, FracksTokenError::InvalidRecoveryTarget);
+        require!(
+            !ctx.accounts.token_state.paused,
+            FracksTokenError::TokenPaused
+        );
+        require!(
+            lost_wallet != new_wallet,
+            FracksTokenError::InvalidRecoveryTarget
+        );
         ensure_wallet_not_frozen(
             &ctx.accounts.new_wallet_frozen,
             &new_wallet,
@@ -845,7 +899,10 @@ pub mod fracks_token {
             &ctx.accounts.token_state.token_mint,
             &new_wallet,
         )?;
-        require!(source.amount >= amount, FracksTokenError::InsufficientBalance);
+        require!(
+            source.amount >= amount,
+            FracksTokenError::InsufficientBalance
+        );
 
         approve_hook_transfer(
             &ctx.accounts.hook_program,
@@ -920,7 +977,10 @@ pub mod fracks_token {
             &[
                 b"transfer_approval",
                 ctx.accounts.transfer_approval.source_token_account.as_ref(),
-                ctx.accounts.transfer_approval.destination_token_account.as_ref(),
+                ctx.accounts
+                    .transfer_approval
+                    .destination_token_account
+                    .as_ref(),
                 ctx.accounts.token_state.key().as_ref(),
             ],
             &FRACKS_TOKEN_HOOK_ID,
@@ -2016,9 +2076,18 @@ fn calculate_sol_payment(amount: u64, price_per_token: u64, token_decimals: u8) 
 }
 
 fn validate_metadata(name: &str, symbol: &str, isin: &str) -> Result<()> {
-    require!(name.len() <= MAX_NAME_LEN, FracksTokenError::MetadataTooLong);
-    require!(symbol.len() <= MAX_SYMBOL_LEN, FracksTokenError::MetadataTooLong);
-    require!(isin.len() <= MAX_ISIN_LEN, FracksTokenError::MetadataTooLong);
+    require!(
+        name.len() <= MAX_NAME_LEN,
+        FracksTokenError::MetadataTooLong
+    );
+    require!(
+        symbol.len() <= MAX_SYMBOL_LEN,
+        FracksTokenError::MetadataTooLong
+    );
+    require!(
+        isin.len() <= MAX_ISIN_LEN,
+        FracksTokenError::MetadataTooLong
+    );
     Ok(())
 }
 
@@ -2028,11 +2097,8 @@ fn authorize_operator<'info>(
     owner_state_info: &AccountInfo<'info>,
     agent_role_info: &AccountInfo<'info>,
 ) -> Result<()> {
-    let expected_owner_state = Pubkey::find_program_address(
-        &[b"owner", token_state.token_mint.as_ref()],
-        &id(),
-    )
-    .0;
+    let expected_owner_state =
+        Pubkey::find_program_address(&[b"owner", token_state.token_mint.as_ref()], &id()).0;
     if owner_state_info.owner == &id()
         && !owner_state_info.data_is_empty()
         && owner_state_info.key() == expected_owner_state
@@ -2128,16 +2194,8 @@ fn evaluate_transfer_components<'info>(
     to_balance: u64,
 ) -> Result<TransferEvaluationSummary> {
     require!(!token_state.paused, FracksTokenError::TokenPaused);
-    ensure_wallet_not_frozen(
-        from_frozen,
-        &from_wallet.key(),
-        &token_state.token_mint,
-    )?;
-    ensure_wallet_not_frozen(
-        to_frozen,
-        &to_wallet.key(),
-        &token_state.token_mint,
-    )?;
+    ensure_wallet_not_frozen(from_frozen, &from_wallet.key(), &token_state.token_mint)?;
+    ensure_wallet_not_frozen(to_frozen, &to_wallet.key(), &token_state.token_mint)?;
 
     let frozen_amount = read_partial_freeze_amount(
         from_partial_freeze,
@@ -2145,7 +2203,10 @@ fn evaluate_transfer_components<'info>(
         &token_state.token_mint,
     )?;
     let transferable = from_balance.saturating_sub(frozen_amount);
-    require!(amount <= transferable, FracksTokenError::InsufficientBalance);
+    require!(
+        amount <= transferable,
+        FracksTokenError::InsufficientBalance
+    );
 
     let sender_identity = verify_wallet_against_irp(
         token_state,
@@ -2336,7 +2397,10 @@ fn validate_token_mint_account<'info>(
     let data = mint_info.try_borrow_data()?;
     let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&data)
         .map_err(|_| error!(FracksTokenError::InvalidTokenAccount))?;
-    require!(mint.base.is_initialized, FracksTokenError::InvalidTokenAccount);
+    require!(
+        mint.base.is_initialized,
+        FracksTokenError::InvalidTokenAccount
+    );
     require!(
         mint.base.decimals == token_state.decimals,
         FracksTokenError::InvalidTokenAccount
@@ -2613,7 +2677,10 @@ fn ensure_wallet_not_frozen<'info>(
 
     let frozen = deserialize_local::<FrozenWallet>(frozen_info)?;
     require!(frozen.wallet == *wallet, FracksTokenError::WalletFrozen);
-    require!(frozen.token_mint == *token_mint, FracksTokenError::WalletFrozen);
+    require!(
+        frozen.token_mint == *token_mint,
+        FracksTokenError::WalletFrozen
+    );
     err!(FracksTokenError::WalletFrozen)
 }
 
@@ -2622,7 +2689,10 @@ fn read_partial_freeze_amount<'info>(
     wallet: &Pubkey,
     token_mint: &Pubkey,
 ) -> Result<u64> {
-    if partial_info.key() == System::id() || partial_info.data_is_empty() || partial_info.owner == &System::id() {
+    if partial_info.key() == System::id()
+        || partial_info.data_is_empty()
+        || partial_info.owner == &System::id()
+    {
         return Ok(0);
     }
 
@@ -2652,7 +2722,10 @@ fn evaluate_compliance<'info>(
         compliance_state_info.key(),
         FracksTokenError::InvalidRegistryReference
     );
-    require!(to_balance <= u64::MAX - amount, FracksTokenError::ComplianceCheckFailed);
+    require!(
+        to_balance <= u64::MAX - amount,
+        FracksTokenError::ComplianceCheckFailed
+    );
 
     let state = deserialize_local::<ComplianceState>(compliance_state_info)?;
     require!(
@@ -2700,13 +2773,19 @@ fn evaluate_compliance<'info>(
 
         if matches_account_discriminator(module_info, "MaxTransferModule")? {
             let module = deserialize_local::<MaxTransferModuleView>(module_info)?;
-            require!(amount <= module.max_amount, FracksTokenError::ComplianceCheckFailed);
+            require!(
+                amount <= module.max_amount,
+                FracksTokenError::ComplianceCheckFailed
+            );
             continue;
         }
 
         if matches_account_discriminator(module_info, "LockupModule")? {
             let module = deserialize_local::<LockupModuleView>(module_info)?;
-            require!(now >= module.lockup_end, FracksTokenError::ComplianceCheckFailed);
+            require!(
+                now >= module.lockup_end,
+                FracksTokenError::ComplianceCheckFailed
+            );
             continue;
         }
 
@@ -2776,7 +2855,9 @@ fn read_daily_usage<'info>(
     now: i64,
 ) -> Result<u64> {
     for account in accounts {
-        if account.owner != module_program || !matches_account_discriminator(account, "DailyWalletUsage")? {
+        if account.owner != module_program
+            || !matches_account_discriminator(account, "DailyWalletUsage")?
+        {
             continue;
         }
         let expected_usage = Pubkey::find_program_address(
@@ -2806,7 +2887,9 @@ fn read_country_count<'info>(
     country: u16,
 ) -> Result<u64> {
     for account in accounts {
-        if account.owner != module_program || !matches_account_discriminator(account, "CountryInvestorCount")? {
+        if account.owner != module_program
+            || !matches_account_discriminator(account, "CountryInvestorCount")?
+        {
             continue;
         }
         let expected_count = Pubkey::find_program_address(
@@ -2971,12 +3054,25 @@ mod tests {
         data
     }
 
-    fn account_info_with_data(key: Pubkey, owner: Pubkey, payload: Vec<u8>) -> AccountInfo<'static> {
+    fn account_info_with_data(
+        key: Pubkey,
+        owner: Pubkey,
+        payload: Vec<u8>,
+    ) -> AccountInfo<'static> {
         let key = Box::leak(Box::new(key));
         let owner = Box::leak(Box::new(owner));
         let lamports = Box::leak(Box::new(0u64));
         let data = Box::leak(payload.into_boxed_slice());
-        AccountInfo::new(key, false, false, lamports, data, owner, false, Epoch::default())
+        AccountInfo::new(
+            key,
+            false,
+            false,
+            lamports,
+            data,
+            owner,
+            false,
+            Epoch::default(),
+        )
     }
 
     #[test]
@@ -2997,8 +3093,8 @@ mod tests {
         );
         let fake_usage = account_info_with_data(Pubkey::new_unique(), module_program, payload);
 
-        let used =
-            read_daily_usage(&[fake_usage], &module, &module_program, &wallet, now).expect("read_daily_usage");
+        let used = read_daily_usage(&[fake_usage], &module, &module_program, &wallet, now)
+            .expect("read_daily_usage");
         assert_eq!(used, 0);
     }
 }

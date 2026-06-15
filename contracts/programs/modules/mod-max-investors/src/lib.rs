@@ -31,13 +31,11 @@ pub mod mod_max_investors {
         Ok(())
     }
 
-    pub fn can_transfer(
-        ctx: Context<ReadModule>,
-        amount: u64,
-        to_balance: u64,
-    ) -> Result<bool> {
+    pub fn can_transfer(ctx: Context<ReadModule>, amount: u64, to_balance: u64) -> Result<bool> {
         if to_balance == 0 && amount > 0 {
-            return Ok(ctx.accounts.module_state.holder_count < ctx.accounts.module_state.max_investors);
+            return Ok(
+                ctx.accounts.module_state.holder_count < ctx.accounts.module_state.max_investors
+            );
         }
         Ok(true)
     }
@@ -49,12 +47,18 @@ pub mod mod_max_investors {
         to_balance_after: u64,
     ) -> Result<()> {
         if amount > 0 && from_balance_after == 0 {
-            ctx.accounts.module_state.holder_count = ctx.accounts.module_state.holder_count
+            ctx.accounts.module_state.holder_count = ctx
+                .accounts
+                .module_state
+                .holder_count
                 .checked_sub(1)
                 .ok_or_else(|| error!(ModMaxInvestorsError::ArithmeticOverflow))?;
         }
         if amount > 0 && to_balance_after == amount {
-            ctx.accounts.module_state.holder_count = ctx.accounts.module_state.holder_count
+            ctx.accounts.module_state.holder_count = ctx
+                .accounts
+                .module_state
+                .holder_count
                 .checked_add(1)
                 .ok_or_else(|| error!(ModMaxInvestorsError::ArithmeticOverflow))?;
         }
@@ -63,16 +67,26 @@ pub mod mod_max_investors {
 
     pub fn created(ctx: Context<MutateModule>, amount: u64, to_balance_after: u64) -> Result<()> {
         if amount > 0 && to_balance_after == amount {
-            ctx.accounts.module_state.holder_count = ctx.accounts.module_state.holder_count
+            ctx.accounts.module_state.holder_count = ctx
+                .accounts
+                .module_state
+                .holder_count
                 .checked_add(1)
                 .ok_or_else(|| error!(ModMaxInvestorsError::ArithmeticOverflow))?;
         }
         Ok(())
     }
 
-    pub fn destroyed(ctx: Context<MutateModule>, amount: u64, from_balance_after: u64) -> Result<()> {
+    pub fn destroyed(
+        ctx: Context<MutateModule>,
+        amount: u64,
+        from_balance_after: u64,
+    ) -> Result<()> {
         if amount > 0 && from_balance_after == 0 {
-            ctx.accounts.module_state.holder_count = ctx.accounts.module_state.holder_count
+            ctx.accounts.module_state.holder_count = ctx
+                .accounts
+                .module_state
+                .holder_count
                 .checked_sub(1)
                 .ok_or_else(|| error!(ModMaxInvestorsError::ArithmeticOverflow))?;
         }
