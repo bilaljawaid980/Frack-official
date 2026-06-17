@@ -4,8 +4,9 @@ import {
   BadRequestException,
   ConflictException,
 } from "@nestjs/common";
-import { PrismaService } from "../../../prisma/prisma.service";
 import { KycApplication } from "@prisma/client";
+import { PrismaService } from "../../../prisma/prisma.service";
+import { WorkflowsService } from "../../../workflows/workflows.service";
 import {
   CreateKycApplicationDto,
   ApproveKycApplicationDto,
@@ -16,22 +17,19 @@ import {
 
 @Injectable()
 export class KycApplicationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly workflows: WorkflowsService,
+  ) {}
 
-  /**
-   * Create a new KYC application
-   * Called when investor submits KYC form
-   */
   async create(dto: CreateKycApplicationDto): Promise<KycApplication> {
-    // Check if application already exists
     const existing = await this.prisma.kycApplication.findUnique({
       where: { walletAddress: dto.walletAddress },
     });
 
     if (existing) {
-      // If existing application is rejected, allow resubmission
       if (existing.status === KycApplicationStatus.REJECTED) {
-        return this.prisma.kycApplication.update({
+        const updated = await this.prisma.kycApplication.update({
           where: { id: existing.id },
           data: {
             ...dto,
@@ -42,6 +40,14 @@ export class KycApplicationService {
             rejectionReason: null,
           },
         });
+        await this.workflows.record({
+          entityType: "KycApplication",
+          entityId: existing.id,
+          fromStatus: existing.status,
+          toStatus: KycApplicationStatus.PENDING,
+          reason: "KYC resubmitted",
+        });
+        return updated;
       }
 
       throw new ConflictException(
@@ -57,9 +63,6 @@ export class KycApplicationService {
     });
   }
 
-  /**
-   * Get all KYC applications with filtering
-   */
   async findAll(
     status?: KycApplicationStatus,
     limit: number = 50,
@@ -88,9 +91,6 @@ export class KycApplicationService {
     });
   }
 
-  /**
-   * Get a single KYC application by ID
-   */
   async findOne(id: string): Promise<KycApplication> {
     const application = await this.prisma.kycApplication.findUnique({
       where: { id },
@@ -103,19 +103,12 @@ export class KycApplicationService {
     return application;
   }
 
-  /**
-   * Get KYC application by wallet address
-   */
   async findByWallet(walletAddress: string): Promise<KycApplication | null> {
     return this.prisma.kycApplication.findUnique({
       where: { walletAddress },
     });
   }
 
-  /**
-   * Approve a KYC application
-   * Called by KYC provider after review
-   */
   async approve(
     id: string,
     dto: ApproveKycApplicationDto
@@ -143,6 +136,16 @@ export class KycApplicationService {
       },
     });
 
+    await this.workflows.record({
+      entityType: "KycApplication",
+      entityId: id,
+      fromStatus: application.status,
+      toStatus: KycApplicationStatus.APPROVED,
+      actorWallet: dto.reviewedBy,
+      txHash: dto.onchainIdAddress || null,
+      reason: dto.notes || null,
+    });
+
     const user = await this.prisma.user.findUnique({
       where: { walletAddress: application.walletAddress },
     });
@@ -164,9 +167,6 @@ export class KycApplicationService {
     return updatedApp;
   }
 
-  /**
-   * Reject a KYC application
-   */
   async reject(
     id: string,
     dto: RejectKycApplicationDto
@@ -177,7 +177,7 @@ export class KycApplicationService {
       throw new BadRequestException("Cannot reject an approved application");
     }
 
-    return this.prisma.kycApplication.update({
+    const updated = await this.prisma.kycApplication.update({
       where: { id },
       data: {
         status: KycApplicationStatus.REJECTED,
@@ -187,26 +187,43 @@ export class KycApplicationService {
         notes: dto.notes,
       },
     });
+
+    await this.workflows.record({
+      entityType: "KycApplication",
+      entityId: id,
+      fromStatus: application.status,
+      toStatus: KycApplicationStatus.REJECTED,
+      actorWallet: dto.reviewedBy,
+      reason: dto.rejectionReason || dto.notes || null,
+    });
+
+    return updated;
   }
 
-  /**
-   * Update application status or notes
-   */
   async update(
     id: string,
     dto: UpdateKycApplicationDto
   ): Promise<KycApplication> {
-    await this.findOne(id); // Verify exists
+    const existing = await this.findOne(id);
 
-    return this.prisma.kycApplication.update({
+    const updated = await this.prisma.kycApplication.update({
       where: { id },
       data: dto,
     });
+
+    if (dto.status && dto.status !== existing.status) {
+      await this.workflows.record({
+        entityType: "KycApplication",
+        entityId: id,
+        fromStatus: existing.status,
+        toStatus: dto.status,
+        reason: dto.notes || null,
+      });
+    }
+
+    return updated;
   }
 
-  /**
-   * Mark OnchainID as created for an application
-   */
   async markOnchainIdCreated(
     id: string,
     onchainIdAddress: string
@@ -220,18 +237,12 @@ export class KycApplicationService {
     });
   }
 
-  /**
-   * Get pending applications count
-   */
   async getPendingCount(): Promise<number> {
     return this.prisma.kycApplication.count({
       where: { status: KycApplicationStatus.PENDING },
     });
   }
 
-  /**
-   * Get statistics
-   */
   async getStatistics() {
     const [total, pending, approved, rejected, underReview] = await Promise.all(
       [

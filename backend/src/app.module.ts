@@ -6,7 +6,6 @@ import { AuthModule } from "./auth/auth.module";
 import { UsersModule } from "./users/users.module";
 import { AssetsModule } from "./assets/assets.module";
 import { IssuanceModule } from "./issuance/issuance.module";
-import { RedemptionModule } from "./redemption/redemption.module";
 import { ComplianceModule } from "./compliance/compliance.module";
 import { IndexedModule } from "./indexed/indexed.module";
 import { ActivityModule } from "./activity/activity.module";
@@ -18,6 +17,14 @@ import { TokenTransferRequestsModule } from './token-transfer-requests/token-tra
 import { TokenListingsModule } from './token-listings/token-listings.module';
 import { TrustedIssuersModule } from './trusted-issuers/trusted-issuers.module';
 import { BlockchainTransactionsModule } from './blockchain-transactions/blockchain-transactions.module';
+import { OrganizationsModule } from './organizations/organizations.module';
+import { WalletsModule } from './wallets/wallets.module';
+import { PlatformRolesModule } from './roles/roles.module';
+import { AuthorityBindingsModule } from './authority-bindings/authority-bindings.module';
+import { WorkflowsModule } from './workflows/workflows.module';
+import { AuditModule } from './audit/audit.module';
+import { OutboxModule } from './outbox/outbox.module';
+import { StartupValidationService } from './common/services/startup-validation.service';
 
 @Module({
   imports: [
@@ -27,7 +34,6 @@ import { BlockchainTransactionsModule } from './blockchain-transactions/blockcha
     UsersModule,
     AssetsModule,
     IssuanceModule,
-    RedemptionModule,
     ComplianceModule,
     IndexedModule,
     ActivityModule,
@@ -39,6 +45,15 @@ import { BlockchainTransactionsModule } from './blockchain-transactions/blockcha
     TokenListingsModule,
     TrustedIssuersModule,
     BlockchainTransactionsModule,
+    OrganizationsModule,
+    WalletsModule,
+    PlatformRolesModule,
+    AuthorityBindingsModule,
+    WorkflowsModule,
+    AuditModule,
+    OutboxModule,
   ],
+  providers: [StartupValidationService],
 })
 export class AppModule {}
+

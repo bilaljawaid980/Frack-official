@@ -968,7 +968,7 @@ export function formatTransactionError(err: unknown): string {
     msg.includes("VersionedTransaction too large") ||
     msg.includes("Transaction too large")
   ) {
-    return "The transfer transaction was too large to serialize. The app will create any missing recipient token account separately, then send the compliant transfer.";
+    return "The transaction was too large to serialize. The app will split any setup step and use address lookup table compression when possible, then send the compliant transaction.";
   }
 
   if (msg.includes("ProgramFailedToComplete")) {

@@ -16,13 +16,12 @@ import type { RWAAsset } from "@/types/rwa";
 type AnalyticsPoint = {
   month: string;
   issued: number;
-  redeemed: number;
   net: number;
 };
 
 function hasChartActivity(series: AnalyticsPoint[]) {
   return series.some(
-    (point) => point.issued > 0 || point.redeemed > 0 || point.net > 0,
+    (point) => point.issued > 0 || point.net > 0,
   );
 }
 
@@ -40,7 +39,7 @@ function buildAssetBackedSeries(assets: RWAAsset[]): AnalyticsPoint[] | undefine
   }
 
   const bucket = new Map(
-    months.map((month) => [month.key, { issued: 0, redeemed: 0 }]),
+    months.map((month) => [month.key, { issued: 0 }]),
   );
 
   assets.forEach((asset) => {
@@ -57,12 +56,11 @@ function buildAssetBackedSeries(assets: RWAAsset[]): AnalyticsPoint[] | undefine
   });
 
   const series = months.map((month) => {
-    const values = bucket.get(month.key) || { issued: 0, redeemed: 0 };
+    const values = bucket.get(month.key) || { issued: 0 };
     return {
       month: month.label,
       issued: values.issued,
-      redeemed: values.redeemed,
-      net: values.issued - values.redeemed,
+      net: values.issued,
     };
   });
 
@@ -133,12 +131,9 @@ export default function Page() {
     let isMounted = true;
     const loadIssuanceSeries = async () => {
       try {
-        const [issuance, redemptions, purchaseRequests] = await Promise.all([
+        const [issuance, purchaseRequests] = await Promise.all([
           apiFetch<Array<{ amount: string; createdAt: string }>>(
             "/issuance-requests",
-          ).catch(() => []),
-          apiFetch<Array<{ amount: string; createdAt: string }>>(
-            "/redemption-requests",
           ).catch(() => []),
           apiFetch<TokenPurchaseRequest[]>("/token-purchase-requests").catch(
             () => [],
@@ -156,7 +151,7 @@ export default function Page() {
         }
 
         const bucket = new Map(
-          months.map((month) => [month.key, { issued: 0, redeemed: 0 }]),
+          months.map((month) => [month.key, { issued: 0 }]),
         );
 
         issuance.forEach((item) => {
@@ -168,14 +163,6 @@ export default function Page() {
           }
         });
 
-        redemptions.forEach((item) => {
-          const createdAt = new Date(item.createdAt);
-          const key = `${createdAt.getFullYear()}-${createdAt.getMonth()}`;
-          const entry = bucket.get(key);
-          if (entry) {
-            entry.redeemed += Number(item.amount) || 0;
-          }
-        });
 
         purchaseRequests
           .filter((item) => item.status === "MINTED")
@@ -189,12 +176,11 @@ export default function Page() {
           });
 
         const series = months.map((month) => {
-          const values = bucket.get(month.key) || { issued: 0, redeemed: 0 };
+          const values = bucket.get(month.key) || { issued: 0 };
           return {
             month: month.label,
             issued: values.issued,
-            redeemed: values.redeemed,
-            net: values.issued - values.redeemed,
+            net: values.issued,
           };
         });
 

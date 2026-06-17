@@ -94,14 +94,6 @@ export interface AssetInfo {
   total_tokenized: string;
 }
 
-export interface RedemptionRequest {
-  id: number;
-  assetId: number;
-  requester: string;
-  amount: string;
-  approved?: boolean;
-  reason?: string;
-}
 
 interface CreateAssetParams {
   referenceId: string;
@@ -1732,26 +1724,6 @@ export class TrexClient {
     throw new Error('MIGRATED: approveIssue queue removed; use direct issuance governance flow.');
   }
 
-  async requestRedemption(
-    _assetId: number,
-    _amount: string,
-    _reason?: string,
-    _tokenContract?: string,
-  ): Promise<{ requestId: number; txHash: string }> {
-    throw new Error('MIGRATED: redemption queue removed; use token burn/recovery governance flow.');
-  }
-
-  async approveRedemption(_requestId: number, _tokenContract?: string): Promise<string> {
-    throw new Error('MIGRATED: approveRedemption queue removed; use direct burn governance flow.');
-  }
-
-  async getRedemptionRequests(
-    _startAfter?: number,
-    _limit: number = 50,
-    _tokenContract?: string,
-  ): Promise<RedemptionRequest[]> {
-    return [];
-  }
 
   async getFactoryConfig(): Promise<FactoryConfig> {
     const [factoryState] = deriveFactoryStatePDA();

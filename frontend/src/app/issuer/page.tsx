@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { useWallet } from "@/hooks/use-wallet";
 import { useConnection, useWallet as useSolanaWallet } from "@solana/wallet-adapter-react";
 import { createAnchorProvider } from "@/lib/anchor";
@@ -22,6 +23,9 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -30,6 +34,24 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  LayoutDashboard,
+  FileText,
+  Coins,
+  ArrowLeftRight,
+  Building2,
+  Wallet,
+  ChevronDown,
+  Plus,
+  Gem,
+  Briefcase,
+  Landmark,
+  Palette,
+  Lightbulb,
+  Loader2,
+  Info,
+  ArrowRight,
+} from "lucide-react";
 import { apiFetch } from "@/lib/backend";
 import { TransactionToastLink } from "@/lib/solscan";
 import {
@@ -37,6 +59,7 @@ import {
   recordBlockchainTransactionWithSolBalanceImpact,
   recordBlockchainTransactionSafely,
 } from "@/lib/blockchain-transactions";
+import { cn } from "@/lib/utils";
 import { PublicKey } from "@solana/web3.js";
 import { toast } from "sonner";
 import type { TokenPurchaseRequest } from "@/types/token-purchase-request";
@@ -158,6 +181,106 @@ function formatOptionalCurrency(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value)
     ? `$${value.toLocaleString()}`
     : "Pending admin review";
+}
+
+const ASSET_TYPE_ICONS: Record<string, typeof Building2> = {
+  "real-estate": Building2,
+  commodity: Gem,
+  equity: Briefcase,
+  debt: Landmark,
+  art: Palette,
+  "intellectual-property": Lightbulb,
+};
+
+function AssetTypeIcon({
+  assetType,
+  className,
+}: {
+  assetType: string;
+  className?: string;
+}) {
+  const Icon = ASSET_TYPE_ICONS[assetType] || Building2;
+  return <Icon className={className} />;
+}
+
+const STATUS_STYLES: Record<string, string> = {
+  PENDING_REVIEW: "border-amber-200 bg-amber-50 text-amber-700",
+  PENDING_KYC: "border-amber-200 bg-amber-50 text-amber-700",
+  PENDING_AML: "border-amber-200 bg-amber-50 text-amber-700",
+  PENDING_ISSUER_REVIEW: "border-amber-200 bg-amber-50 text-amber-700",
+  PENDING_ISSUER_WHITELIST: "border-amber-200 bg-amber-50 text-amber-700",
+  PENDING_ISSUER_ACTIVATION: "border-amber-200 bg-amber-50 text-amber-700",
+  ACTION_REQUIRED_INVESTOR_IDENTITY: "border-orange-200 bg-orange-50 text-orange-700",
+  APPROVED: "border-blue-200 bg-blue-50 text-blue-700",
+  APPROVED_FOR_MINT: "border-blue-200 bg-blue-50 text-blue-700",
+  READY_TO_TRANSFER: "border-blue-200 bg-blue-50 text-blue-700",
+  READY_FOR_SELLER_ACCEPTANCE: "border-blue-200 bg-blue-50 text-blue-700",
+  DEPLOYED: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  MINTED: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  REJECTED: "border-red-200 bg-red-50 text-red-700",
+  CANCELED: "border-slate-200 bg-slate-100 text-slate-600",
+  CANCELLED: "border-slate-200 bg-slate-100 text-slate-600",
+};
+
+function StatusBadge({ status }: { status: string }) {
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "font-bold capitalize",
+        STATUS_STYLES[status] || "border-slate-200 bg-slate-100 text-slate-600",
+      )}
+    >
+      {status.replaceAll("_", " ").toLowerCase()}
+    </Badge>
+  );
+}
+
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  hint,
+  iconClassName,
+}: {
+  icon: typeof Building2;
+  label: string;
+  value: string;
+  hint: string;
+  iconClassName?: string;
+}) {
+  return (
+    <Card className="bg-white/90 border-slate-200/70 shadow-sm">
+      <CardContent className="p-5">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-slate-50 to-slate-100 border border-slate-200">
+          <Icon className={cn("h-5 w-5", iconClassName)} />
+        </div>
+        <p className="mt-4 text-2xl font-bold text-slate-900">{value}</p>
+        <p className="text-sm font-semibold text-slate-700">{label}</p>
+        <p className="text-xs text-slate-500">{hint}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function EmptyState({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: typeof Building2;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-2 py-12 text-center">
+      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100">
+        <Icon className="h-6 w-6 text-slate-400" />
+      </div>
+      <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+      <p className="max-w-sm text-sm text-slate-500">{description}</p>
+    </div>
+  );
 }
 
 function IssuerAssetHoldersTable({
@@ -500,6 +623,19 @@ export default function IssuerPage() {
   const [walletIdentityMap, setWalletIdentityMap] = useState<
     Record<string, WalletIdentityQueueState>
   >({});
+  const [expandedAssets, setExpandedAssets] = useState<Set<string>>(new Set());
+
+  const toggleAssetExpanded = (tokenContract: string) => {
+    setExpandedAssets((current) => {
+      const next = new Set(current);
+      if (next.has(tokenContract)) {
+        next.delete(tokenContract);
+      } else {
+        next.add(tokenContract);
+      }
+      return next;
+    });
+  };
 
   const identityService = useMemo(() => {
     if (!publicKey || !signTransaction || !signAllTransactions) return null;
@@ -1046,84 +1182,206 @@ export default function IssuerPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <Card className="border border-slate-200/70 bg-white/80 shadow-sm">
-        <CardHeader>
-          <div className="flex items-center justify-between gap-4">
+    <div className="w-full space-y-6 p-8 glass-panel rounded-[22px]">
+      {/* Hero Banner */}
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+        <div className="flex flex-col gap-6 rounded-2xl border border-slate-200 bg-linear-to-br from-[#172E7F] to-[#2A5FA6] p-6 sm:pr-10 text-white shadow-lg sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15">
+              <LayoutDashboard className="h-7 w-7" />
+            </div>
             <div>
-              <CardTitle>Tokenization Requests</CardTitle>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">
+                FRACKS Issuer Console
+              </p>
+              <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
+                Issuer Dashboard
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm text-white/80">
+                Review tokenization requests, settle investor purchase
+                orders, whitelist secondary transfer recipients, and manage
+                holders for every asset linked to this wallet.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-center">
+            <Link href="/issuer/submit-request">
+              <Button
+                variant="outline"
+                className="border-white/30 bg-white/20 text-white hover:bg-white/30"
+              >
+                <Plus className="h-4 w-4" />
+                Tokenize Asset
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Stats */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
+      >
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            icon={FileText}
+            label="Tokenization Requests"
+            value={visibleRequests.length.toString()}
+            hint="Submitted by you"
+            iconClassName="text-[#172E7F]"
+          />
+          <StatCard
+            icon={Coins}
+            label="Purchase Queue"
+            value={issuerPurchaseQueue.length.toString()}
+            hint="Awaiting your action"
+            iconClassName="text-[#CAA141]"
+          />
+          <StatCard
+            icon={ArrowLeftRight}
+            label="Transfer Whitelist"
+            value={transferRequests.length.toString()}
+            hint="Pending whitelist/activation"
+            iconClassName="text-blue-600"
+          />
+          <StatCard
+            icon={Building2}
+            label="Issued Assets"
+            value={filteredAssets.length.toString()}
+            hint="Live on-chain contracts"
+            iconClassName="text-emerald-600"
+          />
+        </div>
+      </motion.div>
+
+      {/* Main Content Tabs */}
+      <Tabs defaultValue="requests" className="space-y-6">
+        <TabsList className="h-auto w-fit flex-wrap gap-1.5">
+          <TabsTrigger value="requests" className="gap-1.5">
+            <FileText className="h-3.5 w-3.5" />
+            Tokenization Requests
+          </TabsTrigger>
+          <TabsTrigger value="purchases" className="gap-1.5">
+            <Coins className="h-3.5 w-3.5" />
+            Purchase Queue
+          </TabsTrigger>
+          <TabsTrigger value="transfers" className="gap-1.5">
+            <ArrowLeftRight className="h-3.5 w-3.5" />
+            Transfer Whitelist
+          </TabsTrigger>
+          <TabsTrigger value="assets" className="gap-1.5">
+            <Building2 className="h-3.5 w-3.5" />
+            Issued Assets
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Tokenization Requests */}
+        <TabsContent value="requests">
+          <Card className="bg-white/90 border-slate-200/70 shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-[#172E7F]" />
+                Tokenization Requests
+              </CardTitle>
               <CardDescription>
                 Off-chain asset requests submitted by the connected issuer
                 wallet.
               </CardDescription>
-            </div>
-            <Link href="/issuer/submit-request">
-              <Button>Tokenize Asset</Button>
-            </Link>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {!walletAddress ? (
-            <div className="text-sm text-slate-500">
-              Connect an issuer wallet to view submitted requests.
-            </div>
-          ) : visibleRequests.length === 0 ? (
-            <div className="text-sm text-slate-500">
-              No tokenization requests submitted yet.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {visibleRequests.map((request) => (
-                <div
-                  key={request.id}
-                  className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 md:flex-row md:items-center md:justify-between"
-                >
-                  <div>
-                    <div className="font-semibold text-slate-900">
-                      {request.name} ({request.symbol})
-                    </div>
-                    <div className="text-xs capitalize text-slate-500">
-                      {request.assetType.replace("-", " ")} ·{" "}
-                      {formatOptionalCurrency(request.underlyingValue)}
-                    </div>
-                  </div>
-                  <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                    {request.status.replace("_", " ")}
-                  </div>
-                  {["PENDING_REVIEW", "APPROVED"].includes(request.status) ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                      onClick={() => void handleCancelAssetRequest(request)}
+            </CardHeader>
+            <CardContent>
+              {!walletAddress ? (
+                <EmptyState
+                  icon={Wallet}
+                  title="Connect your issuer wallet"
+                  description="Connect an issuer wallet to view submitted tokenization requests."
+                />
+              ) : visibleRequests.length === 0 ? (
+                <EmptyState
+                  icon={FileText}
+                  title="No tokenization requests yet"
+                  description="Requests you submit for tokenization will appear here for tracking."
+                />
+              ) : (
+                <div className="space-y-3">
+                  {visibleRequests.map((request) => (
+                    <div
+                      key={request.id}
+                      className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-slate-300 sm:flex-row sm:items-center sm:justify-between"
                     >
-                      Cancel Request
-                    </Button>
-                  ) : null}
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-[#172E7F] to-[#2A5FA6] shadow-md">
+                          <AssetTypeIcon
+                            assetType={request.assetType}
+                            className="h-5 w-5 text-white"
+                          />
+                        </div>
+                        <div>
+                          <div className="font-semibold text-slate-900">
+                            {request.name}{" "}
+                            <span className="font-normal text-slate-400">
+                              ({request.symbol})
+                            </span>
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                            <Badge variant="secondary" className="capitalize">
+                              {request.assetType.replace("-", " ")}
+                            </Badge>
+                            <span>
+                              {formatOptionalCurrency(request.underlyingValue)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 sm:flex-col sm:items-end">
+                        <StatusBadge status={request.status} />
+                        {["PENDING_REVIEW", "APPROVED"].includes(
+                          request.status,
+                        ) ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                            onClick={() => void handleCancelAssetRequest(request)}
+                          >
+                            Cancel Request
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      <Card className="border border-slate-200/70 bg-white/80 shadow-sm">
-        <CardHeader>
-          <CardTitle>Investor Purchase Queue</CardTitle>
-          <CardDescription>
-            Requests that passed required provider checks and are waiting for
-            issuer settlement review and minting.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {issuerPurchaseQueue.length === 0 ? (
-            <div className="text-sm text-slate-500">
-              No investor purchase requests awaiting issuer action.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {issuerPurchaseQueue.map((request) => {
+        {/* Investor Purchase Queue */}
+        <TabsContent value="purchases">
+          <Card className="bg-white/90 border-slate-200/70 shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Coins className="h-4 w-4 text-[#CAA141]" />
+                Investor Purchase Queue
+              </CardTitle>
+              <CardDescription>
+                Requests that passed required provider checks and are waiting
+                for issuer settlement review and minting.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {issuerPurchaseQueue.length === 0 ? (
+                <EmptyState
+                  icon={Coins}
+                  title="Queue is empty"
+                  description="No investor purchase requests are awaiting issuer action."
+                />
+              ) : (
+                <div className="space-y-4">
+                  {issuerPurchaseQueue.map((request) => {
                   const asset =
                     assetsByToken.get(request.tokenContract) ||
                     (request.assetId ? assetsByToken.get(request.assetId) : undefined);
@@ -1131,27 +1389,30 @@ export default function IssuerPage() {
                   return (
                     <div
                       key={request.id}
-                      className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 lg:flex-row lg:items-center lg:justify-between"
+                      className="rounded-xl border border-slate-200 bg-white p-4"
                     >
-                      <div>
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-[#172E7F] to-[#2A5FA6] shadow-md">
+                          <Building2 className="h-5 w-5 text-white" />
+                        </div>
+                        <div className="space-y-1.5">
                         <div className="font-semibold text-slate-900">
                           {asset
                             ? `${asset.name} (${asset.symbol})`
                             : "Unknown token"}
                         </div>
-                        <div className="mt-1 text-sm text-slate-700">
+                        <div className="text-sm text-slate-700">
                           {request.amount} tokens requested
                         </div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          Investor{" "}
-                          <span className="font-mono">
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono">
+                            <Wallet className="h-3 w-3" />
                             {request.investorWallet.slice(0, 6)}...
                             {request.investorWallet.slice(-4)}
                           </span>
-                        </div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          Token{" "}
-                          <span className="font-mono">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono">
+                            <Coins className="h-3 w-3" />
                             {request.tokenContract.slice(0, 8)}...
                             {request.tokenContract.slice(-6)}
                           </span>
@@ -1161,7 +1422,7 @@ export default function IssuerPage() {
                           const info = walletIdentityMap[key];
                           if (!info) return null;
                           return (
-                            <div className="mt-2 text-xs text-slate-400">
+                            <div className="space-y-0.5 rounded-lg border border-slate-200 bg-slate-50 p-2 font-mono text-[11px] text-slate-500">
                               <div>IRS Owner: {info.irsOwner ?? "(unknown)"}</div>
                               <div>IRP Owner: {info.irpOwner ?? "(unknown)"}</div>
                               <div>IRP Agents: {info.agents && info.agents.length ? info.agents.join(", ") : "(none)"}</div>
@@ -1170,11 +1431,11 @@ export default function IssuerPage() {
                             </div>
                           );
                         })()}
-                        <div className="mt-1 text-xs text-slate-500">
-                          Status: {request.status.replaceAll("_", " ")}
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-2">
+                      <StatusBadge status={request.status} />
+                      </div>
+                      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
                         {request.status === "PENDING_ISSUER_REVIEW" && (
                           <Button
                             variant="outline"
@@ -1224,9 +1485,9 @@ export default function IssuerPage() {
                           ) {
                             return (
                               <>
-                                <div className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+                                <Badge variant="destructive">
                                   Legacy registry mismatch
-                                </div>
+                                </Badge>
                                 {RECOVERY_TOOLS_ENABLED && info.canRepairRegistry ? (
                                   <Button
                                     onClick={() => handleRepairRegistryOwnership(request)}
@@ -1346,9 +1607,9 @@ export default function IssuerPage() {
                           if (!info.isActive) {
                             return (
                               <>
-                                <div className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                                <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
                                   Pending Activation
-                                </div>
+                                </Badge>
                                 {info.canActivate ? (
                                   <Button
                                     onClick={async () => {
@@ -1400,28 +1661,36 @@ export default function IssuerPage() {
                       </div>
                     </div>
                   );
-                }
+                  })}
+                </div>
               )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      <Card className="border border-slate-200/70 bg-white/80 shadow-sm">
-        <CardHeader>
-          <CardTitle>Transfer Whitelist Queue</CardTitle>
-          <CardDescription>
-            Secondary transfer recipients that need this issuer to register or activate token-specific IRS identity.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {transferRequests.length === 0 ? (
-            <div className="text-sm text-slate-500">
-              No transfer recipient onboarding requests awaiting issuer action.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {transferRequests.map((request) => {
+        {/* Transfer Whitelist Queue */}
+        <TabsContent value="transfers">
+          <Card className="bg-white/90 border-slate-200/70 shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ArrowLeftRight className="h-4 w-4 text-blue-600" />
+                Transfer Whitelist Queue
+              </CardTitle>
+              <CardDescription>
+                Secondary transfer recipients that need this issuer to
+                register or activate token-specific IRS identity.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {transferRequests.length === 0 ? (
+                <EmptyState
+                  icon={ArrowLeftRight}
+                  title="Nothing to whitelist"
+                  description="No transfer recipient onboarding requests are awaiting issuer action."
+                />
+              ) : (
+                <div className="space-y-3">
+                  {transferRequests.map((request) => {
                 const asset =
                   assetsByToken.get(request.tokenContract) ||
                   (request.assetId ? assetsByToken.get(request.assetId) : undefined);
@@ -1430,19 +1699,21 @@ export default function IssuerPage() {
                     key={request.id}
                     className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 lg:flex-row lg:items-center lg:justify-between"
                   >
-                    <div>
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-[#172E7F] to-[#2A5FA6] shadow-md">
+                        <ArrowLeftRight className="h-5 w-5 text-white" />
+                      </div>
+                      <div className="space-y-1.5">
                       <div className="font-semibold text-slate-900">
                         {asset ? `${asset.name} (${asset.symbol})` : "Unknown token"}
                       </div>
-                      <div className="mt-2">
-                        <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
-                          {request.source === "listing" ? "Marketplace buyer" : "Direct transfer recipient"}
-                        </span>
-                      </div>
-                      <div className="mt-1 text-sm text-slate-700">
+                      <Badge variant="secondary">
+                        {request.source === "listing" ? "Marketplace buyer" : "Direct transfer recipient"}
+                      </Badge>
+                      <div className="text-sm text-slate-700">
                         {request.amountBaseUnits ?? request.amount ?? "-"} base units requested for secondary transfer
                       </div>
-                      <div className="mt-1 text-xs text-slate-500">
+                      <div className="text-xs text-slate-500">
                         Sender{" "}
                         <span className="font-mono">
                           {request.fromWallet.slice(0, 6)}...{request.fromWallet.slice(-4)}
@@ -1452,97 +1723,141 @@ export default function IssuerPage() {
                           {transferRecipientWallet(request).slice(0, 6)}...{transferRecipientWallet(request).slice(-4)}
                         </span>
                       </div>
-                      <div className="mt-1 text-xs text-slate-500">
-                        Status: {request.status.replaceAll("_", " ")}
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-col items-end gap-2">
+                      <StatusBadge status={request.status} />
                       {request.status === "PENDING_ISSUER_WHITELIST" ? (
-                        <Button onClick={() => void handleWhitelistTransferRecipient(request)}>
+                        <Button size="sm" onClick={() => void handleWhitelistTransferRecipient(request)}>
                           Whitelist Recipient
                         </Button>
                       ) : request.status === "PENDING_ISSUER_ACTIVATION" ? (
-                        <Button onClick={() => void handleActivateTransferRecipient(request)}>
+                        <Button size="sm" onClick={() => void handleActivateTransferRecipient(request)}>
                           Activate Recipient
                         </Button>
                       ) : null}
                     </div>
                   </div>
                 );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      <Card className="border border-slate-200/70 bg-white/80 shadow-sm">
-        <CardHeader>
-          <CardTitle>Issued Assets</CardTitle>
-          <CardDescription>
-            Assets linked to the connected wallet. Click an asset to review
-            details.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="text-sm text-slate-500">Loading assets...</div>
-          ) : error ? (
-            <div className="text-sm text-red-600">
-              Failed to load assets: {error}
-            </div>
-          ) : filteredAssets.length === 0 ? (
-            <div className="text-sm text-slate-500">
-              No assets found for this issuer.
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {filteredAssets.map((asset) => {
+        {/* Issued Assets */}
+        <TabsContent value="assets">
+          <Card className="bg-white/90 border-slate-200/70 shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-emerald-600" />
+                Issued Assets
+              </CardTitle>
+              <CardDescription>
+                Assets linked to the connected wallet. Expand an asset to
+                review and manage its token holders.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#2A5FA6]" />
+                  <p className="text-sm text-slate-500">Loading assets...</p>
+                </div>
+              ) : error ? (
+                <EmptyState
+                  icon={Building2}
+                  title="Failed to load assets"
+                  description={error}
+                />
+              ) : filteredAssets.length === 0 ? (
+                <EmptyState
+                  icon={Building2}
+                  title="No assets issued yet"
+                  description="Assets you issue will appear here once they are linked to this wallet."
+                />
+              ) : (
+                <div className="space-y-3">
+                  {filteredAssets.map((asset) => {
                 const tokenBalances = balances[asset.tokenContract] || [];
+                const isExpanded = expandedAssets.has(asset.tokenContract);
 
                 return (
-                  <Card
+                  <div
                     key={asset.tokenContract}
-                    className="border border-slate-200/70"
+                    className="overflow-hidden rounded-xl border border-slate-200 bg-white"
                   >
-                    <CardHeader className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => toggleAssetExpanded(asset.tokenContract)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          toggleAssetExpanded(asset.tokenContract);
+                        }
+                      }}
+                      className="flex cursor-pointer flex-col gap-3 p-4 transition-colors hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-[#172E7F] to-[#2A5FA6] shadow-md">
+                          <Building2 className="h-5 w-5 text-white" />
+                        </div>
                         <div>
-                          <CardTitle className="text-base">
+                          <div className="font-semibold text-slate-900">
                             {asset.name}
-                          </CardTitle>
-                          <CardDescription>
+                          </div>
+                          <div className="text-xs text-slate-500">
                             {asset.symbol} - Asset ID{" "}
                             {asset.factoryAssetId ?? asset.id}
-                          </CardDescription>
+                          </div>
+                          <div
+                            className="mt-0.5 max-w-xs truncate font-mono text-[11px] text-slate-400"
+                            title={asset.tokenContract}
+                          >
+                            {asset.tokenContract}
+                          </div>
                         </div>
+                      </div>
+                      <div className="flex items-center gap-3 self-end sm:self-center">
                         <Link
                           href={`/assets/${asset.factoryAssetId ?? asset.id}`}
-                          className="text-sm text-blue-600 hover:underline"
+                          onClick={(event) => event.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-sm font-semibold text-[#172E7F] hover:underline"
                         >
                           View Asset
+                          <ArrowRight className="h-3.5 w-3.5" />
                         </Link>
+                        <ChevronDown
+                          className={cn(
+                            "h-4 w-4 text-slate-400 transition-transform",
+                            isExpanded && "rotate-180",
+                          )}
+                        />
                       </div>
-                      <div className="text-xs text-slate-500">
-                        Token Contract: {asset.tokenContract}
+                    </div>
+                    {isExpanded ? (
+                      <div className="border-t border-slate-100 p-4">
+                        <IssuerAssetHoldersTable
+                          tokenContract={asset.tokenContract}
+                          assetId={asset.factoryAssetId ?? asset.id}
+                          issuerWallet={walletAddress}
+                          tokenSymbol={asset.symbol}
+                          fallbackBalances={tokenBalances}
+                          loadingFallback={loadingBalances}
+                        />
                       </div>
-                    </CardHeader>
-                    <CardContent>
-                      <IssuerAssetHoldersTable
-                        tokenContract={asset.tokenContract}
-                        assetId={asset.factoryAssetId ?? asset.id}
-                        issuerWallet={walletAddress}
-                        tokenSymbol={asset.symbol}
-                        fallbackBalances={tokenBalances}
-                        loadingFallback={loadingBalances}
-                      />
-                    </CardContent>
-                  </Card>
+                    ) : null}
+                  </div>
                 );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

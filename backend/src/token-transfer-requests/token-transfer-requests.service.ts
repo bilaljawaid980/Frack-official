@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateTokenTransferRequestDto } from './dto/create-token-transfer-request.dto';
 import { UpdateTokenTransferRequestDto } from './dto/update-token-transfer-request.dto';
 import { BlockchainTransactionsService } from '../blockchain-transactions/blockchain-transactions.service';
+import { WorkflowsService } from '../workflows/workflows.service';
 
 const CLOSED_STATUSES = ['TRANSFERRED', 'REJECTED', 'CANCELLED'];
 const VALID_STATUSES = new Set([
@@ -30,6 +31,7 @@ export class TokenTransferRequestsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly blockchainTransactions: BlockchainTransactionsService,
+    private readonly workflows: WorkflowsService,
   ) {}
 
   private rowSelect() {
@@ -222,6 +224,15 @@ export class TokenTransferRequestsService {
       RETURNING ${this.rowSelect()}
     `;
 
+    await this.workflows.record({
+      entityType: 'TokenTransferRequest',
+      entityId: id,
+      fromStatus: String(existing.status),
+      toStatus: status,
+      actorWallet: data.reviewerWallet || null,
+      txHash: data.transferTxHash || data.activationTxHash || data.whitelistTxHash || data.claimTxHash || null,
+      reason: data.rejectionReason || data.preflightFailure || data.simulationError || null,
+    });
     await this.recordLedgerEntries(id, data, existing);
     return rows[0];
   }
@@ -260,3 +271,4 @@ export class TokenTransferRequestsService {
     await Promise.all(entries.map((entry) => this.blockchainTransactions.record(entry)));
   }
 }
+

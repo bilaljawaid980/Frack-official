@@ -34,14 +34,6 @@ export interface AgentsResponse {
   agents: string[];
 }
 
-export interface RedeemRequestResponse {
-  id: number;
-  asset_id: number;
-  requester: string;
-  amount: string;
-  approved: boolean;
-  reason?: string;
-}
 
 export interface IssuanceRequestResponse {
   id: number;
@@ -59,7 +51,6 @@ export interface TokenQueryMsg {
   agents?: {};
   paused?: {};
   frozen?: { address: string };
-  redemption_requests?: { start_after?: number; limit?: number };
   issuance_requests?: { start_after?: number; limit?: number };
 }
 
@@ -94,9 +85,7 @@ export interface TokenExecuteMsg {
   remove_agent?: { address: string };
   // Batch operations
   batch_set_kyc?: { updates: Array<{ address: string; status: string }> };
-  // Issuance and redemption
-  request_redemption?: { asset_id: number; amount: string; reason?: string };
-  approve_redemption?: { request_id: number };
+  // Issuance
   issue_asset?: { asset_id: number; recipient: string; amount: string };
   approve_issue?: { request_id: number };
 }

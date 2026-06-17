@@ -1,0 +1,189 @@
+Understood. I read the prompt and cross-checked it against the current backend shape. I will not code yet, and I will not touch contracts/.
+Current Backend Reality
+The backend is still the older platform shape, not the new RWA lifecycle shape.
+Existing active modules include:
+auth, users
+assets, asset-requests
+issuance
+kyc
+token-purchase-requests
+token-transfer-requests
+token-listings
+trusted-issuers
+blockchain-transactions
+indexed, indexer
+activity
+identity-snapshots
+compliance
+Major missing domains from the new prompt:
+Organizations and organization memberships
+Unified onboarding framework
+Private Supabase document metadata/storage flow
+Custody mandates and attestations
+Valuations
+Asset lifecycle events
+Distributions
+Governance backend snapshot/voting validation
+Trade workflow mapped to new escrow contract
+Quick Exit
+Succession
+Regulatory cases
+Insurance/total-loss workflows
+Sandbox simulators
+Unified workflow/audit architecture
+Current Prisma schema is mostly wallet/string-status based. It has useful existing flows but needs normalization. Examples: User.roles String[], one walletAddress, JSON documents, JSON trusted issuers, string statuses, no organization model, no document model, no workflow transition model, no canonical custody/valuation/distribution models.
+Frontend is actively using many existing APIs, especially:
+/auth/*
+/assets, /assets/deployed, /assets/apply
+/asset-requests
+/issuance-requests
+/kyc/applications
+/token-purchase-requests
+/token-transfer-requests
+/token-listings
+/trusted-issuers
+/indexed/*
+/blockchain-transactions
+/activity-logs
+/compliance-rules
+So the correct approach is extension and migration, not replacement.
+Implementation Approach
+Phase 0: Audit And Design Baseline
+No product changes yet.
+Deliver:
+Full NestJS module/controller/service/guard inventory
+Route matrix with KEEP / EXTEND / MERGE / DEPRECATE / REMOVE
+Frontend endpoint usage map
+Prisma model audit
+Manual migration audit
+Existing workflow map for KYC, purchase, transfer, listings, mint, freeze, burn, recovery
+Proposed ERD
+RBAC/auth matrix
+Supabase private storage design
+Workflow transition design
+Blockchain ledger/indexer extension design
+This phase should be approved before schema changes.
+Phase 1: Foundation Models
+Add additive schema only, no destructive changes.
+Implement:
+Organization
+OrganizationMember
+WalletAccount
+OrganizationWallet
+PlatformRoleAssignment
+OnChainAuthorityBinding
+WorkflowTransition
+normalized AuditLog extension or replacement strategy
+shared status enums where safe
+core guards/services for organization membership and platform roles
+Do not remove current User.roles yet. Backfill and run both systems during migration.
+Phase 2: Documents, Onboarding, Assets
+Implement the reusable onboarding/document/asset base.
+Add:
+OnboardingApplication
+OnboardingStep
+BeneficialOwner
+AuthorizedSignatory
+Document
+expanded Asset
+AssetLegalReview
+AssetTokenLink
+AssetLifecycleEvent
+APIs:
+/organizations
+/onboarding/applications
+/documents/upload-intents
+/documents/:id/confirm
+/documents/:id/access-url
+extend /assets
+add /assets/:id/overview
+Supabase service-role stays backend-only. Files are private and immutable.
+Phase 3: Custody, Valuation, Deployment Readiness
+Implement the new contract-gated deployment backend layer.
+Add:
+CustodyMandate
+CustodyAttestation
+ReserveAttestation
+ValuationAssignment
+AssetValuation
+APIs:
+/assets/:assetId/custody-mandates
+/custody-mandates/:id/accept
+/custody-mandates/:id/attestations
+/custody-mandates/:id/reserve-attestations
+/assets/:assetId/valuation-assignments
+/valuation-assignments/:id/valuations
+/assets/:assetId/deployment-readiness
+Readiness must verify backend records and confirmed on-chain state where applicable.
+Phase 4: Extend Purchase, Payment, Mint
+Reuse existing TokenPurchaseRequest.
+Add fields/workflows for:
+whitepaper acknowledgement
+sandbox bank account
+sandbox payment
+payment idempotency
+custody readiness check
+NAV freshness check
+mint confirmation linkage
+Add:
+WhitepaperAcknowledgement
+SandboxBankAccount
+SandboxPayment
+SandboxPaymentEvent
+Do not break current KYC/IRS/activation/mint paths.
+Phase 5: Distributions
+Add:
+Distribution
+DistributionEntitlement
+TaxCertificate
+APIs:
+/assets/:assetId/distributions
+/distributions/:id/submit
+/distributions/:id/record-claim
+/investors/me/distributions
+Use indexed holder snapshots and avoid slow live RPC scans for dashboards.
+Phase 6: Trading, Quick Exit, Governance
+Extend current marketplace instead of creating a parallel marketplace.
+Add:
+trade workflow mapped to fracks-trade-escrow
+quick exit requests
+governance proposals
+governance vote snapshots
+Important: governance contract accepts vote weight as input, so backend must compute and lock snapshot weights. Never trust frontend vote weight.
+Phase 7: Construction, Succession, Regulatory, Total Loss
+Add:
+construction milestones
+escrow tranche records
+apartment allocation records
+succession claims and heirs
+regulatory cases
+insurance policies/claims
+total-loss workflows
+These should record legal workflow state, but only mark blockchain-dependent actions complete after confirmed tx/indexer state.
+Phase 8: Indexer And Blockchain Ledger Expansion
+Extend existing indexer and BlockchainTransaction.
+Add support for:
+asset registry events
+custody/reserve/valuation events
+lifecycle transitions
+governance proposal/vote events
+trade status events
+succession
+title disputes
+total loss
+rent/fee/net SOL tracking
+Keep transaction recording idempotent with unique network + signature.
+Phase 9: Cleanup And Hardening
+Only after usage telemetry:
+deprecate stale routes
+remove duplicate issuance routes if confirmed safe
+remove old identity snapshot logic if replaced
+remove dead frontend API proxies
+consolidate duplicate transaction recorders
+add rate limits
+add idempotency middleware/service
+add Swagger docs
+add integration/E2E tests
+Best-Practice Direction
+Controllers should stay thin. Business rules go into domain services. Prisma writes use transactions. Read endpoints should use select, pagination, indexes, and aggregated read models. Workflow writes should be idempotent and append WorkflowTransition + AuditLog. Backend must cache/index on-chain state for speed, but must fetch live on-chain state before privileged actions.
+I would start with Phase 0 as the next concrete task: generate the route matrix, schema audit, endpoint usage report, and proposed ERD before touching code.

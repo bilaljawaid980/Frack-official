@@ -8,6 +8,7 @@ import { CreateTokenPurchaseRequestDto } from './dto/create-token-purchase-reque
 import { UpdateTokenPurchaseRequestDto } from './dto/update-token-purchase-request.dto';
 import { BlockchainTransactionsService } from '../blockchain-transactions/blockchain-transactions.service';
 import { getIndexerConfig } from '../indexer/indexer.config';
+import { WorkflowsService } from '../workflows/workflows.service';
 
 const CLOSED_STATUSES = ['REJECTED', 'CANCELLED', 'MINTED'];
 const ACTIVE_STATUSES = [
@@ -121,6 +122,7 @@ export class TokenPurchaseRequestsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly blockchainTransactions: BlockchainTransactionsService,
+    private readonly workflows: WorkflowsService,
   ) {}
 
   private getInitialStatus(data: CreateTokenPurchaseRequestDto) {
@@ -694,6 +696,16 @@ export class TokenPurchaseRequestsService {
       RETURNING ${this.rowSelect()}
     `;
 
+    await this.workflows.record({
+      entityType: 'TokenPurchaseRequest',
+      entityId: id,
+      fromStatus: currentStatus,
+      toStatus: status,
+      actorWallet: data.reviewerWallet || null,
+      txHash: data.mintTxHash || data.activationTxHash || data.whitelistTxHash || data.claimTxHash || null,
+      reason: data.rejectionReason || null,
+    });
+
     const ledgerBase = {
       actorWallet: data.reviewerWallet || null,
       entityType: 'token_purchase_request',
@@ -729,6 +741,7 @@ export class TokenPurchaseRequestsService {
       return existing;
     }
 
+    const previousStatus = String(existing.status);
     const nextStatus = this.getResumeStatus(existing);
     const rows = await this.prisma.$queryRaw<Array<Record<string, unknown>>>`
       UPDATE "TokenPurchaseRequest"
@@ -736,6 +749,13 @@ export class TokenPurchaseRequestsService {
       WHERE id = ${id}
       RETURNING ${this.rowSelect()}
     `;
+
+    await this.workflows.record({
+      entityType: 'TokenPurchaseRequest',
+      entityId: id,
+      fromStatus: previousStatus,
+      toStatus: nextStatus,
+    });
 
     return rows[0];
   }
@@ -747,3 +767,4 @@ export class TokenPurchaseRequestsService {
     });
   }
 }
+

@@ -1,11 +1,15 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
+import { WorkflowsService } from "../workflows/workflows.service";
 import { CreateIssuanceDto } from "./dto/create-issuance.dto";
 import { UpdateIssuanceStatusDto } from "./dto/update-issuance-status.dto";
 
 @Injectable()
 export class IssuanceService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly workflows: WorkflowsService,
+  ) {}
 
   findAll(filters?: { tokenContract?: string; status?: string }) {
     const { tokenContract, status } = filters || {};
@@ -31,9 +35,19 @@ export class IssuanceService {
       throw new NotFoundException("Issuance request not found");
     }
 
-    return this.prisma.issuanceRequest.update({
-      where: { id },
-      data: { status: dto.status, txHash: dto.txHash },
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.issuanceRequest.update({
+        where: { id },
+        data: { status: dto.status, txHash: dto.txHash },
+      });
+      await this.workflows.recordWithClient(tx, {
+        entityType: "IssuanceRequest",
+        entityId: id,
+        fromStatus: existing.status,
+        toStatus: dto.status,
+        txHash: dto.txHash || null,
+      });
+      return updated;
     });
   }
 
@@ -45,9 +59,19 @@ export class IssuanceService {
       throw new NotFoundException("Issuance request not found");
     }
 
-    return this.prisma.issuanceRequest.update({
-      where: { id },
-      data: { status: "MINTED", txHash },
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.issuanceRequest.update({
+        where: { id },
+        data: { status: "MINTED", txHash },
+      });
+      await this.workflows.recordWithClient(tx, {
+        entityType: "IssuanceRequest",
+        entityId: id,
+        fromStatus: existing.status,
+        toStatus: "MINTED",
+        txHash,
+      });
+      return updated;
     });
   }
 }

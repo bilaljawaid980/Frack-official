@@ -4,6 +4,10 @@ export class RecordBlockchainTransactionDto {
   @IsString()
   txHash!: string;
 
+  @IsOptional()
+  @IsString()
+  network?: string;
+
   @IsString()
   actionType!: string;
 

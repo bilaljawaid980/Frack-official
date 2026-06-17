@@ -1,9 +1,13 @@
-import { IsBoolean, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateTrustedIssuerDto {
   @IsString()
   @MinLength(1)
   walletAddress!: string;
+
+  @IsOptional()
+  @IsString()
+  fidAddress?: string;
 
   @IsString()
   @MinLength(2)

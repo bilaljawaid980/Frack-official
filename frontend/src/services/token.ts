@@ -6,9 +6,14 @@
 
 import { AnchorProvider, Idl, Program, BN } from "@coral-xyz/anchor";
 import {
+  AddressLookupTableAccount,
+  AddressLookupTableProgram,
   PublicKey,
   SystemProgram,
   Transaction,
+  TransactionInstruction,
+  TransactionMessage,
+  VersionedTransaction,
 } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
@@ -784,11 +789,7 @@ export class TokenService {
         finalAccounts: mintIx.keys,
       });
 
-      const sig = await this.provider.sendAndConfirm(
-        new Transaction().add(mintIx),
-        [],
-        { commitment: "confirmed" },
-      );
+      const sig = await this.sendMintInstructions(authority, [mintIx]);
       return sig;
     } catch (err) {
       const formatted = formatTransactionError(err);
@@ -798,6 +799,182 @@ export class TokenService {
         );
       }
       throw new Error(formatted);
+    }
+  }
+
+  private compileVersionedTransaction(
+    payerKey: PublicKey,
+    recentBlockhash: string,
+    instructions: TransactionInstruction[],
+    lookupTables: AddressLookupTableAccount[] = [],
+  ): VersionedTransaction {
+    const message = new TransactionMessage({
+      payerKey,
+      recentBlockhash,
+      instructions,
+    }).compileToV0Message(lookupTables);
+    return new VersionedTransaction(message);
+  }
+
+  private getSerializedTransactionSize(transaction: VersionedTransaction): number | null {
+    try {
+      return transaction.serialize().length;
+    } catch {
+      return null;
+    }
+  }
+
+  private async sendMintInstructions(
+    payerKey: PublicKey,
+    instructions: TransactionInstruction[],
+  ): Promise<string> {
+    let { blockhash, lastValidBlockHeight } =
+      await this.provider.connection.getLatestBlockhash("confirmed");
+    let tx = this.compileVersionedTransaction(payerKey, blockhash, instructions);
+    const txSize = this.getSerializedTransactionSize(tx);
+
+    if (txSize === null || txSize > 1232) {
+      const lookupTable = await this.createLookupTableForInstructions(payerKey, instructions);
+      ({ blockhash, lastValidBlockHeight } =
+        await this.provider.connection.getLatestBlockhash("confirmed"));
+      tx = this.compileVersionedTransaction(payerKey, blockhash, instructions, [lookupTable]);
+
+      const lutTxSize = this.getSerializedTransactionSize(tx);
+      if (lutTxSize === null || lutTxSize > 1232) {
+        throw new Error(
+          `Mint transaction is ${lutTxSize ?? "too large to serialize"} bytes, above Solana's 1232-byte limit even with an address lookup table.`,
+        );
+      }
+    }
+
+    const signed = await this.provider.wallet.signTransaction(tx);
+    const signature = await this.provider.connection.sendRawTransaction(
+      signed.serialize(),
+      { skipPreflight: false, preflightCommitment: "confirmed", maxRetries: 3 },
+    );
+    await this.confirmSubmittedTransaction(signature, blockhash, lastValidBlockHeight);
+    return signature;
+  }
+
+  private async createLookupTableForInstructions(
+    payerKey: PublicKey,
+    instructions: TransactionInstruction[],
+  ): Promise<AddressLookupTableAccount> {
+    const slot = await this.provider.connection.getSlot("confirmed");
+    const [createLookupTableIx, lookupTableAddress] =
+      AddressLookupTableProgram.createLookupTable({
+        authority: payerKey,
+        payer: payerKey,
+        recentSlot: slot - 1,
+      });
+
+    const lookupAddresses = this.collectLookupTableAddresses(payerKey, instructions);
+    for (let index = 0; index < lookupAddresses.length; index += 24) {
+      const extendLookupTableIx = AddressLookupTableProgram.extendLookupTable({
+        payer: payerKey,
+        authority: payerKey,
+        lookupTable: lookupTableAddress,
+        addresses: lookupAddresses.slice(index, index + 24),
+      });
+      const transaction = new Transaction();
+      if (index === 0) {
+        transaction.add(createLookupTableIx);
+      }
+      transaction.add(extendLookupTableIx);
+      await this.sendLegacyTransaction(payerKey, transaction);
+    }
+
+    return this.waitForLookupTableActivation(lookupTableAddress, lookupAddresses.length);
+  }
+
+  private async waitForLookupTableActivation(
+    lookupTableAddress: PublicKey,
+    expectedAddressCount: number,
+  ): Promise<AddressLookupTableAccount> {
+    const deadline = Date.now() + 20_000;
+    let lastLookupTable: AddressLookupTableAccount | null = null;
+
+    while (Date.now() < deadline) {
+      const lookupTable = await this.provider.connection.getAddressLookupTable(
+        lookupTableAddress,
+        { commitment: "confirmed" },
+      );
+      lastLookupTable = lookupTable.value;
+
+      if (
+        lookupTable.value &&
+        lookupTable.value.state.addresses.length >= expectedAddressCount
+      ) {
+        const currentSlot = await this.provider.connection.getSlot("confirmed");
+        const lastExtendedSlot = Number(lookupTable.value.state.lastExtendedSlot);
+        if (currentSlot > lastExtendedSlot) {
+          return lookupTable.value;
+        }
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    if (lastLookupTable) {
+      throw new Error("Address lookup table was created but was not ready for this slot. Please retry minting.");
+    }
+    throw new Error("Address lookup table was not available after creation.");
+  }
+
+  private collectLookupTableAddresses(
+    payerKey: PublicKey,
+    instructions: TransactionInstruction[],
+  ): PublicKey[] {
+    const seen = new Set<string>();
+    const addresses: PublicKey[] = [];
+    const pushAddress = (pubkey: PublicKey) => {
+      const key = pubkey.toBase58();
+      if (key === payerKey.toBase58() || seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      addresses.push(pubkey);
+    };
+
+    for (const instruction of instructions) {
+      pushAddress(instruction.programId);
+      for (const account of instruction.keys) {
+        if (!account.isSigner) {
+          pushAddress(account.pubkey);
+        }
+      }
+    }
+    return addresses;
+  }
+
+  private async sendLegacyTransaction(
+    payerKey: PublicKey,
+    transaction: Transaction,
+  ): Promise<string> {
+    const { blockhash, lastValidBlockHeight } =
+      await this.provider.connection.getLatestBlockhash("confirmed");
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = payerKey;
+    const signed = await this.provider.wallet.signTransaction(transaction);
+    const signature = await this.provider.connection.sendRawTransaction(
+      signed.serialize(),
+      { skipPreflight: false, preflightCommitment: "confirmed" },
+    );
+    await this.confirmSubmittedTransaction(signature, blockhash, lastValidBlockHeight);
+    return signature;
+  }
+
+  private async confirmSubmittedTransaction(
+    signature: string,
+    blockhash: string,
+    lastValidBlockHeight: number,
+  ): Promise<void> {
+    const result = await this.provider.connection.confirmTransaction(
+      { signature, blockhash, lastValidBlockHeight },
+      "confirmed",
+    );
+    if (result.value.err) {
+      throw new Error(formatTransactionError(result.value.err));
     }
   }
 

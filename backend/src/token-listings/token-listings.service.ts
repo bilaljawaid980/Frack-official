@@ -8,6 +8,7 @@ import { CreateTokenSellListingDto } from './dto/create-token-sell-listing.dto';
 import { UpdateTokenBuyIntentDto } from './dto/update-token-buy-intent.dto';
 import { UpdateTokenSellListingDto } from './dto/update-token-sell-listing.dto';
 import { BlockchainTransactionsService } from '../blockchain-transactions/blockchain-transactions.service';
+import { WorkflowsService } from '../workflows/workflows.service';
 
 const LISTING_STATUSES = new Set(['LISTED', 'PARTIALLY_FILLED', 'FILLED', 'CANCELLED', 'EXPIRED']);
 const OPEN_LISTING_STATUSES = ['LISTED', 'PARTIALLY_FILLED'];
@@ -56,6 +57,7 @@ export class TokenListingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly blockchainTransactions: BlockchainTransactionsService,
+    private readonly workflows: WorkflowsService,
   ) {}
 
   private listingSelect() {
@@ -202,13 +204,19 @@ export class TokenListingsService {
 
   async updateListingStatus(id: string, dto: UpdateTokenSellListingDto) {
     if (!LISTING_STATUSES.has(dto.status)) throw new ConflictException('Invalid listing status.');
-    await this.findListing(id);
+    const existing = await this.findListing(id);
     const rows = await this.prisma.$queryRaw<Array<Record<string, unknown>>>`
       UPDATE "TokenSellListing"
       SET status = ${dto.status}, "updatedAt" = NOW()
       WHERE id = ${id}
       RETURNING ${this.listingSelect()}
     `;
+    await this.workflows.record({
+      entityType: 'TokenSellListing',
+      entityId: id,
+      fromStatus: String(existing.status),
+      toStatus: dto.status,
+    });
     return rows[0];
   }
 
@@ -418,6 +426,22 @@ export class TokenListingsService {
         `;
         return updatedIntent;
       });
+      await this.workflows.record({
+        entityType: 'TokenBuyIntent',
+        entityId: id,
+        fromStatus: String(intent.status),
+        toStatus: dto.status,
+        actorWallet: dto.reviewerWallet || null,
+        txHash: dto.transferTxHash,
+      });
+      await this.workflows.record({
+        entityType: 'TokenSellListing',
+        entityId: String(intent.listingId),
+        fromStatus: String(listing.status),
+        toStatus: newRemaining === 0n ? 'FILLED' : 'PARTIALLY_FILLED',
+        actorWallet: dto.reviewerWallet || null,
+        txHash: dto.transferTxHash,
+      });
       await this.recordBuyIntentLedgerEntries(id, dto, intent);
       return rows[0];
     }
@@ -428,6 +452,15 @@ export class TokenListingsService {
       WHERE id = ${id}
       RETURNING ${this.buyIntentSelect()}
     `;
+    await this.workflows.record({
+      entityType: 'TokenBuyIntent',
+      entityId: id,
+      fromStatus: String(intent.status),
+      toStatus: dto.status,
+      actorWallet: dto.reviewerWallet || null,
+      txHash: dto.activationTxHash || dto.whitelistTxHash || dto.claimTxHash || null,
+      reason: dto.rejectionReason || dto.preflightFailure || dto.simulationError || null,
+    });
     await this.recordBuyIntentLedgerEntries(id, dto, intent);
     return rows[0];
   }
@@ -491,3 +524,4 @@ export class TokenListingsService {
     return rows[0];
   }
 }
+

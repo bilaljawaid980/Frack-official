@@ -5,11 +5,11 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTrustedIssuerDto } from './dto/create-trusted-issuer.dto';
 
-function normalizeWallet(value: string): string {
+function normalizeWallet(value: string, label = 'Issuer wallet address'): string {
   try {
     return new PublicKey(value.trim()).toBase58();
   } catch {
-    throw new ConflictException('Issuer wallet address must be a valid Solana wallet address.');
+    throw new ConflictException(`${label} must be a valid Solana address.`);
   }
 }
 
@@ -21,6 +21,7 @@ export class TrustedIssuersService {
     return Prisma.sql`
       id,
       "walletAddress",
+      "fidAddress",
       "authorityName",
       "kycAuthorized",
       "amlAuthorized",
@@ -43,6 +44,7 @@ export class TrustedIssuersService {
     }
 
     const walletAddress = normalizeWallet(dto.walletAddress);
+    const fidAddress = dto.fidAddress ? normalizeWallet(dto.fidAddress, 'FID address') : null;
     const authorityName = dto.authorityName.trim();
     if (!authorityName) {
       throw new ConflictException('Issuer authority name is required.');
@@ -62,6 +64,7 @@ export class TrustedIssuersService {
       INSERT INTO "TrustedIssuer" (
         id,
         "walletAddress",
+        "fidAddress",
         "authorityName",
         "kycAuthorized",
         "amlAuthorized",
@@ -70,6 +73,7 @@ export class TrustedIssuersService {
       VALUES (
         ${randomUUID()},
         ${walletAddress},
+        ${fidAddress},
         ${authorityName},
         ${dto.kycAuthorized},
         ${dto.amlAuthorized},

@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordBlockchainTransactionDto } from './dto/record-blockchain-transaction.dto';
@@ -24,6 +23,7 @@ export class BlockchainTransactionsService {
     return this.prisma.$queryRaw<Array<Record<string, unknown>>>`
       SELECT
         id,
+        network,
         "txHash",
         "actionType",
         "actorWallet",
@@ -55,10 +55,12 @@ export class BlockchainTransactionsService {
   async record(entry: BlockchainTransactionEntry) {
     const metadata = entry.metadata ? JSON.stringify(entry.metadata) : null;
     const occurredAt = entry.occurredAt ? new Date(entry.occurredAt) : new Date();
+    const network = entry.network || process.env.SOLANA_CLUSTER || 'devnet';
 
     const rows = await this.prisma.$queryRaw<Array<Record<string, unknown>>>`
       INSERT INTO "BlockchainTransaction" (
         id,
+        network,
         "txHash",
         "actionType",
         "actorWallet",
@@ -75,6 +77,7 @@ export class BlockchainTransactionsService {
       )
       VALUES (
         ${randomUUID()},
+        ${network},
         ${entry.txHash},
         ${entry.actionType},
         ${entry.actorWallet || null},
@@ -89,7 +92,7 @@ export class BlockchainTransactionsService {
         ${entry.netSolChangeLamports || null}::bigint,
         ${occurredAt}
       )
-      ON CONFLICT ("txHash") DO UPDATE
+      ON CONFLICT (network, "txHash") DO UPDATE
       SET
         "actionType" = EXCLUDED."actionType",
         "actorWallet" = COALESCE(EXCLUDED."actorWallet", "BlockchainTransaction"."actorWallet"),
@@ -104,6 +107,7 @@ export class BlockchainTransactionsService {
         metadata = COALESCE(EXCLUDED.metadata, "BlockchainTransaction".metadata)
       RETURNING
         id,
+        network,
         "txHash",
         "actionType",
         "actorWallet",

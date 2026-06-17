@@ -28,31 +28,6 @@ CREATE TABLE IF NOT EXISTS issuance_requests (
     INDEX idx_created_at (created_at)
 );
 
--- Create redemption_requests table
-CREATE TABLE IF NOT EXISTS redemption_requests (
-    id SERIAL PRIMARY KEY,
-    request_id BIGINT NOT NULL,
-    token_address VARCHAR(255) NOT NULL,
-    asset_id BIGINT NOT NULL,
-    requester VARCHAR(255) NOT NULL,
-    amount VARCHAR(255) NOT NULL,
-    status VARCHAR(50) NOT NULL DEFAULT 'pending',
-    reason TEXT,
-    tx_hash VARCHAR(255),
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    approved_at TIMESTAMP,
-    approved_by VARCHAR(255),
-    rejected_at TIMESTAMP,
-    rejected_by VARCHAR(255),
-    rejection_reason TEXT,
-    
-    UNIQUE(token_address, request_id),
-    INDEX idx_token_address (token_address),
-    INDEX idx_status (status),
-    INDEX idx_requester (requester),
-    INDEX idx_created_at (created_at)
-);
 
 -- Create activity_logs table for audit trail
 CREATE TABLE IF NOT EXISTS activity_logs (
@@ -78,10 +53,8 @@ CREATE TABLE IF NOT EXISTS activity_logs (
 
 -- Add comments for documentation
 COMMENT ON TABLE issuance_requests IS 'Tracks token issuance requests from issuers awaiting controller approval';
-COMMENT ON TABLE redemption_requests IS 'Tracks token redemption requests from holders awaiting controller approval';
 COMMENT ON TABLE activity_logs IS 'Audit trail for all privileged actions on the platform';
 
 COMMENT ON COLUMN issuance_requests.request_id IS 'On-chain request ID from the token contract';
 COMMENT ON COLUMN issuance_requests.status IS 'pending | approved | rejected';
-COMMENT ON COLUMN redemption_requests.status IS 'pending | approved | rejected';
 COMMENT ON COLUMN activity_logs.action_type IS 'e.g., APPROVE_ISSUANCE, REJECT_REDEMPTION, UPDATE_COMPLIANCE';

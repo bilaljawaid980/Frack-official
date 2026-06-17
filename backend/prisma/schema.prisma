@@ -19,6 +19,10 @@ model User {
   updatedAt     DateTime @updatedAt
 
   sessions      Session[]
+  walletAccounts WalletAccount[]
+  organizationMemberships OrganizationMember[]
+  platformRolesGranted PlatformRoleAssignment[] @relation("PlatformRoleGrantedBy")
+  platformRolesRevoked PlatformRoleAssignment[] @relation("PlatformRoleRevokedBy")
 }
 
 model Session {
@@ -147,34 +151,6 @@ model IssuanceRequest {
   @@index([status])
   @@index([requester])
   @@index([recipient])
-}
-
-model RedemptionRequest {
-  id              String    @id @default(uuid())
-  requestId       Int       // On-chain request ID
-  tokenContract   String
-  assetId         Int
-  requester       String
-  amount          String
-  reason          String?
-  status          String    @default("PENDING") // PENDING | APPROVED | REJECTED
-  txHash          String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  // Approval fields
-  approvedAt      DateTime?
-  approvedBy      String?
-  
-  // Rejection fields
-  rejectedAt      DateTime?
-  rejectedBy      String?
-  rejectionReason String?
-  
-  @@unique([tokenContract, requestId])
-  @@index([tokenContract])
-  @@index([status])
-  @@index([requester])
 }
 
 model ComplianceRule {
@@ -477,6 +453,7 @@ model TokenTransferHistory {
 
 model BlockchainTransaction {
   id            String   @id @default(uuid())
+  network       String   @default("devnet")
   txHash        String   @unique
   actionType    String
   actorWallet   String?
@@ -496,11 +473,13 @@ model BlockchainTransaction {
   @@index([actionType])
   @@index([assetId])
   @@index([tokenContract])
+  @@unique([network, txHash], name: "BlockchainTransaction_network_txHash_key")
 }
 
 model TrustedIssuer {
   id              String   @id @default(uuid())
   walletAddress   String   @unique
+  fidAddress      String?
   authorityName   String
   kycAuthorized   Boolean  @default(false)
   amlAuthorized   Boolean  @default(false)
@@ -511,4 +490,194 @@ model TrustedIssuer {
   @@index([kycAuthorized])
   @@index([amlAuthorized])
 }
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  type      String
+  status    String   @default("ACTIVE")
+  environment String @default("sandbox")
+  network   String   @default("devnet")
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt
 
+  members OrganizationMember[]
+  wallets OrganizationWallet[]
+
+  @@index([type])
+  @@index([status])
+  @@index([environment])
+}
+
+model OrganizationMember {
+  id             String   @id @default(uuid())
+  organizationId String
+  userId         String
+  memberRole     String
+  invitedBy      String?
+  joinedAt       DateTime @default(now()) @db.Timestamptz(3)
+  revokedAt      DateTime? @db.Timestamptz(3)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+  @@index([memberRole])
+}
+
+model WalletAccount {
+  id              String   @id @default(uuid())
+  userId          String
+  publicKey       String
+  network         String
+  isPrimary       Boolean  @default(false)
+  status          String   @default("ACTIVE")
+  label           String?
+  verifiedAt      DateTime? @db.Timestamptz(3)
+  lastChallengeAt DateTime? @db.Timestamptz(3)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt
+
+  user       User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orgWallets OrganizationWallet[]
+
+  @@unique([publicKey, network])
+  @@index([userId])
+  @@index([publicKey])
+  @@index([status])
+}
+
+model OrganizationWallet {
+  id                    String   @id @default(uuid())
+  organizationId        String
+  walletAccountId       String
+  purpose               String?
+  isAuthorizedSignatory Boolean  @default(false)
+  status                String   @default("ACTIVE")
+  validFrom             DateTime @default(now()) @db.Timestamptz(3)
+  validUntil            DateTime? @db.Timestamptz(3)
+  createdAt             DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime @updatedAt
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  walletAccount WalletAccount @relation(fields: [walletAccountId], references: [id])
+
+  @@index([organizationId])
+  @@index([walletAccountId])
+  @@index([status])
+}
+
+model PlatformRoleAssignment {
+  id            String   @id @default(uuid())
+  walletAddress String
+  role          String
+  grantedBy     String?
+  grantedAt     DateTime @default(now()) @db.Timestamptz(3)
+  revokedAt     DateTime? @db.Timestamptz(3)
+  revokedBy     String?
+  reason        String?
+  environment   String   @default("sandbox")
+  network       String   @default("devnet")
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt
+
+  grantedByUser User? @relation("PlatformRoleGrantedBy", fields: [grantedBy], references: [id])
+  revokedByUser User? @relation("PlatformRoleRevokedBy", fields: [revokedBy], references: [id])
+
+  @@index([walletAddress])
+  @@index([role])
+  @@index([revokedAt])
+  @@index([environment])
+}
+
+model OnChainAuthorityBinding {
+  id            String   @id @default(uuid())
+  walletAddress String
+  fidAddress    String?
+  authorityType String
+  tokenContract String?
+  txHash        String?
+  network       String   @default("devnet")
+  environment   String   @default("sandbox")
+  confirmedAt   DateTime? @db.Timestamptz(3)
+  revokedAt     DateTime? @db.Timestamptz(3)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt
+
+  @@index([walletAddress])
+  @@index([tokenContract])
+  @@index([authorityType])
+  @@index([network])
+}
+
+model WorkflowTransition {
+  id          String   @id @default(uuid())
+  entityType  String
+  entityId    String
+  fromStatus  String?
+  toStatus    String
+  actorWallet String?
+  actorUserId String?
+  txHash      String?
+  reason      String?
+  metadata    Json?
+  environment String   @default("sandbox")
+  network     String   @default("devnet")
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([entityType, entityId])
+  @@index([actorWallet])
+  @@index([createdAt])
+  @@index([environment])
+}
+
+model AuditLog {
+  id             String   @id @default(uuid())
+  actorUserId    String?
+  actorWallet    String?
+  organizationId String?
+  action         String
+  resourceType   String?
+  resourceId     String?
+  requestId      String?
+  correlationId  String?
+  ipAddressHash  String?
+  userAgentHash  String?
+  before         Json?
+  after          Json?
+  result         String
+  failureCode    String?
+  environment    String   @default("sandbox")
+  network        String   @default("devnet")
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([actorUserId])
+  @@index([actorWallet])
+  @@index([action, resourceType])
+  @@index([createdAt])
+}
+
+model OutboxEvent {
+  id            String   @id @default(uuid())
+  eventType     String
+  aggregateType String
+  aggregateId   String
+  payload       Json
+  status        String   @default("PENDING")
+  attempts      Int      @default(0)
+  availableAt   DateTime @default(now()) @db.Timestamptz(3)
+  lockedAt      DateTime? @db.Timestamptz(3)
+  processedAt   DateTime? @db.Timestamptz(3)
+  lastError     String?
+  environment   String   @default("sandbox")
+  network       String   @default("devnet")
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt
+
+  @@index([status, availableAt])
+  @@index([aggregateType, aggregateId])
+  @@index([environment])
+}

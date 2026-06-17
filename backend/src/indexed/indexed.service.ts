@@ -73,10 +73,4 @@ export class IndexedService {
     });
   }
 
-  listRedemptionRequests(contract: string) {
-    return this.prisma.redemptionRequest.findMany({
-      where: { tokenContract: contract },
-      orderBy: { createdAt: "desc" },
-    });
-  }
 }

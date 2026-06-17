@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { WorkflowsService } from "../workflows/workflows.service";
 import { CreateAssetRequestDto } from "./dto/create-asset-request.dto";
 import { UpdateAssetRequestStatusDto } from "./dto/update-asset-request-status.dto";
 
@@ -14,7 +15,10 @@ const ASSET_REQUEST_STATUSES = new Set([
 
 @Injectable()
 export class AssetRequestsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly workflows: WorkflowsService,
+  ) {}
 
   findAll(status?: string) {
     return this.prisma.assetRequest.findMany({
@@ -60,20 +64,32 @@ export class AssetRequestsService {
       throw new BadRequestException("Invalid asset request status");
     }
 
-    await this.findOne(id);
+    const existing = await this.findOne(id);
     const now = new Date();
 
-    return this.prisma.assetRequest.update({
-      where: { id },
-      data: {
-        status: dto.status,
-        reviewedAt: dto.status === "PENDING_REVIEW" ? null : now,
-        reviewedBy: dto.reviewedBy,
-        rejectionReason:
-          dto.status === "REJECTED" ? dto.rejectionReason || null : null,
-        deployedAssetId: dto.deployedAssetId,
-        txHash: dto.txHash,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.assetRequest.update({
+        where: { id },
+        data: {
+          status: dto.status,
+          reviewedAt: dto.status === "PENDING_REVIEW" ? null : now,
+          reviewedBy: dto.reviewedBy,
+          rejectionReason:
+            dto.status === "REJECTED" ? dto.rejectionReason || null : null,
+          deployedAssetId: dto.deployedAssetId,
+          txHash: dto.txHash,
+        },
+      });
+      await this.workflows.recordWithClient(tx, {
+        entityType: "AssetRequest",
+        entityId: id,
+        fromStatus: existing.status,
+        toStatus: dto.status,
+        actorWallet: dto.reviewedBy || null,
+        txHash: dto.txHash || null,
+        reason: dto.rejectionReason || null,
+      });
+      return updated;
     });
   }
 }

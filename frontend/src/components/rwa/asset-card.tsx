@@ -4,9 +4,13 @@ import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import {
   Building2,
-  TrendingUp,
+  Briefcase,
+  Gem,
+  Landmark,
+  Palette,
+  Lightbulb,
   Shield,
-  Users,
+  MapPin,
   ArrowRight,
   Eye,
 } from "lucide-react";
@@ -18,6 +22,10 @@ import {
   CardHeader,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import {
+  formatTokenizedPercentage,
+  getTokenizedPercentage,
+} from "@/lib/asset-tokenization";
 import { RWAAsset } from "@/types/rwa";
 
 interface AssetCardProps {
@@ -31,29 +39,37 @@ function formatAssetValue(value: unknown) {
     : "Pending review";
 }
 
+const statusColors = {
+  compliant:
+    "bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 text-emerald-700 border-emerald-300 shadow-[0_2px_8px_rgba(16,185,129,0.15)]",
+  pending:
+    "bg-gradient-to-br from-amber-500/20 to-amber-600/20 text-amber-700 border-amber-300 shadow-[0_2px_8px_rgba(245,158,11,0.15)]",
+  "non-compliant":
+    "bg-gradient-to-br from-red-500/20 to-red-600/20 text-red-700 border-red-300 shadow-[0_2px_8px_rgba(220,38,38,0.15)]",
+  "under-review":
+    "bg-gradient-to-br from-blue-500/20 to-blue-600/20 text-blue-700 border-blue-300 shadow-[0_2px_8px_rgba(37,99,235,0.15)]",
+};
+
+const typeStyles: Record<
+  RWAAsset["assetType"],
+  { icon: typeof Building2; gradient: string }
+> = {
+  "real-estate": { icon: Building2, gradient: "from-[#172E7F] to-[#2A5FA6]" },
+  commodity: { icon: Gem, gradient: "from-[#172E7F] to-[#2A5FA6]" },
+  equity: { icon: Briefcase, gradient: "from-[#172E7F] to-[#2A5FA6]" },
+  debt: { icon: Landmark, gradient: "from-[#172E7F] to-[#2A5FA6]" },
+  art: { icon: Palette, gradient: "from-[#172E7F] to-[#2A5FA6]" },
+  "intellectual-property": {
+    icon: Lightbulb,
+    gradient: "from-[#172E7F] to-[#2A5FA6]",
+  },
+};
+
 export function AssetCard({ asset, className }: AssetCardProps) {
   const router = useRouter();
-  const statusColors = {
-    compliant:
-      "bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 text-emerald-700 border-emerald-300 shadow-[0_2px_8px_rgba(16,185,129,0.15)]",
-    pending:
-      "bg-gradient-to-br from-amber-500/20 to-amber-600/20 text-amber-700 border-amber-300 shadow-[0_2px_8px_rgba(245,158,11,0.15)]",
-    "non-compliant":
-      "bg-gradient-to-br from-red-500/20 to-red-600/20 text-red-700 border-red-300 shadow-[0_2px_8px_rgba(220,38,38,0.15)]",
-    "under-review":
-      "bg-gradient-to-br from-blue-500/20 to-blue-600/20 text-blue-700 border-blue-300 shadow-[0_2px_8px_rgba(37,99,235,0.15)]",
-  };
-
-  const typeIcons = {
-    "real-estate": Building2,
-    commodity: TrendingUp,
-    equity: Users,
-    debt: Shield,
-    art: Building2,
-    "intellectual-property": Building2,
-  } as const;
-
-  const Icon = typeIcons[asset.assetType] || Building2;
+  const typeStyle = typeStyles[asset.assetType] || typeStyles["real-estate"];
+  const Icon = typeStyle.icon;
+  const tokenizedPercentage = getTokenizedPercentage(asset);
 
   return (
     <motion.div
@@ -64,29 +80,35 @@ export function AssetCard({ asset, className }: AssetCardProps) {
     >
       <Card
         className={cn(
-          "overflow-hidden group bg-white/95 backdrop-blur-sm rounded-2xl border-2 border-slate-200/80 shadow-[0_8px_32px_rgba(23,46,127,0.08)] hover:shadow-[0_16px_48px_rgba(23,46,127,0.14)] transition-all duration-300",
+          "overflow-hidden group bg-white/95 backdrop-blur-sm rounded-2xl border border-slate-200/80 shadow-[0_10px_30px_rgba(15,23,42,0.06)] hover:border-[#2A5FA6]/30 hover:shadow-[0_18px_42px_rgba(23,46,127,0.16)] transition-all duration-300",
           className
         )}
       >
         {/* Header with Icon and Badge */}
-        <CardHeader className="pb-3 space-y-3">
-          <div className="flex items-start justify-between">
+        <CardHeader className="pb-3 space-y-3 px-5 pt-5">
+          <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 border-2 border-slate-200">
-                <Icon className="h-5 w-5 text-slate-700" />
+              <div
+                className={cn(
+                  "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br shadow-[0_8px_18px_rgba(23,46,127,0.24)] ring-1 ring-white/70",
+                  typeStyle.gradient
+                )}
+              >
+                <Icon className="h-5 w-5 text-white" />
               </div>
               <div>
                 <h3 className="font-bold text-base text-slate-900 leading-tight">
                   {asset.name}
                 </h3>
-                <p className="text-xs text-slate-500 font-medium mt-0.5">
-                  {asset.location}
+                <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-slate-500">
+                  <MapPin className="h-3 w-3" />
+                  {asset.location} - {asset.symbol}
                 </p>
               </div>
             </div>
             <Badge
               className={cn(
-                "border-2 font-bold text-xs px-2.5 py-1",
+                "border-2 font-bold text-xs px-2.5 py-1 shrink-0",
                 statusColors[asset.complianceStatus]
               )}
             >
@@ -96,7 +118,7 @@ export function AssetCard({ asset, className }: AssetCardProps) {
         </CardHeader>
 
         {/* Content - Stats Grid */}
-        <CardContent className="pb-4">
+        <CardContent className="pb-4 space-y-3 px-5">
           <div className="grid grid-cols-2 gap-3">
             <div className="p-3 rounded-xl bg-gradient-to-br from-slate-50 to-white border border-slate-200">
               <p className="text-xs text-slate-500 font-semibold mb-1">Value</p>
@@ -106,14 +128,26 @@ export function AssetCard({ asset, className }: AssetCardProps) {
             </div>
             <div className="p-3 rounded-xl bg-gradient-to-br from-slate-50 to-white border border-slate-200">
               <p className="text-xs text-slate-500 font-semibold mb-1">
-                Symbol
+                Tokenized
               </p>
-              <p className="font-bold text-slate-900 text-lg">{asset.symbol}</p>
+              <p className="font-bold text-slate-900 text-lg">
+                {formatTokenizedPercentage(asset)}
+              </p>
             </div>
           </div>
 
+          {/* Tokenization Progress */}
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-[#172E7F] to-[#2A5FA6]"
+              style={{
+                width: `${Math.min(100, Math.max(0, tokenizedPercentage))}%`,
+              }}
+            />
+          </div>
+
           {/* Token Contract */}
-          <div className="mt-3 flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+          <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
             <Shield className="h-3.5 w-3.5 text-slate-600 shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide">
@@ -131,7 +165,7 @@ export function AssetCard({ asset, className }: AssetCardProps) {
         </CardContent>
 
         {/* Footer - Action Buttons */}
-        <CardFooter className="pt-0 pb-4 px-4">
+        <CardFooter className="pt-0 pb-5 px-5">
           <div className="flex w-full gap-2">
             {/* View Details Button - Subtle */}
             <motion.button
@@ -163,14 +197,5 @@ export function AssetCard({ asset, className }: AssetCardProps) {
         </CardFooter>
       </Card>
     </motion.div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs text-slate-500 font-semibold">{label}</p>
-      <p className="font-bold text-slate-900 text-base">{value}</p>
-    </div>
   );
 }

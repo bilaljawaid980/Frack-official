@@ -34,7 +34,7 @@ Run a sync loop (default 30s interval):
 pnpm indexer:dev
 ```
 
-This indexes factory tokens, token roles, token assets, redemption requests, and
+This indexes factory tokens, token roles, token assets, issuance requests, and
 balances for wallet addresses stored in the Users table.
 
 ## Auth Endpoints
@@ -48,8 +48,6 @@ balances for wallet addresses stored in the Users table.
 - `POST /assets`
 - `GET /issuance-requests`
 - `POST /issuance-requests`
-- `GET /redemption-requests`
-- `POST /redemption-requests`
 - `GET /compliance-rules`
 - `POST /compliance-rules`
 
@@ -61,7 +59,6 @@ balances for wallet addresses stored in the Users table.
 - `GET /indexed/tokens/:contract/assets`
 - `GET /indexed/tokens/:contract/balances`
 - `GET /indexed/tokens/:contract/issuance-requests`
-- `GET /indexed/tokens/:contract/redemption-requests`
 
 ## Notes
 - All endpoints require JWT unless marked public.
@@ -214,36 +211,6 @@ Content-Type: application/json
 }
 ```
 
-#### Redemption Requests
-- `GET {{base_url}}/redemption-requests`
-- `POST {{base_url}}/redemption-requests` (Roles: `investor`, `admin`)
-- `PATCH {{base_url}}/redemption-requests/:id/status` (Roles: `token_controller`, `admin`)
-
-Create Redemption Request:
-```
-POST {{base_url}}/redemption-requests
-Content-Type: application/json
-
-{
-  "requestId": 2001,
-  "tokenContract": "0xTokenAddress",
-  "assetId": 1,
-  "requester": "zig1requester",
-  "amount": "500",
-  "reason": "Investor redemption"
-}
-```
-
-Update Redemption Status:
-```
-PATCH {{base_url}}/redemption-requests/1/status
-Content-Type: application/json
-
-{
-  "status": "approved",
-  "txHash": "0xdef456"
-}
-```
 
 #### Compliance Rules
 - `GET {{base_url}}/compliance-rules`
@@ -337,7 +304,6 @@ These endpoints do not use JWT guards in code.
 - `GET {{base_url}}/indexed/tokens/:contract/assets`
 - `GET {{base_url}}/indexed/tokens/:contract/balances?wallet=zig1wallet`
 - `GET {{base_url}}/indexed/tokens/:contract/issuance-requests`
-- `GET {{base_url}}/indexed/tokens/:contract/redemption-requests`
 - `GET {{base_url}}/indexed/wallets`
 - `POST {{base_url}}/indexed/wallets`
 

@@ -3,9 +3,31 @@
 import { useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { PublicKey } from "@solana/web3.js";
-import { AlertTriangle, ArrowLeft, FileText, Loader2, Shield } from "lucide-react";
+import { motion } from "framer-motion";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Briefcase,
+  Building2,
+  Coins,
+  FileText,
+  Gem,
+  Globe,
+  Landmark,
+  Lightbulb,
+  Link2,
+  Loader2,
+  Mail,
+  MapPin,
+  Palette,
+  Shield,
+  TrendingUp,
+  User,
+  Wallet,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAssetsContext } from "@/contexts/assets-context";
@@ -30,7 +52,7 @@ import {
   getTrustedIssuers,
   isInvestorCountryAllowed,
 } from "@/lib/asset-compliance";
-import { getCountryName } from "@/lib/utils";
+import { formatCurrency, getCountryName } from "@/lib/utils";
 
 type LiveProvider = {
   walletAddress: string;
@@ -63,6 +85,30 @@ type CompliancePreflight = {
   reservedSupply: string;
   supplyRemaining: string | null;
   maxRequestableTokens: string | null;
+};
+
+const ASSET_TYPE_ICONS: Record<string, typeof Building2> = {
+  "real-estate": Building2,
+  commodity: Gem,
+  equity: Briefcase,
+  debt: Landmark,
+  art: Palette,
+  "intellectual-property": Lightbulb,
+};
+
+function AssetTypeIcon({ assetType, className }: { assetType: string; className?: string }) {
+  const Icon = ASSET_TYPE_ICONS[assetType] || Building2;
+  return <Icon className={className} />;
+}
+
+const formContainerVariants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.08 } },
+};
+
+const fadeUpVariants = {
+  hidden: { opacity: 0, y: 16 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" as const } },
 };
 
 function topicStrings(topics: unknown): string[] {
@@ -640,7 +686,7 @@ function RequestFormContent() {
 
   if (loading) {
     return (
-      <div className="p-8 glass-panel rounded-[22px] space-y-6">
+      <div className="w-full space-y-6 p-8 glass-panel rounded-[22px]">
         <Skeleton className="h-12 w-1/3 rounded-xl" />
         <Skeleton className="h-96 w-full rounded-2xl" />
       </div>
@@ -649,46 +695,62 @@ function RequestFormContent() {
 
   if (!asset) {
     return (
-      <div className="p-8 glass-panel rounded-[22px] flex flex-col items-center justify-center min-h-[50vh] text-center space-y-4">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex w-full min-h-[60vh] flex-col items-center justify-center space-y-4 p-8 glass-panel rounded-[22px] text-center"
+      >
         <FileText className="h-16 w-16 text-slate-300" />
         <h2 className="text-2xl font-bold text-slate-700">Invalid Request</h2>
         <p className="text-slate-500">No asset selected for purchase.</p>
         <Button onClick={() => router.push("/")}>Return to Dashboard</Button>
-      </div>
+      </motion.div>
     );
   }
 
   if (!isConnected) {
     return (
-      <div className="p-8 glass-panel rounded-[22px] flex flex-col items-center justify-center min-h-[50vh] text-center space-y-4">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex w-full min-h-[60vh] flex-col items-center justify-center space-y-4 p-8 glass-panel rounded-[22px] text-center"
+      >
         <Shield className="h-16 w-16 text-slate-300" />
         <h2 className="text-2xl font-bold text-slate-700">Wallet Connection Required</h2>
         <p className="text-slate-500">You must connect your wallet to submit a purchase request.</p>
         <Button size="lg" onClick={connectWallet}>Connect Wallet</Button>
-      </div>
+      </motion.div>
     );
   }
 
   if (identityLoading) {
     return (
-      <div className="p-8 glass-panel rounded-[22px] flex flex-col items-center justify-center min-h-[50vh] text-center space-y-4">
-        <Shield className="h-16 w-16 text-slate-300" />
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex w-full min-h-[60vh] flex-col items-center justify-center space-y-4 p-8 glass-panel rounded-[22px] text-center"
+      >
+        <Loader2 className="h-12 w-12 animate-spin text-[#2A5FA6]" />
         <h2 className="text-2xl font-bold text-slate-700">Checking Compliance</h2>
         <p className="text-slate-500">
           Reading your wallet FID country before opening the request form.
         </p>
-      </div>
+      </motion.div>
     );
   }
 
   if (investorFidRegistered === false) {
     return (
-      <div className="p-8 glass-panel rounded-[22px] w-full max-w-4xl mx-auto">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full p-8 glass-panel rounded-[22px]"
+      >
         <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-4">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Asset
         </Button>
-        <Card className="border-amber-200 bg-amber-50/80 shadow-sm">
+        <Card className="mx-auto max-w-3xl border-amber-200 bg-amber-50/80 shadow-sm">
           <CardHeader>
             <div className="flex items-center gap-3">
               <div className="rounded-xl bg-amber-100 p-3">
@@ -733,7 +795,7 @@ function RequestFormContent() {
                 type="button"
                 disabled={registeringFid}
                 onClick={handleCreateInvestorFid}
-                className="bg-gradient-to-tr from-[#172E7F] to-[#2A5FA6] text-white"
+                className="bg-linear-to-tr from-[#172E7F] to-[#2A5FA6] text-white"
               >
                 {registeringFid ? (
                   <>
@@ -757,18 +819,22 @@ function RequestFormContent() {
             ) : null}
           </CardContent>
         </Card>
-      </div>
+      </motion.div>
     );
   }
 
   if (!countryAllowed && effectiveCountry !== null) {
     return (
-      <div className="p-8 glass-panel rounded-[22px] w-full max-w-4xl mx-auto">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full p-8 glass-panel rounded-[22px]"
+      >
         <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-4">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Asset
         </Button>
-        <Card className="border-red-200 bg-red-50/80 shadow-sm">
+        <Card className="mx-auto max-w-3xl border-red-200 bg-red-50/80 shadow-sm">
           <CardHeader>
             <div className="flex items-center gap-3">
               <div className="rounded-xl bg-red-100 p-3">
@@ -797,13 +863,17 @@ function RequestFormContent() {
             </p>
           </CardContent>
         </Card>
-      </div>
+      </motion.div>
     );
   }
 
   if (!compliancePreflight) {
     return (
-      <div className="p-8 glass-panel rounded-[22px] flex flex-col items-center justify-center min-h-[50vh] text-center space-y-4">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex w-full min-h-[60vh] flex-col items-center justify-center space-y-4 p-8 glass-panel rounded-[22px] text-center"
+      >
         {complianceLoadError ? (
           <AlertTriangle className="h-16 w-16 text-red-500" />
         ) : (
@@ -822,18 +892,22 @@ function RequestFormContent() {
             Back to Asset
           </Button>
         ) : null}
-      </div>
+      </motion.div>
     );
   }
 
   if (formIsBlocked) {
     return (
-      <div className="p-8 glass-panel rounded-[22px] w-full max-w-4xl mx-auto">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full p-8 glass-panel rounded-[22px]"
+      >
         <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-4">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Asset
         </Button>
-        <Card className="border-red-200 bg-red-50/80 shadow-sm">
+        <Card className="mx-auto max-w-3xl border-red-200 bg-red-50/80 shadow-sm">
           <CardHeader>
             <div className="flex items-center gap-3">
               <div className="rounded-xl bg-red-100 p-3">
@@ -867,236 +941,378 @@ function RequestFormContent() {
             </div>
           </CardContent>
         </Card>
-      </div>
+      </motion.div>
     );
   }
 
+  const estimatedCost =
+    requestAmountReady && asset.tokenPrice && Number.isFinite(parseFloat(formData.amount))
+      ? parseFloat(formData.amount) * asset.tokenPrice
+      : null;
+
   return (
-    <div className="p-8 glass-panel rounded-[22px] w-full max-w-5xl mx-auto">
-      <div className="mb-8">
-        <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-4">
+    <div className="w-full space-y-6 p-8 glass-panel rounded-[22px]">
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => router.back()}
+          className="-ml-2 mb-4 text-slate-500 hover:text-slate-900"
+        >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Asset
         </Button>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-2">
-          Token Purchase Request
-        </h1>
-        <p className="text-slate-600">
-          You are requesting to purchase <span className="font-semibold text-slate-900">{asset.name} ({asset.symbol})</span>. 
-          Please fill out the necessary Know Your Customer (KYC) details below.
-        </p>
-      </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <Card className="bg-white/90 border-slate-200/70 shadow-sm">
-          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-6 rounded-2xl border border-slate-200 bg-linear-to-br from-[#172E7F] to-[#2A5FA6] p-6 sm:pr-10 text-white shadow-lg sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15">
+              <AssetTypeIcon assetType={asset.assetType} className="h-7 w-7" />
+            </div>
             <div>
-              <CardTitle className="text-lg">Purchase Details</CardTitle>
-              <CardDescription>
-                Request amount must satisfy this token&apos;s live compliance modules.
-              </CardDescription>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-right">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                Remaining Tokens
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">
+                Token Purchase Request
               </p>
-              <p className="mt-1 font-mono text-sm font-semibold text-slate-900">
-                {complianceLoading && !compliancePreflight
-                  ? "Checking..."
-                  : compliancePreflight?.supplyRemaining ??
-                    compliancePreflight?.maxRequestableTokens ??
-                    "No cap"}
+              <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
+                {asset.name}{" "}
+                <span className="font-mono text-lg font-medium text-white/70">
+                  ({asset.symbol})
+                </span>
+              </h1>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Badge variant="secondary" className="capitalize">
+                  {asset.assetType.replace("-", " ")}
+                </Badge>
+                {asset.location ? (
+                  <span className="text-sm text-white/80">{asset.location}</span>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-6 sm:gap-10">
+            <div className="text-left sm:text-right">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/60">
+                Token Price
+              </p>
+              <p className="mt-1 text-lg font-bold">
+                {formatCurrency(asset.tokenPrice, asset.currency)}
               </p>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="amount">Amount of Tokens</Label>
-                <Input
-                  id="amount"
-                  name="amount"
-                  type="number"
-                  min="0"
-                  step="any"
-                  placeholder="e.g. 1000"
-                  required
-                  value={formData.amount}
-                  onChange={handleChange}
-                  className="bg-white"
-                />
-                {compliancePreflight?.maxRequestableTokens ? (
-                  <p className="text-xs text-slate-500">
-                    Maximum request currently allowed:{" "}
-                    <span className="font-mono font-medium text-slate-700">
-                      {compliancePreflight.maxRequestableTokens}
-                    </span>{" "}
-                    tokens.
-                  </p>
-                ) : null}
-                {complianceLoading ? (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                    Checking live compliance...
-                  </div>
-                ) : null}
-                {compliancePreflight?.amountError ? (
-                  <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                    {compliancePreflight.amountError}
-                  </div>
-                ) : null}
-                {compliancePreflight?.blockingReasons.length ? (
-                  <div className="space-y-2">
-                    {compliancePreflight.blockingReasons.map((reason) => (
-                      <div
-                        key={reason}
-                        className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
-                      >
-                        {reason}
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-                {complianceLoadError ? (
-                  <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                    {complianceLoadError}
-                  </div>
-                ) : null}
-              </div>
+            <div className="text-left sm:text-right">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/60">
+                Underlying Value
+              </p>
+              <p className="mt-1 text-lg font-bold">
+                {formatCurrency(asset.underlyingValue, asset.currency)}
+              </p>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white/90 border-slate-200/70 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-lg">KYC Information</CardTitle>
-            <CardDescription>
-              {kycAutofilled
-                ? "Previous KYC details for this wallet were loaded automatically."
-                : "Your details will be securely sent to the appointed KYC provider for verification."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="fullName">Full Legal Name</Label>
-                <Input
-                  id="fullName"
-                  name="fullName"
-                  placeholder="John Doe"
-                  required
-                  value={formData.fullName}
-                  onChange={handleChange}
-                  readOnly={kycFieldsLocked}
-                  className="bg-white"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  placeholder="john@example.com"
-                  required
-                  value={formData.email}
-                  onChange={handleChange}
-                  readOnly={kycFieldsLocked}
-                  className="bg-white"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="nationality">Nationality</Label>
-                <Input
-                  id="nationality"
-                  name="nationality"
-                  placeholder="e.g. US"
-                  required
-                  value={formData.nationality}
-                  onChange={handleChange}
-                  readOnly={kycFieldsLocked}
-                  className="bg-white"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="country">Country of Residence</Label>
-                <Input
-                  id="country"
-                  name="country"
-                  placeholder="e.g. United States"
-                  required
-                  value={formData.country}
-                  onChange={handleChange}
-                  readOnly={kycFieldsLocked}
-                  className="bg-white"
-                />
-              </div>
-              <div className="space-y-2 col-span-1 md:col-span-2">
-                <Label htmlFor="idDocumentUrl">ID Document URL (Passport/License)</Label>
-                <Input
-                  id="idDocumentUrl"
-                  name="idDocumentUrl"
-                  placeholder="https://storage.provider.com/doc..."
-                  required
-                  value={formData.idDocumentUrl}
-                  onChange={handleChange}
-                  readOnly={kycFieldsLocked}
-                  className="bg-white"
-                />
-              </div>
-              <div className="space-y-2 col-span-1 md:col-span-2">
-                <Label htmlFor="proofOfAddressUrl">Proof of Address URL (Utility Bill)</Label>
-                <Input
-                  id="proofOfAddressUrl"
-                  name="proofOfAddressUrl"
-                  placeholder="https://storage.provider.com/poa..."
-                  required
-                  value={formData.proofOfAddressUrl}
-                  onChange={handleChange}
-                  readOnly={kycFieldsLocked}
-                  className="bg-white"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-amber-200 bg-amber-50/70 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-base text-amber-950">Need to restart this token request?</CardTitle>
-            <CardDescription className="text-amber-800">
-              Use these only when a previous on-chain onboarding or token registry entry is stale and blocks a corrected request.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3 sm:flex-row">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={resettingOnChainState}
-              onClick={handleCancelOnChainApplication}
-              className="border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
-            >
-              Cancel On-chain Application
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={resettingOnChainState}
-              onClick={handleRemoveOwnRegistryIdentity}
-              className="border-red-200 bg-white text-red-700 hover:bg-red-50"
-            >
-              Delete My Token Registry Identity
-            </Button>
-          </CardContent>
-        </Card>
-
-        <div className="flex justify-end gap-4 pt-4">
-          <Button type="button" variant="outline" onClick={() => router.back()}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={submitDisabled} className="bg-gradient-to-tr from-[#172E7F] to-[#2A5FA6] hover:from-[#13266A] hover:to-[#224D86] text-white rounded-[11px] min-w-[200px] font-medium border-none shadow-md shadow-blue-900/10">
-            {submitting ? "Submitting..." : "Submit Purchase Request"}
-          </Button>
+          </div>
         </div>
+
+        <p className="mt-4 text-sm text-slate-600">
+          Please fill out the necessary Know Your Customer (KYC) details below to request{" "}
+          <span className="font-semibold text-slate-900">
+            {asset.name} ({asset.symbol})
+          </span>{" "}
+          tokens.
+        </p>
+      </motion.div>
+
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
+        <motion.div
+          variants={formContainerVariants}
+          initial="hidden"
+          animate="show"
+          className="space-y-6 lg:col-span-2"
+        >
+          <motion.div variants={fadeUpVariants}>
+            <Card className="bg-white/90 border-slate-200/70 shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-lg">Purchase Details</CardTitle>
+                <CardDescription>
+                  Request amount must satisfy this token&apos;s live compliance modules.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <Label htmlFor="amount">Amount of Tokens</Label>
+                  <div className="relative">
+                    <Coins className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <Input
+                      id="amount"
+                      name="amount"
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder="e.g. 1000"
+                      required
+                      value={formData.amount}
+                      onChange={handleChange}
+                      className="bg-white pl-10"
+                    />
+                  </div>
+                  {compliancePreflight?.maxRequestableTokens ? (
+                    <p className="text-xs text-slate-500">
+                      Maximum request currently allowed:{" "}
+                      <span className="font-mono font-medium text-slate-700">
+                        {compliancePreflight.maxRequestableTokens}
+                      </span>{" "}
+                      tokens.
+                    </p>
+                  ) : null}
+                  {complianceLoading ? (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                      Checking live compliance...
+                    </div>
+                  ) : null}
+                  {compliancePreflight?.amountError ? (
+                    <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                      {compliancePreflight.amountError}
+                    </div>
+                  ) : null}
+                  {compliancePreflight?.blockingReasons.length ? (
+                    <div className="space-y-2">
+                      {compliancePreflight.blockingReasons.map((reason) => (
+                        <div
+                          key={reason}
+                          className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                        >
+                          {reason}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {complianceLoadError ? (
+                    <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                      {complianceLoadError}
+                    </div>
+                  ) : null}
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div variants={fadeUpVariants}>
+            <Card className="bg-white/90 border-slate-200/70 shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-lg">KYC Information</CardTitle>
+                <CardDescription>
+                  {kycAutofilled
+                    ? "Previous KYC details for this wallet were loaded automatically."
+                    : "Your details will be securely sent to the appointed KYC provider for verification."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="fullName">Full Legal Name</Label>
+                    <div className="relative">
+                      <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <Input
+                        id="fullName"
+                        name="fullName"
+                        placeholder="John Doe"
+                        required
+                        value={formData.fullName}
+                        onChange={handleChange}
+                        readOnly={kycFieldsLocked}
+                        className="bg-white pl-10"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email Address</Label>
+                    <div className="relative">
+                      <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <Input
+                        id="email"
+                        name="email"
+                        type="email"
+                        placeholder="john@example.com"
+                        required
+                        value={formData.email}
+                        onChange={handleChange}
+                        readOnly={kycFieldsLocked}
+                        className="bg-white pl-10"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="nationality">Nationality</Label>
+                    <div className="relative">
+                      <Globe className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <Input
+                        id="nationality"
+                        name="nationality"
+                        placeholder="e.g. US"
+                        required
+                        value={formData.nationality}
+                        onChange={handleChange}
+                        readOnly={kycFieldsLocked}
+                        className="bg-white pl-10"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="country">Country of Residence</Label>
+                    <div className="relative">
+                      <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <Input
+                        id="country"
+                        name="country"
+                        placeholder="e.g. United States"
+                        required
+                        value={formData.country}
+                        onChange={handleChange}
+                        readOnly={kycFieldsLocked}
+                        className="bg-white pl-10"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2 col-span-1 md:col-span-2">
+                    <Label htmlFor="idDocumentUrl">ID Document URL (Passport/License)</Label>
+                    <div className="relative">
+                      <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <Input
+                        id="idDocumentUrl"
+                        name="idDocumentUrl"
+                        placeholder="https://storage.provider.com/doc..."
+                        required
+                        value={formData.idDocumentUrl}
+                        onChange={handleChange}
+                        readOnly={kycFieldsLocked}
+                        className="bg-white pl-10"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2 col-span-1 md:col-span-2">
+                    <Label htmlFor="proofOfAddressUrl">Proof of Address URL (Utility Bill)</Label>
+                    <div className="relative">
+                      <FileText className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <Input
+                        id="proofOfAddressUrl"
+                        name="proofOfAddressUrl"
+                        placeholder="https://storage.provider.com/poa..."
+                        required
+                        value={formData.proofOfAddressUrl}
+                        onChange={handleChange}
+                        readOnly={kycFieldsLocked}
+                        className="bg-white pl-10"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div variants={fadeUpVariants}>
+            <Card className="border-amber-200 bg-amber-50/70 shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-base text-amber-950">Need to restart this token request?</CardTitle>
+                <CardDescription className="text-amber-800">
+                  Use these only when a previous on-chain onboarding or token registry entry is stale and blocks a corrected request.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3 sm:flex-row">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={resettingOnChainState}
+                  onClick={handleCancelOnChainApplication}
+                  className="border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+                >
+                  Cancel On-chain Application
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={resettingOnChainState}
+                  onClick={handleRemoveOwnRegistryIdentity}
+                  className="border-red-200 bg-white text-red-700 hover:bg-red-50"
+                >
+                  Delete My Token Registry Identity
+                </Button>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, x: 16 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.15, duration: 0.4, ease: "easeOut" }}
+          className="space-y-4 lg:sticky lg:top-6"
+        >
+          <Card className="border-slate-200/70 bg-white/95 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Order Summary</CardTitle>
+              <CardDescription>Live compliance snapshot for this token.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <Coins className="h-4 w-4 text-[#172E7F]" />
+                  Remaining Capacity
+                </div>
+                <span className="font-mono text-sm font-semibold text-slate-900">
+                  {complianceLoading && !compliancePreflight
+                    ? "Checking..."
+                    : compliancePreflight?.supplyRemaining ??
+                      compliancePreflight?.maxRequestableTokens ??
+                      "No cap"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <TrendingUp className="h-4 w-4 text-[#172E7F]" />
+                  You&apos;re Requesting
+                </div>
+                <span className="font-mono text-sm font-semibold text-slate-900">
+                  {requestAmountReady ? `${formData.amount} ${asset.symbol}` : "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3">
+                <div className="flex items-center gap-2 text-sm text-blue-900">
+                  <Wallet className="h-4 w-4" />
+                  Estimated Cost
+                </div>
+                <span className="font-mono text-sm font-semibold text-blue-900">
+                  {estimatedCost !== null ? formatCurrency(estimatedCost, asset.currency) : "—"}
+                </span>
+              </div>
+              <div className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+                <Shield className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                <span>
+                  KYC details are sent to the appointed compliance provider for review
+                  before tokens are released.
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200/70 bg-white/95 shadow-sm">
+            <CardContent className="space-y-3 pt-6">
+              <Button
+                type="submit"
+                disabled={submitDisabled}
+                className="h-11 w-full rounded-[11px] border-none bg-linear-to-tr from-[#172E7F] to-[#2A5FA6] font-medium text-white shadow-md shadow-blue-900/10 hover:from-[#13266A] hover:to-[#224D86]"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  "Submit Purchase Request"
+                )}
+              </Button>
+              <Button type="button" variant="outline" className="w-full" onClick={() => router.back()}>
+                Cancel
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
       </form>
     </div>
   );

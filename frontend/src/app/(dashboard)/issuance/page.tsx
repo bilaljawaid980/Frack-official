@@ -407,7 +407,7 @@ export default function IssuancePage() {
           <TabsTrigger value="pending" className="relative">
             Pending Applications
             {stats.pendingReview > 0 && (
-              <Badge className="ml-2 bg-yellow-500 hover:bg-yellow-600 px-1.5 h-5 min-w-[20px] justify-center">
+              <Badge className="ml-2 bg-yellow-500 hover:bg-yellow-600 px-1.5 h-5 min-w-5 justify-center">
                 {stats.pendingReview}
               </Badge>
             )}

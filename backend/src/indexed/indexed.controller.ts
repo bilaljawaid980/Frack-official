@@ -44,10 +44,6 @@ export class IndexedController {
     return this.indexedService.listIssuanceRequests(contract);
   }
 
-  @Get("tokens/:contract/redemption-requests")
-  listRedemptionRequests(@Param("contract") contract: string) {
-    return this.indexedService.listRedemptionRequests(contract);
-  }
 
   @Get("wallets")
   listTrackedWallets() {

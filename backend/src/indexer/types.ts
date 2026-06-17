@@ -32,11 +32,3 @@ export interface TokenAssetInfo {
   total_tokenized: string;
 }
 
-export interface RedemptionRequestResponse {
-  id: number;
-  asset_id: number;
-  requester: string;
-  amount: string;
-  approved: boolean;
-  reason?: string | null;
-}
