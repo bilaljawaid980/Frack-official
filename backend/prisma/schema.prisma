@@ -55,6 +55,7 @@ model Asset {
 model AssetRequest {
   id              String   @id @default(uuid())
   status          String   @default("PENDING_REVIEW")
+  factoryAssetId  Int?    @map("factory_asset_id")
   issuerWallet    String   @map("issuer_wallet")
   legalOwner      String?  @map("legal_owner")
   referenceId     String?  @map("reference_id")
@@ -81,12 +82,157 @@ model AssetRequest {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
+  custodyMandates CustodyMandate[]
+  assetDocuments  AssetDocument[]
+
   @@index([status])
   @@index([issuerWallet])
   @@index([createdAt])
   @@map("asset_requests")
 }
 
+enum DocumentType {
+  FARD
+  SALE_DEED
+  MUTATION_RECORD
+  SPV_REGISTRATION
+  LEGAL_OPINION
+  WHITEPAPER
+  INSURANCE_POLICY
+  VALUATION_REPORT
+  OTHER
+}
+
+enum DocumentVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+model AssetDocument {
+  id              String             @id @default(uuid())
+  assetRequestId  String             @map("asset_request_id")
+  factoryAssetId  Int?               @map("factory_asset_id")
+  deployedAssetId String?            @map("deployed_asset_id")
+  type            DocumentType
+  visibility      DocumentVisibility @default(PRIVATE)
+  bucket          String             @default("legal-docs")
+  storageKey      String             @map("storage_key")
+  fileHash        String             @map("file_hash")
+  fileName        String             @map("file_name")
+  mimeType        String             @map("mime_type")
+  sizeBytes       Int                @map("size_bytes")
+  uploadedById    String?            @map("uploaded_by_id")
+  uploadedByWallet String?           @map("uploaded_by_wallet")
+  verifiedAt      DateTime?          @map("verified_at") @db.Timestamptz(3)
+  verifiedById    String?            @map("verified_by_id")
+  attestationTxHash String?          @map("attestation_tx_hash")
+  attestedAt      DateTime?          @map("attested_at") @db.Timestamptz(3)
+  deletedAt       DateTime?          @map("deleted_at") @db.Timestamptz(3)
+  metadata        Json?
+  uploadedAt      DateTime           @default(now()) @map("uploaded_at") @db.Timestamptz(3)
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  assetRequest    AssetRequest       @relation(fields: [assetRequestId], references: [id], onDelete: Cascade)
+
+  @@unique([assetRequestId, storageKey])
+  @@index([assetRequestId])
+  @@index([factoryAssetId])
+  @@index([deployedAssetId])
+  @@index([type])
+  @@index([visibility])
+  @@index([attestationTxHash])
+  @@index([attestedAt])
+  @@index([deletedAt])
+  @@map("asset_documents")
+}
+
+model PlatformValuer {
+  id               String    @id @default(uuid())
+  organizationName String    @map("organization_name")
+  walletAddress    String    @unique @map("wallet_address")
+  fidAddress       String?   @map("fid_address")
+  status           String    @default("REGISTERED")
+  fidTxHash        String?   @map("fid_tx_hash")
+  approvedAt       DateTime? @map("approved_at") @db.Timestamptz(3)
+  suspendedAt      DateTime? @map("suspended_at") @db.Timestamptz(3)
+  credentials      Json?
+  metadata         Json?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@index([walletAddress])
+  @@index([fidAddress])
+  @@index([status])
+  @@map("platform_valuers")
+}
+
+model AssetValuerAssignment {
+  id                   String    @id @default(uuid())
+  assetRequestId       String    @map("asset_request_id")
+  deployedAssetId      String?   @map("deployed_asset_id")
+  factoryAssetId       Int       @map("factory_asset_id")
+  tokenContract        String    @map("token_contract")
+  assetRegistryAddress String    @map("asset_registry_address")
+  tirStateAddress      String    @map("tir_state_address")
+  valuerProfileId      String    @map("valuer_profile_id")
+  valuerWallet         String    @map("valuer_wallet")
+  valuerFid            String    @map("valuer_fid")
+  status               String    @default("ASSIGNED")
+  assignedBy           String?   @map("assigned_by")
+  acceptedAt           DateTime? @map("accepted_at") @db.Timestamptz(3)
+  tirTrustTxHash       String?   @map("tir_trust_tx_hash")
+  tirTrustedAt         DateTime? @map("tir_trusted_at") @db.Timestamptz(3)
+  cancelledAt          DateTime? @map("cancelled_at") @db.Timestamptz(3)
+  replacedAt           DateTime? @map("replaced_at") @db.Timestamptz(3)
+  metadata             Json?
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  @@index([assetRequestId])
+  @@index([deployedAssetId])
+  @@index([factoryAssetId])
+  @@index([tokenContract])
+  @@index([valuerWallet])
+  @@index([valuerFid])
+  @@index([status])
+  @@map("asset_valuer_assignments")
+}
+
+model AssetValuation {
+  id                   String    @id @default(uuid())
+  assignmentId         String    @map("assignment_id")
+  assetRequestId       String    @map("asset_request_id")
+  deployedAssetId      String?   @map("deployed_asset_id")
+  factoryAssetId       Int       @map("factory_asset_id")
+  tokenContract        String    @map("token_contract")
+  assetRegistryAddress String    @map("asset_registry_address")
+  valuerWallet         String    @map("valuer_wallet")
+  valuerFid            String    @map("valuer_fid")
+  navRaw               String    @map("nav_raw")
+  navCurrency          String    @default("PKR") @map("nav_currency")
+  navScale             Int       @default(2) @map("nav_scale")
+  navDate              DateTime  @map("nav_date") @db.Timestamptz(3)
+  navValidityDays      Int       @map("nav_validity_days")
+  validUntil           DateTime  @map("valid_until") @db.Timestamptz(3)
+  methodologyHash      String    @map("methodology_hash")
+  reportDocumentId     String?   @map("report_document_id")
+  txHash               String    @unique @map("tx_hash")
+  confirmedSlot        BigInt?   @map("confirmed_slot")
+  status               String    @default("CONFIRMED")
+  metadata             Json?
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  @@index([assignmentId])
+  @@index([assetRequestId])
+  @@index([deployedAssetId])
+  @@index([factoryAssetId])
+  @@index([tokenContract])
+  @@index([valuerWallet])
+  @@index([status])
+  @@index([validUntil])
+  @@map("asset_valuations")
+}
 model TokenState {
   id           String   @id @default(uuid())
   tokenContract String @unique
@@ -490,6 +636,81 @@ model TrustedIssuer {
   @@index([kycAuthorized])
   @@index([amlAuthorized])
 }
+model CustodyMandate {
+  id                    String   @id @default(uuid())
+  assetRequestId        String   @map("asset_request_id")
+  factoryAssetId        Int      @map("factory_asset_id")
+  issuerWallet          String   @map("issuer_wallet")
+  issuerFid             String   @map("issuer_fid")
+  custodianWallet       String   @map("custodian_wallet")
+  custodianFid          String   @map("custodian_fid")
+  mandateAddress        String?  @map("mandate_address")
+  status                String   @default("ASSIGNED")
+  createTxHash          String?  @map("create_tx_hash")
+  acceptTxHash          String?  @map("accept_tx_hash")
+  releaseTxHash         String?  @map("release_tx_hash")
+  acceptedAt            DateTime? @map("accepted_at") @db.Timestamptz(3)
+  releasedAt            DateTime? @map("released_at") @db.Timestamptz(3)
+  metadata              Json?
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  assetRequest          AssetRequest @relation(fields: [assetRequestId], references: [id], onDelete: Cascade)
+  attestations          CustodyAttestation[]
+
+  @@unique([assetRequestId, custodianWallet])
+  @@index([factoryAssetId])
+  @@index([custodianWallet])
+  @@index([status])
+  @@map("custody_mandates")
+}
+
+model PlatformCustodian {
+  id                       String   @id @default(uuid())
+  organizationName         String   @map("organization_name")
+  walletAddress            String   @unique @map("wallet_address")
+  fidAddress               String?  @map("fid_address")
+  platformAuthorityAddress String?  @map("platform_authority_address")
+  authorityTopic           Int      @default(4) @map("authority_topic")
+  status                   String   @default("REGISTERED")
+  fidTxHash                String?  @map("fid_tx_hash")
+  approvalTxHash           String?  @map("approval_tx_hash")
+  approvedAt               DateTime? @map("approved_at") @db.Timestamptz(3)
+  suspendedAt              DateTime? @map("suspended_at") @db.Timestamptz(3)
+  metadata                 Json?
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+
+  @@index([walletAddress])
+  @@index([fidAddress])
+  @@index([status])
+  @@map("platform_custodians")
+}
+model CustodyAttestation {
+  id                    String   @id @default(uuid())
+  mandateId             String   @map("mandate_id")
+  factoryAssetId        Int      @map("factory_asset_id")
+  attestationAddress    String   @map("attestation_address")
+  documentHash          String   @map("document_hash")
+  attestationHash       String   @map("attestation_hash")
+  reserveRatioBps       Int?     @map("reserve_ratio_bps")
+  status                String   @default("ACTIVE")
+  txHash                String   @map("tx_hash")
+  attestedAt            DateTime? @map("attested_at") @db.Timestamptz(3)
+  expiresAt             DateTime? @map("expires_at") @db.Timestamptz(3)
+  metadata              Json?
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  mandate               CustodyMandate @relation(fields: [mandateId], references: [id], onDelete: Cascade)
+
+  @@unique([attestationAddress, txHash])
+  @@index([mandateId])
+  @@index([factoryAssetId])
+  @@index([status])
+  @@map("custody_attestations")
+}
+
 model Organization {
   id        String   @id @default(uuid())
   name      String
@@ -681,3 +902,5 @@ model OutboxEvent {
   @@index([aggregateType, aggregateId])
   @@index([environment])
 }
+
+

@@ -131,6 +131,72 @@
           }
         },
         {
+          "name": "custody_mandate",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  115,
+                  116,
+                  111,
+                  100,
+                  121,
+                  95,
+                  109,
+                  97,
+                  110,
+                  100,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "args.asset_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "custody_attestation",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  115,
+                  116,
+                  111,
+                  100,
+                  121,
+                  95,
+                  97,
+                  116,
+                  116,
+                  101,
+                  115,
+                  116,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "custody_mandate"
+              }
+            ]
+          }
+        },
+        {
           "name": "token_state",
           "writable": true
         },
@@ -553,6 +619,10 @@
           {
             "name": "issuer",
             "type": "pubkey"
+          },
+          {
+            "name": "asset_id",
+            "type": "u64"
           },
           {
             "name": "token_mint",

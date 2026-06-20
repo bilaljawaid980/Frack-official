@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useWallet } from "@/hooks/use-wallet";
@@ -27,6 +27,13 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -51,8 +58,21 @@ import {
   Loader2,
   Info,
   ArrowRight,
+  ShieldCheck,
 } from "lucide-react";
 import { apiFetch } from "@/lib/backend";
+import { buildAdminWalletHeaders } from "@/lib/admin-wallet-auth";
+import { listAssetDocuments, type AssetDocument } from "@/lib/asset-documents";
+import { listCustodyMandates, type CustodyMandate } from "@/lib/custody";
+import {
+  assignValuerToAssetRequest,
+  getValuationReadiness,
+  listPlatformValuers,
+  listValuerAssignments,
+  recordValuerTirTrust,
+  type AssetValuerAssignment,
+  type PlatformValuer,
+} from "@/lib/valuations";
 import { TransactionToastLink } from "@/lib/solscan";
 import {
   recordBlockchainTransaction,
@@ -63,6 +83,7 @@ import { cn } from "@/lib/utils";
 import { PublicKey } from "@solana/web3.js";
 import { toast } from "sonner";
 import type { TokenPurchaseRequest } from "@/types/token-purchase-request";
+import { ValuationChainService } from "@/services/valuation";
 
 type IndexedAsset = {
   id: string;
@@ -85,6 +106,8 @@ type AssetRequest = {
   id: string;
   status: "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "DEPLOYED" | "CANCELED";
   issuerWallet: string;
+  factoryAssetId?: number | null;
+  deployedAssetId?: string | null;
   name: string;
   symbol: string;
   assetType: string;
@@ -183,6 +206,10 @@ function formatOptionalCurrency(value: number | null | undefined) {
     : "Pending admin review";
 }
 
+function shortAddress(value?: string | null) {
+  if (!value) return "Not set";
+  return value.length > 12 ? `${value.slice(0, 6)}...${value.slice(-6)}` : value;
+}
 const ASSET_TYPE_ICONS: Record<string, typeof Building2> = {
   "real-estate": Building2,
   commodity: Gem,
@@ -283,6 +310,279 @@ function EmptyState({
   );
 }
 
+
+type ValuationReadiness = Awaited<ReturnType<typeof getValuationReadiness>>;
+
+function registryDocument(documents: AssetDocument[], type: string) {
+  return documents.find((document) => document.type === type && /^[0-9a-fA-F]{64}$/.test(document.fileHash));
+}
+
+function registryRef(document: AssetDocument | undefined, fallback: string) {
+  const value = (document?.fileName || fallback).trim() || fallback;
+  return value.length > 64 ? value.slice(0, 64) : value;
+}
+
+function IssuerValuationPanel({
+  asset,
+  request,
+  walletAddress,
+  signMessage,
+  chain,
+  onRefresh,
+}: {
+  asset: IndexedAsset;
+  request: AssetRequest | null;
+  walletAddress?: string | null;
+  signMessage?: (message: Uint8Array) => Promise<Uint8Array>;
+  chain: ValuationChainService | null;
+  onRefresh: () => Promise<void> | void;
+}) {
+  const [valuers, setValuers] = useState<PlatformValuer[]>([]);
+  const [assignments, setAssignments] = useState<AssetValuerAssignment[]>([]);
+  const [readiness, setReadiness] = useState<ValuationReadiness | null>(null);
+  const [custodyMandate, setCustodyMandate] = useState<CustodyMandate | null>(null);
+  const [assetDocuments, setAssetDocuments] = useState<AssetDocument[]>([]);
+  const [registryInitialized, setRegistryInitialized] = useState<boolean | null>(null);
+  const [selectedValuerId, setSelectedValuerId] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const activeAssignment = useMemo(
+    () => assignments.find((assignment) => ["ASSIGNED", "ACCEPTED", "ATTESTATION_PENDING", "CONFIRMED"].includes(assignment.status)) || assignments[0] || null,
+    [assignments],
+  );
+
+  const load = useCallback(async () => {
+    if (!request) return;
+    setLoading(true);
+    try {
+      const [valuerRows, assignmentRows, readinessRow, mandateRows, documentRows] = await Promise.all([
+        listPlatformValuers({ status: "APPROVED" }),
+        listValuerAssignments({ assetRequestId: request.id }),
+        getValuationReadiness({ assetRequestId: request.id }).catch(() => null),
+        listCustodyMandates({ assetRequestId: request.id }).catch(() => []),
+        listAssetDocuments(request.id, true).catch(() => []),
+      ]);
+      const readyValuers = valuerRows.filter((valuer) => Boolean(valuer.fidAddress));
+      const currentAssignment = assignmentRows.find((assignment) => ["ASSIGNED", "ACCEPTED", "ATTESTATION_PENDING", "CONFIRMED"].includes(assignment.status)) || assignmentRows[0] || null;
+      setValuers(readyValuers);
+      setAssignments(assignmentRows);
+      setReadiness(readinessRow);
+      setCustodyMandate(mandateRows[0] || null);
+      setAssetDocuments(documentRows);
+      if (chain && currentAssignment) {
+        const registry = await chain.isAssetRegistryInitialized({
+          factoryAssetId: currentAssignment.factoryAssetId,
+          assetRegistryAddress: currentAssignment.assetRegistryAddress,
+        }).catch(() => null);
+        setRegistryInitialized(registry?.initialized ?? null);
+      } else {
+        setRegistryInitialized(null);
+      }
+      setSelectedValuerId((current) => current || assignmentRows[0]?.valuerProfileId || readyValuers[0]?.id || "");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to load valuation readiness.");
+    } finally {
+      setLoading(false);
+    }
+  }, [chain, request]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const assignValuer = async () => {
+    if (!request || !walletAddress) return;
+    if (!selectedValuerId) {
+      toast.error("Select an approved valuer first.");
+      return;
+    }
+    setBusy(true);
+    const toastId = toast.loading("Assigning valuer...");
+    try {
+      const body = JSON.stringify({
+        valuerProfileId: selectedValuerId,
+        assignedBy: walletAddress,
+        tokenContract: asset.tokenContract,
+        metadata: { source: "issuer-assets-tab" },
+      });
+      const path = `/asset-requests/${request.id}/valuer-assignments`;
+      const headers = await buildAdminWalletHeaders({ body, method: "POST", path, signMessage, walletAddress });
+      await assignValuerToAssetRequest(request.id, JSON.parse(body), headers);
+      await load();
+      await onRefresh();
+      toast.success("Valuer assigned to this token.", { id: toastId });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to assign valuer.", { id: toastId });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const initializeAssetRegistry = async () => {
+    if (!activeAssignment || !walletAddress || !chain || !request) {
+      toast.error("Assign a valuer and connect the issuer wallet first.");
+      return;
+    }
+    if (request.issuerWallet.toLowerCase() !== walletAddress.toLowerCase()) {
+      toast.error(`Connect the issuer wallet ${shortAddress(request.issuerWallet)} to initialize the asset registry.`);
+      return;
+    }
+    if (!custodyMandate) {
+      toast.error("Custody mandate data is required before initializing the asset registry.");
+      return;
+    }
+    const fard = registryDocument(assetDocuments, "FARD");
+    const whitepaper = registryDocument(assetDocuments, "WHITEPAPER");
+    const legalOpinion = registryDocument(assetDocuments, "LEGAL_OPINION");
+    const insurancePolicy = registryDocument(assetDocuments, "INSURANCE_POLICY");
+    const missing = [
+      !fard ? "FARD" : null,
+      !whitepaper ? "Whitepaper" : null,
+      !legalOpinion ? "Legal opinion" : null,
+    ].filter(Boolean);
+    if (missing.length) {
+      toast.error(`Upload required deployment documents before registry initialization: ${missing.join(", ")}.`);
+      return;
+    }
+
+    setBusy(true);
+    const toastId = toast.loading("Initializing asset registry...");
+    try {
+      const result = await chain.initializeAssetRegistry({
+        assignmentId: activeAssignment.id,
+        factoryAssetId: activeAssignment.factoryAssetId,
+        assetRegistryAddress: activeAssignment.assetRegistryAddress,
+        tokenContract: activeAssignment.tokenContract,
+        issuerFid: custodyMandate.issuerFid,
+        custodianFid: custodyMandate.custodianFid,
+        fardRef: registryRef(fard, String(activeAssignment.factoryAssetId)),
+        spvSecpReg: registryRef(registryDocument(assetDocuments, "SPV_REGISTRATION"), request.id),
+        province: 0,
+        whitepaperHash: whitepaper?.fileHash,
+        legalOpinionHash: legalOpinion?.fileHash,
+        insurancePolicyHash: insurancePolicy?.fileHash,
+        navValidityDays: 365,
+        encumbranceFlag: false,
+      });
+      await load();
+      await onRefresh();
+      toast.success(result.alreadyInitialized ? "Asset registry is already initialized." : "Asset registry initialized for valuation attestations.", { id: toastId });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to initialize asset registry.", { id: toastId });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const trustValuer = async () => {
+    if (!activeAssignment || !walletAddress || !chain) {
+      toast.error("Connect the issuer wallet that owns this token TIR.");
+      return;
+    }
+    setBusy(true);
+    const toastId = toast.loading("Adding valuer topic 5 trust...");
+    try {
+      const valuer = valuers.find((row) => row.id === activeAssignment.valuerProfileId);
+      const result = await chain.trustValuerInTokenTir({
+        assignmentId: activeAssignment.id,
+        tokenContract: activeAssignment.tokenContract,
+        valuerFid: activeAssignment.valuerFid,
+        label: valuer?.organizationName || "Valuer",
+      });
+      const body = JSON.stringify({
+        txHash: result.signature,
+        issuerEntryAddress: result.issuerEntry,
+        actorWallet: walletAddress,
+      });
+      const path = `/asset-valuer-assignments/${activeAssignment.id}/tir-trust`;
+      const headers = await buildAdminWalletHeaders({ body, method: "POST", path, signMessage, walletAddress });
+      await recordValuerTirTrust(activeAssignment.id, JSON.parse(body), headers);
+      await load();
+      await onRefresh();
+      toast.success("Valuer is trusted for topic 5 on this token.", { id: toastId });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to trust valuer for topic 5.", { id: toastId });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!request) {
+    return (
+      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+        Valuation controls will appear once this token is linked to a deployed issuer request.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-[#172E7F]" />
+            <p className="text-sm font-semibold text-slate-900">Valuation readiness</p>
+            <Badge className={readiness?.ready ? "bg-emerald-600 text-white" : "bg-amber-500 text-white"}>
+              {readiness?.ready ? "Investment Ready" : "Pending"}
+            </Badge>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            Assign a platform-approved valuer, initialize the asset registry, trust the valuer FID in this token TIR for topic 5, then wait for NAV attestation.
+          </p>
+          {readiness?.reasons?.length ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {readiness.reasons.map((reason) => (
+                <Badge key={reason.code} variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
+                  {reason.message}
+                </Badge>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading || busy}>
+          <Loader2 className={cn("mr-2 h-3.5 w-3.5", loading ? "animate-spin" : "hidden")} />
+          Refresh
+        </Button>
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_auto_auto_auto] lg:items-end">
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase text-slate-500">Assigned valuer</p>
+          <Select value={selectedValuerId} onValueChange={setSelectedValuerId} disabled={busy || valuers.length === 0 || Boolean(activeAssignment)}>
+            <SelectTrigger className="bg-white">
+              <SelectValue placeholder={valuers.length ? "Select approved valuer" : "No approved valuers with FID"} />
+            </SelectTrigger>
+            <SelectContent>
+              {valuers.map((valuer) => (
+                <SelectItem key={valuer.id} value={valuer.id}>
+                  {valuer.organizationName} - {shortAddress(valuer.fidAddress)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Button variant="outline" onClick={() => void assignValuer()} disabled={busy || loading || Boolean(activeAssignment) || !selectedValuerId}>
+          Assign Valuer
+        </Button>
+        <Button variant="outline" onClick={() => void initializeAssetRegistry()} disabled={busy || loading || !activeAssignment || registryInitialized === true}>
+          Init Registry
+        </Button>
+        <Button className="bg-[#172E7F] hover:bg-[#21439B]" onClick={() => void trustValuer()} disabled={busy || loading || !activeAssignment || Boolean(activeAssignment.tirTrustTxHash)}>
+          Trust Topic 5
+        </Button>
+      </div>
+
+      {activeAssignment ? (
+        <div className="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-4">
+          <div className="rounded-md bg-white p-2"><span className="font-semibold">Status:</span> {activeAssignment.status}</div>
+          <div className="rounded-md bg-white p-2"><span className="font-semibold">Registry:</span> {registryInitialized ? "Initialized" : "Pending"}</div>
+          <div className="rounded-md bg-white p-2"><span className="font-semibold">Valuer:</span> {shortAddress(activeAssignment.valuerWallet)}</div>
+          <div className="rounded-md bg-white p-2"><span className="font-semibold">Topic 5:</span> {activeAssignment.tirTrustTxHash ? "Recorded" : "Pending"}</div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 function IssuerAssetHoldersTable({
   tokenContract,
   assetId,
@@ -608,7 +908,8 @@ function IssuerAssetHoldersTable({
 export default function IssuerPage() {
   const { address: walletAddress } = useWallet();
   const mintTokens = useMintTokens();
-  const { publicKey, signTransaction, signAllTransactions } = useSolanaWallet();
+  const solanaWallet = useSolanaWallet();
+  const { publicKey, signTransaction, signAllTransactions, signMessage, sendTransaction } = solanaWallet;
   const { connection } = useConnection();
   const [assets, setAssets] = useState<IndexedAsset[]>([]);
   const [loading, setLoading] = useState(false);
@@ -650,6 +951,25 @@ export default function IssuerPage() {
       return null;
     }
   }, [connection, publicKey, signTransaction, signAllTransactions]);
+
+  const valuationChain = useMemo(() => {
+    if (!publicKey || !signTransaction || !signAllTransactions || !sendTransaction) return null;
+    try {
+      const provider = createAnchorProvider(connection, {
+        publicKey,
+        signTransaction,
+        signAllTransactions,
+      });
+      return new ValuationChainService(provider, sendTransaction);
+    } catch {
+      return null;
+    }
+  }, [connection, publicKey, sendTransaction, signAllTransactions, signTransaction]);
+
+  const refreshAssetRequests = useCallback(async () => {
+    const requests = await apiFetch<AssetRequest[]>("/asset-requests");
+    setAssetRequests(requests);
+  }, []);
 
   const filteredAssets = useMemo(() => {
     if (!walletAddress) return [];
@@ -1045,7 +1365,9 @@ export default function IssuerPage() {
           return;
         } catch {
           toast.error(
-            `${message}\n\nSend this request back to KYC, then have the KYC provider approve it again so the stale claim is revoked and reissued.`,
+            `${message}
+
+Send this request back to KYC, then have the KYC provider approve it again so the stale claim is revoked and reissued.`,
           );
           return;
         }
@@ -1783,6 +2105,12 @@ export default function IssuerPage() {
                 const tokenBalances = balances[asset.tokenContract] || [];
                 const isExpanded = expandedAssets.has(asset.tokenContract);
 
+                const request = visibleRequests.find((row) =>
+                  row.status === "DEPLOYED" &&
+                  ((row.deployedAssetId && row.deployedAssetId === asset.tokenContract) ||
+                    (row.factoryAssetId != null && asset.factoryAssetId != null && row.factoryAssetId === asset.factoryAssetId) ||
+                    (row.name === asset.name && row.symbol === asset.symbol))
+                ) || null;
                 return (
                   <div
                     key={asset.tokenContract}
@@ -1838,7 +2166,15 @@ export default function IssuerPage() {
                       </div>
                     </div>
                     {isExpanded ? (
-                      <div className="border-t border-slate-100 p-4">
+                      <div className="space-y-4 border-t border-slate-100 p-4">
+                        <IssuerValuationPanel
+                          asset={asset}
+                          request={request}
+                          walletAddress={walletAddress}
+                          signMessage={signMessage}
+                          chain={valuationChain}
+                          onRefresh={refreshAssetRequests}
+                        />
                         <IssuerAssetHoldersTable
                           tokenContract={asset.tokenContract}
                           assetId={asset.factoryAssetId ?? asset.id}
@@ -1861,3 +2197,12 @@ export default function IssuerPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+

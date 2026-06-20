@@ -13,6 +13,7 @@ import {
   DollarSign,
   TrendingUp,
   Shield,
+  FileCheck2,
   FileText,
   Users,
   ExternalLink,
@@ -36,7 +37,69 @@ import {
   getRequiredClaimTopics,
   getTrustedIssuers,
 } from "@/lib/asset-compliance";
+import { getCustodyMandate, listCustodyMandates, type CustodyAttestation, type CustodyMandate } from "@/lib/custody";
+import { getSolscanTxUrl, shortTx } from "@/lib/solscan";
+import { listAssetDocuments, type AssetDocument } from "@/lib/asset-documents";
+import { getLatestValuationReport, type LatestValuationReport } from "@/lib/valuations";
 
+
+type CustodyMandateDetail = CustodyMandate & {
+  attestations?: CustodyAttestation[];
+};
+
+function metadataRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function stringValue(value: unknown, fallback = "") {
+  return typeof value === "string" && value.length > 0 ? value : fallback;
+}
+
+function shortAddress(value?: string | null, head = 8, tail = 8) {
+  if (!value) return "Not available";
+  if (value.length <= head + tail + 3) return value;
+  return `${value.slice(0, head)}...${value.slice(-tail)}`;
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "Not available";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Not available" : date.toLocaleString();
+}
+
+function solscanAccountUrl(address: string) {
+  const cluster = process.env.NEXT_PUBLIC_SOLANA_CLUSTER || process.env.NEXT_PUBLIC_SOLANA_NETWORK || "devnet";
+  const query = cluster === "mainnet-beta" ? "" : `?cluster=${cluster}`;
+  return `https://solscan.io/account/${address}${query}`;
+}
+
+function InfoTile({ label, value, mono = false }: { label: string; value?: string | number | null; mono?: boolean }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className={`mt-2 break-all text-sm font-medium text-slate-900 ${mono ? "font-mono" : ""}`}>
+        {value || "Not available"}
+      </p>
+    </div>
+  );
+}
+
+function TxLink({ signature }: { signature?: string | null }) {
+  if (!signature) return <span className="text-sm text-slate-500">Not available</span>;
+  return (
+    <a
+      href={getSolscanTxUrl(signature)}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-1 font-mono text-sm text-[#172E7F] underline underline-offset-2"
+    >
+      {shortTx(signature)}
+      <ExternalLink className="h-3.5 w-3.5" />
+    </a>
+  );
+}
 function optionalNumber(value: unknown, fallback = 0) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
@@ -57,12 +120,102 @@ export default function AssetDetailPage({
   const { connection } = useConnection();
   const { assets, loading } = useAssetsContext();
   const [onchainTokenizedAmount, setOnchainTokenizedAmount] = useState<number | null>(null);
+  const [custodyDetail, setCustodyDetail] = useState<CustodyMandateDetail | null>(null);
+  const [custodyLoading, setCustodyLoading] = useState(false);
+  const [publicDocuments, setPublicDocuments] = useState<AssetDocument[]>([]);
+  const [publicDocumentsLoading, setPublicDocumentsLoading] = useState(false);
+  const [valuationReport, setValuationReport] = useState<LatestValuationReport | null>(null);
+  const [valuationReportLoading, setValuationReportLoading] = useState(false);
 
   const asset = useMemo(
     () => assets.find((a) => a.id === resolvedParams.id) || null,
     [assets, resolvedParams.id],
   );
 
+  useEffect(() => {
+    let isActive = true;
+
+    const loadPublicDocuments = async () => {
+      if (!asset?.id) {
+        setPublicDocuments([]);
+        return;
+      }
+
+      setPublicDocumentsLoading(true);
+      try {
+        const rows = await listAssetDocuments(asset.id);
+        if (isActive) setPublicDocuments(rows);
+      } catch {
+        if (isActive) setPublicDocuments([]);
+      } finally {
+        if (isActive) setPublicDocumentsLoading(false);
+      }
+    };
+
+    loadPublicDocuments();
+    return () => {
+      isActive = false;
+    };
+  }, [asset?.id]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadValuationReport = async () => {
+      const lookupId = asset?.factoryAssetId ? String(asset.factoryAssetId) : asset?.id;
+      if (!lookupId) {
+        setValuationReport(null);
+        return;
+      }
+
+      setValuationReportLoading(true);
+      try {
+        const report = await getLatestValuationReport(lookupId);
+        if (isActive) setValuationReport(report);
+      } catch {
+        if (isActive) setValuationReport(null);
+      } finally {
+        if (isActive) setValuationReportLoading(false);
+      }
+    };
+
+    loadValuationReport();
+    return () => {
+      isActive = false;
+    };
+  }, [asset?.factoryAssetId, asset?.id]);
+  useEffect(() => {
+    let isActive = true;
+
+    const loadCustodyDetails = async () => {
+      if (!asset?.factoryAssetId) {
+        setCustodyDetail(null);
+        return;
+      }
+
+      setCustodyLoading(true);
+      try {
+        const mandates = await listCustodyMandates({ factoryAssetId: asset.factoryAssetId });
+        const mandate = mandates[0];
+        if (!mandate) {
+          if (isActive) setCustodyDetail(null);
+          return;
+        }
+
+        const detail = await getCustodyMandate(mandate.id);
+        if (isActive) setCustodyDetail(detail);
+      } catch {
+        if (isActive) setCustodyDetail(null);
+      } finally {
+        if (isActive) setCustodyLoading(false);
+      }
+    };
+
+    loadCustodyDetails();
+    return () => {
+      isActive = false;
+    };
+  }, [asset?.factoryAssetId]);
   useEffect(() => {
     let isActive = true;
 
@@ -143,6 +296,35 @@ export default function AssetDetailPage({
   const trustedIssuers = getTrustedIssuers(asset);
   const complianceRows = getComplianceRuleRows(asset);
   const allowedCountries = getAllowedCountries(asset);
+  const custodyMetadata = metadataRecord(custodyDetail?.metadata);
+  const custodianOrganization = stringValue(custodyMetadata.custodianOrganization, "Independent custodian");
+  const latestAttestation = custodyDetail?.attestations?.[0] || null;
+  const hasCustody = Boolean(custodyDetail);
+  const attestationValid = latestAttestation?.status === "ACTIVE" || custodyDetail?.status === "ATTESTED";
+  const displayedDocuments: Array<{
+    id: string;
+    name: string;
+    url: string;
+    hash: string;
+    type?: string;
+    uploadedAt: Date;
+  }> = publicDocuments.length > 0
+    ? publicDocuments.map((doc) => ({
+        id: doc.id,
+        name: doc.fileName,
+        url: doc.accessUrl,
+        hash: doc.fileHash,
+        type: doc.type,
+        uploadedAt: new Date(doc.uploadedAt),
+      }))
+    : asset.documents.map((doc) => ({
+        id: doc.id,
+        name: doc.name,
+        url: doc.url,
+        hash: doc.hash,
+        type: undefined,
+        uploadedAt: doc.uploadedAt,
+      }));
 
   return (
     <div className="p-8 glass-panel rounded-[22px]">
@@ -329,6 +511,41 @@ export default function AssetDetailPage({
               </div>
             </CardContent>
           </Card>
+
+          <Card className="bg-white rounded-2xl">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-[#172E7F]" />
+                Custodian & Asset Verification
+              </CardTitle>
+              <CardDescription>
+                Public custody information used to verify this asset before token deployment.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {custodyLoading ? (
+                <div className="rounded-xl border border-slate-200 p-4 text-sm text-slate-500">Loading custody verification...</div>
+              ) : hasCustody ? (
+                <>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <InfoTile label="Custodian" value={custodianOrganization} />
+                    <InfoTile label="Custody Status" value={custodyDetail?.status} />
+                    <InfoTile label="Attestation" value={attestationValid ? "Confirmed" : latestAttestation?.status || "Pending"} />
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <InfoTile label="Custodian Wallet" value={custodyDetail?.custodianWallet} mono />
+                    <InfoTile label="Custodian FID" value={custodyDetail?.custodianFid} mono />
+                    <InfoTile label="Issuer FID" value={custodyDetail?.issuerFid} mono />
+                    <InfoTile label="Attestation Expiry" value={formatDateTime(latestAttestation?.expiresAt)} />
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-xl border border-slate-200 p-4 text-sm text-slate-500">
+                  No public custody mandate has been indexed for this asset yet.
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="compliance" className="space-y-4">
@@ -373,6 +590,27 @@ export default function AssetDetailPage({
                           .join(", ")
                       : "No allowed countries indexed"}
                   </p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold">Custody Gate</h3>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="rounded-xl border border-slate-200 p-4">
+                    <p className="text-sm font-semibold text-slate-900">Mandate</p>
+                    <p className="mt-2 text-lg font-bold text-[#172E7F]">{custodyDetail?.status || "Not indexed"}</p>
+                    <p className="mt-1 text-xs text-slate-500">Custodian assignment and acceptance state</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 p-4">
+                    <p className="text-sm font-semibold text-slate-900">Attestation</p>
+                    <p className="mt-2 text-lg font-bold text-[#172E7F]">{latestAttestation?.status || "Pending"}</p>
+                    <p className="mt-1 text-xs text-slate-500">Custody evidence verification record</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 p-4">
+                    <p className="text-sm font-semibold text-slate-900">Custodian Authority</p>
+                    <p className="mt-2 text-lg font-bold text-[#172E7F]">Topic 4</p>
+                    <p className="mt-1 text-xs text-slate-500">Protocol-level platform custodian authority</p>
+                  </div>
                 </div>
               </div>
 
@@ -442,32 +680,80 @@ export default function AssetDetailPage({
         <TabsContent value="documents" className="space-y-4">
           <Card>
             <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileCheck2 className="h-5 w-5 text-[#172E7F]" />
+                Latest Valuation Report
+              </CardTitle>
+              <CardDescription>
+                Public valuation report whose SHA-256 hash is attested in the asset registry.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {valuationReportLoading ? (
+                <div className="rounded-xl border border-slate-200 p-4 text-sm text-slate-500">Loading valuation report...</div>
+              ) : valuationReport ? (
+                <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 md:flex-row md:items-center md:justify-between">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900">{valuationReport.fileName}</p>
+                    <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
+                      <span className="font-mono">SHA-256 {shortAddress(valuationReport.hash, 10, 10)}</span>
+                      {valuationReport.attestedAt ? <span>Attested {formatDateTime(valuationReport.attestedAt)}</span> : <span>Uploaded, not attested yet</span>}
+                      {valuationReport.navValidityDays ? <span>Valid for {valuationReport.navValidityDays} days</span> : null}
+                    </div>
+                    {valuationReport.attestationTxHash ? (
+                      <div className="mt-2 text-xs text-slate-500">Attestation tx: <TxLink signature={valuationReport.attestationTxHash} /></div>
+                    ) : null}
+                  </div>
+                  <Button type="button" onClick={() => window.open(valuationReport.downloadUrl, "_blank", "noopener,noreferrer")} className="bg-[#172E7F] hover:bg-[#21439B]">
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Download Latest Valuation Report
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <FileCheck2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No valuation report available</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
               <CardTitle>Legal Documents</CardTitle>
               <CardDescription>
                 Official documentation for this asset
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {asset.documents && asset.documents.length > 0 ? (
+              {publicDocumentsLoading ? (
+                <div className="rounded-xl border border-slate-200 p-4 text-sm text-slate-500">Loading public documents...</div>
+              ) : displayedDocuments && displayedDocuments.length > 0 ? (
                 <div className="space-y-2">
-                  {asset.documents.map((doc, index) => (
+                  {displayedDocuments.map((doc, index) => (
                     <div
-                      key={index}
-                      className="flex items-center justify-between p-4 border rounded-lg"
+                      key={doc.id || index}
+                      className="flex flex-col gap-3 rounded-lg border p-4 md:flex-row md:items-center md:justify-between"
                     >
-                      <div className="flex items-center gap-3">
-                        <FileText className="h-5 w-5 text-muted-foreground" />
-                        <p className="font-medium">{doc.name}</p>
+                      <div className="flex min-w-0 items-start gap-3">
+                        <FileText className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{doc.name}</p>
+                          <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
+                            {"type" in doc && doc.type ? <span>{doc.type}</span> : null}
+                            {doc.hash ? <span className="font-mono">SHA-256 {shortAddress(doc.hash, 10, 10)}</span> : null}
+                          </div>
+                        </div>
                       </div>
                       {doc.url ? (
                         <a
                           href={doc.url}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                          className="inline-flex h-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-[#172E7F] hover:bg-slate-50"
                           title="Open document"
                         >
-                          <ExternalLink className="h-4 w-4" />
+                          <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                          Open
                         </a>
                       ) : null}
                     </div>
@@ -477,6 +763,37 @@ export default function AssetDetailPage({
                 <div className="text-center py-8 text-muted-foreground">
                   <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>No documents available yet</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileCheck2 className="h-5 w-5 text-[#172E7F]" />
+                Custody Verification Evidence
+              </CardTitle>
+              <CardDescription>
+                Public hashes and validity data for the custodian evidence. The source file remains off-chain.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {latestAttestation ? (
+                <div className="space-y-3">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <InfoTile label="Document SHA-256" value={latestAttestation.documentHash} mono />
+                    <InfoTile label="Attestation Hash" value={latestAttestation.attestationHash} mono />
+                    <InfoTile label="Attestation Status" value={latestAttestation.status} />
+                    <InfoTile label="Valid Until" value={formatDateTime(latestAttestation.expiresAt)} />
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                    Investors can compare the SHA-256 hash of an independently shared custody evidence file against the document hash shown here.
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <FileCheck2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No custody attestation evidence has been indexed yet.</p>
                 </div>
               )}
             </CardContent>
@@ -555,15 +872,64 @@ export default function AssetDetailPage({
                   </div>
                 </div>
 
+                <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 text-sm">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-[#172E7F]" />
+                    <p className="font-semibold text-slate-900">Custody On-Chain Records</p>
+                  </div>
+                  {hasCustody ? (
+                    <div className="space-y-4">
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-1">
+                          <p className="text-sm text-muted-foreground">Custody Mandate PDA</p>
+                          {custodyDetail?.mandateAddress ? (
+                            <a href={solscanAccountUrl(custodyDetail.mandateAddress)} target="_blank" rel="noreferrer" className="block break-all rounded bg-white p-2 font-mono text-sm text-[#172E7F] underline underline-offset-2">
+                              {custodyDetail.mandateAddress}
+                            </a>
+                          ) : (
+                            <p className="font-mono text-sm bg-white p-2 rounded">Not available</p>
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-sm text-muted-foreground">Custody Attestation PDA</p>
+                          {latestAttestation?.attestationAddress ? (
+                            <a href={solscanAccountUrl(latestAttestation.attestationAddress)} target="_blank" rel="noreferrer" className="block break-all rounded bg-white p-2 font-mono text-sm text-[#172E7F] underline underline-offset-2">
+                              {latestAttestation.attestationAddress}
+                            </a>
+                          ) : (
+                            <p className="font-mono text-sm bg-white p-2 rounded">Not available</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Mandate Creation Tx</p>
+                          <div className="mt-1"><TxLink signature={custodyDetail?.createTxHash} /></div>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Mandate Acceptance Tx</p>
+                          <div className="mt-1"><TxLink signature={custodyDetail?.acceptTxHash} /></div>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Attestation Tx</p>
+                          <div className="mt-1"><TxLink signature={latestAttestation?.txHash} /></div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">No custody on-chain records indexed for this asset.</p>
+                  )}
+                </div>
+
                 <div className="p-4 rounded-lg bg-muted/50 text-sm">
                   <p className="font-medium mb-2">
                     Shared Compliance Infrastructure:
                   </p>
                   <ul className="space-y-1 text-muted-foreground text-xs">
-                    <li>• Identity Registry: Shared across all assets</li>
-                    <li>• Trusted Issuers: Common issuer registry</li>
-                    <li>• Claim Topics: Unified KYC/AML requirements</li>
-                    <li>• Compliance Module: Centralized rule enforcement</li>
+                    <li>Ã¢â‚¬Â¢ Identity Registry: Shared across all assets</li>
+                    <li>Ã¢â‚¬Â¢ Trusted Issuers: Common issuer registry</li>
+                    <li>Ã¢â‚¬Â¢ Claim Topics: Unified KYC/AML requirements</li>
+                    <li>Ã¢â‚¬Â¢ Compliance Module: Centralized rule enforcement</li>
                   </ul>
                 </div>
               </div>
@@ -594,3 +960,9 @@ export default function AssetDetailPage({
     </div>
   );
 }
+
+
+
+
+
+

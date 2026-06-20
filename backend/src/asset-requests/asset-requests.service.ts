@@ -1,7 +1,10 @@
+import { randomUUID } from "crypto";
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { WorkflowsService } from "../workflows/workflows.service";
+import { computeFactoryAssetId } from "../custody/custody.service";
+import { AssetDocumentsService } from "../asset-documents/asset-documents.service";
 import { CreateAssetRequestDto } from "./dto/create-asset-request.dto";
 import { UpdateAssetRequestStatusDto } from "./dto/update-asset-request-status.dto";
 
@@ -18,24 +21,32 @@ export class AssetRequestsService {
   constructor(
     private prisma: PrismaService,
     private readonly workflows: WorkflowsService,
+    private readonly assetDocuments: AssetDocumentsService,
   ) {}
 
   findAll(status?: string) {
     return this.prisma.assetRequest.findMany({
       where: status ? { status } : undefined,
+      include: { assetDocuments: { where: { deletedAt: null }, orderBy: { uploadedAt: "desc" } } },
       orderBy: { createdAt: "desc" },
     });
   }
 
   async findOne(id: string) {
-    const request = await this.prisma.assetRequest.findUnique({ where: { id } });
+    const request = await this.prisma.assetRequest.findUnique({
+      where: { id },
+      include: { assetDocuments: { where: { deletedAt: null }, orderBy: { uploadedAt: "desc" } } },
+    });
     if (!request) throw new NotFoundException("Asset request not found");
     return request;
   }
 
-  create(dto: CreateAssetRequestDto) {
-    return this.prisma.assetRequest.create({
+  async create(dto: CreateAssetRequestDto) {
+    const id = randomUUID();
+    const request = await this.prisma.assetRequest.create({
       data: {
+        id,
+        factoryAssetId: computeFactoryAssetId(id),
         issuerWallet: dto.issuerWallet,
         legalOwner: dto.legalOwner || dto.issuerWallet,
         referenceId: dto.referenceId,
@@ -57,6 +68,9 @@ export class AssetRequestsService {
         status: "PENDING_REVIEW",
       },
     });
+
+    await this.assetDocuments.createManyForAssetRequest(request.id, dto.documents, dto.issuerWallet);
+    return this.findOne(request.id);
   }
 
   async updateStatus(id: string, dto: UpdateAssetRequestStatusDto) {

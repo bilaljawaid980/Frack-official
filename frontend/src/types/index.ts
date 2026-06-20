@@ -180,6 +180,8 @@ export interface TokenDeployment {
 export interface DeployTokenSuiteArgs {
   /** Issuer wallet that becomes final owner of the deployed suite. */
   issuer: string;
+  /** Factory asset id used to derive custody and deployment records. */
+  assetId: bigint | number | string;
   /** Pre-generated Token-2022 mint keypair public key (base-58). */
   tokenMint: string;
   /** Token name (max 32 chars). */
@@ -654,3 +656,4 @@ export interface FormField<T> {
 export type FormState<T extends Record<string, unknown>> = {
   [K in keyof T]: FormField<T[K]>;
 };
+

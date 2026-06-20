@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "crypto";
 import { createClient } from "@supabase/supabase-js";
 
 const LEGAL_DOCS_BUCKET =
@@ -98,6 +99,7 @@ export async function POST(request: NextRequest) {
         ].join("/");
 
         const buffer = Buffer.from(await file.arrayBuffer());
+        const fileHash = createHash("sha256").update(buffer).digest("hex");
         const { error } = await supabase.storage
           .from(LEGAL_DOCS_BUCKET)
           .upload(path, buffer, {
@@ -116,6 +118,7 @@ export async function POST(request: NextRequest) {
           bucket: LEGAL_DOCS_BUCKET,
           path,
           publicUrl: legalDocUrl(LEGAL_DOCS_BUCKET, path),
+          fileHash,
         };
       }),
     );

@@ -117,6 +117,21 @@ const DEPLOYMENT_DISCRIMINATOR = Buffer.from([
  * The seed is combined with the token mint to derive the module state PDA.
  * Note: country_restrict uses "mod_country" (not "mod_country_restrict").
  */
+function normalizeAssetId(value: DeployTokenSuiteArgs["assetId"]): BN {
+  const raw = value.toString();
+  if (!/^\d+$/.test(raw)) {
+    throw new Error("Factory asset id must be a non-negative integer.");
+  }
+  const assetId = new BN(raw);
+  if (assetId.isNeg() || assetId.bitLength() > 64) {
+    throw new Error("Factory asset id must fit in u64.");
+  }
+  return assetId;
+}
+
+function assetIdToLeBytes(assetId: BN): Buffer {
+  return assetId.toArrayLike(Buffer, "le", 8);
+}
 const MODULE_STATE_SEEDS: Record<string, string> = {
   [MOD_MAX_INVESTORS.toBase58()]: "mod_max_investors",
   [MOD_COUNTRY_RESTRICT.toBase58()]: "mod_country",
@@ -580,6 +595,7 @@ export class FactoryService {
     }
     const issuer = new PublicKey(args.issuer);
     const tokenMint = new PublicKey(args.tokenMint);
+    const assetId = normalizeAssetId(args.assetId);
 
     // ── Derive PDAs ────────────────────────────────────────────────────────────
     const [factoryState] = this.getFactoryStatePda();
@@ -604,6 +620,14 @@ export class FactoryService {
     }
 
     const [deploymentPda] = this.getDeploymentPda(issuer, args.salt);
+    const [custodyMandate] = PublicKey.findProgramAddressSync(
+      [Buffer.from("custody_mandate"), assetIdToLeBytes(assetId)],
+      FACTORY_PROGRAM_ID,
+    );
+    const [custodyAttestation] = PublicKey.findProgramAddressSync(
+      [Buffer.from("custody_attestation"), custodyMandate.toBuffer()],
+      FACTORY_PROGRAM_ID,
+    );
 
     const [tokenState] = PublicKey.findProgramAddressSync(
       [Buffer.from("token_state"), tokenMint.toBuffer()],
@@ -683,6 +707,7 @@ export class FactoryService {
 
     const ixArgs = {
       issuer,
+      assetId,
       tokenMint,
       tokenName: args.tokenName,
       tokenSymbol: args.tokenSymbol,
@@ -696,6 +721,17 @@ export class FactoryService {
     };
 
     try {
+      const [custodyMandateInfo, custodyAttestationInfo] =
+        await this.provider.connection.getMultipleAccountsInfo(
+          [custodyMandate, custodyAttestation],
+          "confirmed",
+        );
+      if (!custodyMandateInfo || !custodyAttestationInfo) {
+        throw new Error(
+          `The updated factory requires custody to be prepared before token deployment. Missing ${!custodyMandateInfo ? "custody mandate" : "custody attestation"} for asset id ${assetId.toString()}. Create and accept the custody mandate, then submit a valid custody attestation before deploying this token suite.`,
+        );
+      }
+
       // ── Step 1: Create and populate the address lookup table ───────────────────
       // The factory deploy touches many PDA accounts. Keep them in the ALT so the
       // second transaction stays below Solana's 1232-byte raw transaction limit.
@@ -783,7 +819,10 @@ export class FactoryService {
             mintLenWithMetadata,
           );
         console.info("[FRACKS Deploy] Token-2022 mint sizing:", {
+          assetId: assetId.toString(),
           tokenMint: tokenMint.toBase58(),
+          custodyMandate: custodyMandate.toBase58(),
+          custodyAttestation: custodyAttestation.toBase58(),
           baseExtensions: [
             "MetadataPointer",
             "TransferHook",
@@ -934,7 +973,10 @@ export class FactoryService {
         ctrProgram: ctrProgramId.toBase58(),
         complianceProgram: complianceProgramId.toBase58(),
         systemProgram: SystemProgram.programId.toBase58(),
+        assetId: assetId.toString(),
         tokenMint: tokenMint.toBase58(),
+        custodyMandate: custodyMandate.toBase58(),
+        custodyAttestation: custodyAttestation.toBase58(),
       });
       const deployIx = await (
         this.program.methods as unknown as FactoryProgramMethods
@@ -974,6 +1016,8 @@ export class FactoryService {
         { name: "factory_state", pubkey: factoryState, writable: true },
         { name: "issuer", pubkey: issuer, writable: false },
         { name: "deployment", pubkey: deploymentPda, writable: true },
+        { name: "custody_mandate", pubkey: custodyMandate, writable: false },
+        { name: "custody_attestation", pubkey: custodyAttestation, writable: false },
         { name: "token_state", pubkey: tokenState, writable: true },
         { name: "owner_state", pubkey: ownerState, writable: true },
         { name: "irs_state", pubkey: irsState, writable: true },
@@ -1227,7 +1271,10 @@ export class FactoryService {
         irsProgramId,
       });
       console.info("[FRACKS Deploy] Registry owner invariant:", {
+        assetId: assetId.toString(),
         tokenMint: tokenMint.toBase58(),
+        custodyMandate: custodyMandate.toBase58(),
+        custodyAttestation: custodyAttestation.toBase58(),
         irpState: irpState.toBase58(),
         irpOwner: invariant.irpOwner.toBase58(),
         irsState: irsState.toBase58(),
@@ -1289,7 +1336,10 @@ export class FactoryService {
               executable: persistedDeployment.executable,
             }
           : null,
+        assetId: assetId.toString(),
         tokenMint: tokenMint.toBase58(),
+        custodyMandate: custodyMandate.toBase58(),
+        custodyAttestation: custodyAttestation.toBase58(),
         tokenMintAccount: persistedTokenMint
           ? {
               lamports: persistedTokenMint.lamports,
@@ -1927,3 +1977,7 @@ export class FactoryService {
     };
   }
 }
+
+
+
+

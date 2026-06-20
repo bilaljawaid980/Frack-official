@@ -2,14 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useWallet as useSolanaWallet } from "@solana/wallet-adapter-react";
 import { motion } from "framer-motion";
 import {
+  AlertCircle,
   Building2,
   CheckCircle,
   Clock,
   Download,
   ExternalLink,
   FileText,
+  Loader2,
+  ShieldCheck,
   TrendingUp,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -24,15 +28,42 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   IssuanceForm,
   type StoredLegalDocument,
   type IssuanceFormValues,
 } from "@/components/rwa/issuance-form";
 import { ConnectWalletCard } from "@/components/wallet/connect-wallet-card";
 import { useWallet } from "@/hooks/use-wallet";
+import { useAnchorProvider } from "@/hooks/useAnchorProvider";
 import { formatCurrency } from "@/lib/utils";
 import { apiFetch } from "@/lib/backend";
+import { buildAdminWalletHeaders } from "@/lib/admin-wallet-auth";
 import { downloadDocuments } from "@/lib/document-download";
+import {
+  createCustodyMandateRecord,
+  getDeploymentReadiness,
+  recordCustodyMandateCreation,
+  type DeploymentReadiness,
+} from "@/lib/custody";
+import { listPlatformCustodians, type PlatformCustodian } from "@/lib/platform-custodians";
+import {
+  assignValuerToAssetRequest,
+  getValuationReadiness,
+  listPlatformValuers,
+  listValuerAssignments,
+  recordValuerTirTrust,
+  type AssetValuerAssignment,
+  type PlatformValuer,
+} from "@/lib/valuations";
+import { CustodyChainService, deriveFidFromWallet } from "@/services/custody";
+import { ValuationChainService } from "@/services/valuation";
 
 type IndexedAsset = {
   id: string;
@@ -65,12 +96,15 @@ type IssuanceAsset = {
   underlyingValue: number;
   totalSupply: number;
   tokenContract: string;
+  factoryAssetId?: number | null;
   lifecycleState: string;
 };
 
 type AssetRequest = {
   id: string;
   status: "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "DEPLOYED" | "CANCELED";
+  factoryAssetId?: number | null;
+  deployedAssetId?: string | null;
   issuerWallet: string;
   legalOwner?: string | null;
   referenceId?: string | null;
@@ -94,6 +128,436 @@ type AssetRequest = {
 
 type RequestDocument = StoredLegalDocument;
 
+
+type ProposedCustodian = {
+  id?: string;
+  organizationName?: string;
+  walletAddress?: string;
+  fidAddress?: string;
+  platformAuthorityAddress?: string | null;
+  authorityTopic?: number;
+  status?: string;
+};
+
+function shortAddress(value?: string | null, head = 6, tail = 6) {
+  if (!value) return "Pending";
+  if (value.length <= head + tail + 3) return value;
+  return `${value.slice(0, head)}...${value.slice(-tail)}`;
+}
+
+function proposedCustodianFromRequest(request: AssetRequest | null): ProposedCustodian | null {
+  if (!request) return null;
+  const metadata = parseMetadata(request.metadata ?? null);
+  const custody = metadata.custody && typeof metadata.custody === "object"
+    ? (metadata.custody as Record<string, unknown>)
+    : {};
+  const proposed = custody.proposedCustodian && typeof custody.proposedCustodian === "object"
+    ? (custody.proposedCustodian as Record<string, unknown>)
+    : null;
+  if (!proposed) return null;
+
+  const walletAddress = stringValue(proposed.walletAddress);
+  const fidAddress = stringValue(proposed.fidAddress);
+  if (!walletAddress && !fidAddress) return null;
+
+  return {
+    id: stringValue(proposed.id),
+    organizationName: stringValue(proposed.organizationName, "Proposed custodian"),
+    walletAddress,
+    fidAddress,
+    platformAuthorityAddress: stringValue(proposed.platformAuthorityAddress) || null,
+    authorityTopic: typeof proposed.authorityTopic === "number" ? proposed.authorityTopic : Number(proposed.authorityTopic || 4),
+    status: stringValue(proposed.status, "UNKNOWN"),
+  };
+}
+
+function deriveIssuerFidAddress(walletAddress?: string | null) {
+  if (!walletAddress) return "";
+  try {
+    return deriveFidFromWallet(walletAddress).toBase58();
+  } catch {
+    return "";
+  }
+}
+
+function isValidFinalCustodian(custodian: PlatformCustodian, issuerFid: string) {
+  return (
+    custodian.status === "APPROVED" &&
+    Boolean(custodian.walletAddress) &&
+    Boolean(custodian.fidAddress) &&
+    Boolean(custodian.platformAuthorityAddress) &&
+    custodian.authorityTopic === 4 &&
+    (!issuerFid || custodian.fidAddress !== issuerFid)
+  );
+}
+
+function nextCustodyAction(readiness: DeploymentReadiness | null) {
+  const code = readiness?.reasons?.[0]?.code;
+  if (!readiness) return "Load custody status";
+  if (readiness.ready) return "Ready for deployment";
+  if (code === "CUSTODY_MANDATE_NOT_ASSIGNED") return "Create & Send Custody Mandate";
+  if (code === "CUSTODY_MANDATE_MISSING") return "Create & Send Custody Mandate";
+  if (code === "CUSTODY_MANDATE_NOT_ACCEPTED") return "Waiting for Custodian";
+  if (code === "CUSTODY_ATTESTATION_MISSING") return "Custodian Must Submit Attestation";
+  if (code === "CUSTODY_ATTESTATION_EXPIRED") return "Request New Attestation";
+  if (code === "CUSTODIAN_AUTHORITY_MISSING") return "Approve Custodian Authority";
+  return "Resolve custody blockers";
+}
+
+function CustodyCheckRow({ done, label, detail }: { done: boolean; label: string; detail?: string }) {
+  return (
+    <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+      <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${done ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400"}`}>
+        {done ? <CheckCircle className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
+      </div>
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-slate-900">{label}</div>
+        {detail ? <div className="mt-0.5 break-all text-xs text-slate-500">{detail}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+
+type ValuationReadiness = Awaited<ReturnType<typeof getValuationReadiness>>;
+
+function AdminValuationPanel({
+  asset,
+  request,
+  walletAddress,
+  signMessage,
+  chain,
+  onRefresh,
+}: {
+  asset: IssuanceAsset;
+  request: AssetRequest | null;
+  walletAddress?: string | null;
+  signMessage?: (message: Uint8Array) => Promise<Uint8Array>;
+  chain: ValuationChainService | null;
+  onRefresh: () => Promise<void> | void;
+}) {
+  const [valuers, setValuers] = useState<PlatformValuer[]>([]);
+  const [assignments, setAssignments] = useState<AssetValuerAssignment[]>([]);
+  const [readiness, setReadiness] = useState<ValuationReadiness | null>(null);
+  const [selectedValuerId, setSelectedValuerId] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const activeAssignment = useMemo(
+    () => assignments.find((assignment) => ["ASSIGNED", "ACCEPTED", "ATTESTATION_PENDING", "CONFIRMED"].includes(assignment.status)) || assignments[0] || null,
+    [assignments],
+  );
+
+  const load = useCallback(async () => {
+    if (!request) return;
+    setLoading(true);
+    try {
+      const [valuerRows, assignmentRows, readinessRow] = await Promise.all([
+        listPlatformValuers({ status: "APPROVED" }),
+        listValuerAssignments({ assetRequestId: request.id }),
+        getValuationReadiness({ assetRequestId: request.id }).catch(() => null),
+      ]);
+      setValuers(valuerRows.filter((valuer) => Boolean(valuer.fidAddress)));
+      setAssignments(assignmentRows);
+      setReadiness(readinessRow);
+      setSelectedValuerId((current) => current || assignmentRows[0]?.valuerProfileId || valuerRows.find((valuer) => valuer.fidAddress)?.id || "");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to load valuation status.");
+    } finally {
+      setLoading(false);
+    }
+  }, [request]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const assignValuer = async () => {
+    if (!request || !walletAddress) return;
+    if (!selectedValuerId) {
+      toast.error("Select an approved valuer first.");
+      return;
+    }
+    setBusy(true);
+    const toastId = toast.loading("Assigning valuer...");
+    try {
+      const body = JSON.stringify({
+        valuerProfileId: selectedValuerId,
+        assignedBy: walletAddress,
+        tokenContract: asset.tokenContract,
+        metadata: { source: "issuance-recent-tokens" },
+      });
+      const path = `/asset-requests/${request.id}/valuer-assignments`;
+      const headers = await buildAdminWalletHeaders({ body, method: "POST", path, signMessage, walletAddress });
+      await assignValuerToAssetRequest(request.id, JSON.parse(body), headers);
+      await load();
+      await onRefresh();
+      toast.success("Valuer assigned.", { id: toastId });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to assign valuer.", { id: toastId });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const trustValuer = async () => {
+    if (!activeAssignment || !walletAddress || !chain) {
+      toast.error("Connect the platform admin wallet before trusting a valuer in TIR.");
+      return;
+    }
+    setBusy(true);
+    const toastId = toast.loading("Adding valuer topic 5 trust...");
+    try {
+      const valuer = valuers.find((row) => row.id === activeAssignment.valuerProfileId);
+      const result = await chain.trustValuerInTokenTir({
+        assignmentId: activeAssignment.id,
+        tokenContract: activeAssignment.tokenContract,
+        valuerFid: activeAssignment.valuerFid,
+        label: valuer?.organizationName || "Valuer",
+      });
+      const body = JSON.stringify({
+        txHash: result.signature,
+        issuerEntryAddress: result.issuerEntry,
+        actorWallet: walletAddress,
+      });
+      const path = `/asset-valuer-assignments/${activeAssignment.id}/tir-trust`;
+      const headers = await buildAdminWalletHeaders({ body, method: "POST", path, signMessage, walletAddress });
+      await recordValuerTirTrust(activeAssignment.id, JSON.parse(body), headers);
+      await load();
+      await onRefresh();
+      toast.success("Valuer is trusted for topic 5 on this token.", { id: toastId });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to add valuer TIR trust.", { id: toastId });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!request) {
+    return (
+      <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-3 text-xs text-slate-500">
+        Valuation controls are unavailable because this token is not linked to a deployed issuer request.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-[#172E7F]" />
+            <p className="text-sm font-semibold text-slate-900">Valuation readiness</p>
+            <Badge className={readiness?.ready ? "bg-emerald-600 text-white" : "bg-amber-500 text-white"}>
+              {readiness?.ready ? "Investment Ready" : "Pending"}
+            </Badge>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            One approved valuer must be assigned, trusted in this token TIR with topic 5, and submit NAV attestation.
+          </p>
+          {readiness?.reasons?.length ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {readiness.reasons.map((reason) => (
+                <Badge key={reason.code} variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
+                  {reason.message}
+                </Badge>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading || busy}>
+          <Loader2 className={`mr-2 h-3.5 w-3.5 ${loading ? "animate-spin" : "hidden"}`} />
+          Refresh
+        </Button>
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_auto_auto] lg:items-end">
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase text-slate-500">Assigned valuer</p>
+          <Select value={selectedValuerId} onValueChange={setSelectedValuerId} disabled={busy || valuers.length === 0 || Boolean(activeAssignment)}>
+            <SelectTrigger>
+              <SelectValue placeholder={valuers.length ? "Select approved valuer" : "No approved valuers with FID"} />
+            </SelectTrigger>
+            <SelectContent>
+              {valuers.map((valuer) => (
+                <SelectItem key={valuer.id} value={valuer.id}>
+                  {valuer.organizationName} - {shortAddress(valuer.fidAddress)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Button variant="outline" onClick={() => void assignValuer()} disabled={busy || loading || Boolean(activeAssignment) || !selectedValuerId}>
+          Assign Valuer
+        </Button>
+        <Button className="bg-[#172E7F] hover:bg-[#21439B]" onClick={() => void trustValuer()} disabled={busy || loading || !activeAssignment || Boolean(activeAssignment.tirTrustTxHash)}>
+          Trust Topic 5
+        </Button>
+      </div>
+
+      {activeAssignment ? (
+        <div className="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-3">
+          <div className="rounded-md bg-slate-50 p-2"><span className="font-semibold">Status:</span> {activeAssignment.status}</div>
+          <div className="rounded-md bg-slate-50 p-2"><span className="font-semibold">Valuer:</span> {shortAddress(activeAssignment.valuerWallet)}</div>
+          <div className="rounded-md bg-slate-50 p-2"><span className="font-semibold">Topic 5:</span> {activeAssignment.tirTrustTxHash ? "Recorded" : "Pending"}</div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+function AdminCustodyPanel({
+  proposedCustodian,
+  approvedCustodians,
+  selectedCustodian,
+  selectedCustodianId,
+  issuerFid,
+  readiness,
+  loading,
+  busy,
+  onSelectCustodian,
+  onCreateMandate,
+  onRefresh,
+}: {
+  proposedCustodian: ProposedCustodian | null;
+  approvedCustodians: PlatformCustodian[];
+  selectedCustodian: PlatformCustodian | null;
+  selectedCustodianId: string;
+  issuerFid: string;
+  readiness: DeploymentReadiness | null;
+  loading: boolean;
+  busy: boolean;
+  onSelectCustodian: (custodianId: string) => void;
+  onCreateMandate: () => void;
+  onRefresh: () => void;
+}) {
+  const checks = readiness?.blockchainChecks;
+  const mandate = readiness?.mandate ?? null;
+  const attestation = readiness?.attestation ?? null;
+  const mandateCreated = Boolean(checks?.mandateExists || mandate?.createTxHash);
+  const mandateLocked = Boolean(mandateCreated || mandate?.acceptTxHash || attestation);
+  const finalCustodianMatchesProposal =
+    Boolean(selectedCustodian?.walletAddress && proposedCustodian?.walletAddress) &&
+    selectedCustodian?.walletAddress === proposedCustodian?.walletAddress;
+  const canCreateMandate = Boolean(selectedCustodian && issuerFid && !mandateCreated && !busy && !loading);
+  const blockerText = readiness?.reasons?.map((reason) => reason.message).join(" ") || "Custody readiness has not been checked yet.";
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-[#172E7F] to-[#2A5FA6] text-white shadow-sm">
+            <ShieldCheck className="h-5 w-5" />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-slate-950">Custody Setup</h4>
+            <p className="mt-1 text-xs leading-5 text-slate-600">
+              Confirm the asset custodian and send the mandate before deployment. Custody is separate from token trusted issuers.
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge className={readiness?.ready ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}>
+            {readiness?.ready ? "Ready for Deployment" : nextCustodyAction(readiness)}
+          </Badge>
+          <Button type="button" variant="outline" size="sm" onClick={onRefresh} disabled={loading || busy}>
+            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Refresh
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Issuer proposed</p>
+              <p className="mt-1 text-sm font-semibold text-slate-950">
+                {proposedCustodian?.organizationName || "No custodian proposed"}
+              </p>
+            </div>
+            {finalCustodianMatchesProposal ? <Badge variant="secondary">Kept</Badge> : <Badge variant="outline">Changed</Badge>}
+          </div>
+          <div className="grid gap-2 text-xs text-slate-600">
+            <div><span className="font-semibold text-slate-800">Wallet:</span> <span className="font-mono">{shortAddress(proposedCustodian?.walletAddress)}</span></div>
+            <div><span className="font-semibold text-slate-800">FID:</span> <span className="font-mono">{shortAddress(proposedCustodian?.fidAddress)}</span></div>
+            <div><span className="font-semibold text-slate-800">PlatformAuthority:</span> <span className="font-mono">{shortAddress(proposedCustodian?.platformAuthorityAddress)}</span></div>
+            <div><span className="font-semibold text-slate-800">Topic:</span> {proposedCustodian?.authorityTopic ?? 4}</div>
+            <div><span className="font-semibold text-slate-800">Backend status:</span> {proposedCustodian?.status || "Unknown"}</div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="mb-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Final custodian</p>
+            <p className="mt-1 text-xs text-slate-500">
+              {mandateLocked ? "Mandate already exists. Use a formal replacement flow to change custody." : "Select an approved platform custodian."}
+            </p>
+          </div>
+          <Select
+            value={selectedCustodianId || undefined}
+            onValueChange={onSelectCustodian}
+            disabled={loading || busy || mandateLocked || approvedCustodians.length === 0}
+          >
+            <SelectTrigger className="h-11 bg-slate-50">
+              <SelectValue placeholder={loading ? "Loading custodians..." : "Select approved custodian"} />
+            </SelectTrigger>
+            <SelectContent>
+              {approvedCustodians.map((custodian) => (
+                <SelectItem key={custodian.id} value={custodian.id}>
+                  {custodian.organizationName} - {shortAddress(custodian.walletAddress)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedCustodian ? (
+            <div className="mt-3 grid gap-1 text-xs text-slate-600">
+              <div><span className="font-semibold text-slate-800">Wallet:</span> <span className="font-mono">{shortAddress(selectedCustodian.walletAddress)}</span></div>
+              <div><span className="font-semibold text-slate-800">FID:</span> <span className="font-mono">{shortAddress(selectedCustodian.fidAddress)}</span></div>
+              <div><span className="font-semibold text-slate-800">PlatformAuthority:</span> <span className="font-mono">{shortAddress(selectedCustodian.platformAuthorityAddress)}</span></div>
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-amber-700">No approved custodian is available for this issuer FID.</p>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <CustodyCheckRow done={Boolean(selectedCustodian)} label="Custodian selected" detail={selectedCustodian?.organizationName} />
+        <CustodyCheckRow done={Boolean(selectedCustodian?.fidAddress && selectedCustodian?.fidAddress !== issuerFid)} label="FID verified" detail={selectedCustodian?.fidAddress || undefined} />
+        <CustodyCheckRow done={Boolean(selectedCustodian?.platformAuthorityAddress && selectedCustodian.authorityTopic === 4)} label="PlatformAuthority topic 4" detail={selectedCustodian?.platformAuthorityAddress || undefined} />
+        <CustodyCheckRow done={Boolean(mandate)} label={`Current mandate status: ${mandate?.status || "Not created"}`} detail={mandate?.mandateAddress || readiness?.expectedMandate} />
+        <CustodyCheckRow done={Boolean(checks?.mandateAccepted)} label={checks?.mandateAccepted ? "Mandate accepted" : mandateCreated ? "Awaiting custodian acceptance" : "Mandate not sent"} />
+        <CustodyCheckRow done={Boolean(checks?.custodyAttestationValid)} label={checks?.custodyAttestationValid ? "Custody attestation confirmed" : "Custody attestation pending"} detail={attestation?.expiresAt ? `Expires ${new Date(attestation.expiresAt).toLocaleString()}` : undefined} />
+      </div>
+
+      {!readiness?.ready ? (
+        <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <div className="font-semibold">Deployment blocked</div>
+            <div className="mt-1 text-xs leading-5">{blockerText}</div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-xs text-slate-500">
+          Attestation status: <span className="font-semibold text-slate-800">{attestation?.status || "Pending"}</span>
+          {attestation?.expiresAt ? <span> | Expires {new Date(attestation.expiresAt).toLocaleString()}</span> : null}
+        </div>
+        <Button
+          type="button"
+          onClick={onCreateMandate}
+          disabled={!canCreateMandate}
+          className="bg-linear-to-r from-[#172E7F] to-[#2A5FA6] text-white"
+        >
+          {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          {mandateCreated ? "Custody Mandate Sent" : "Create & Send Custody Mandate"}
+        </Button>
+      </div>
+    </div>
+  );
+}
 function parseMetadata(metadata: IndexedAsset["metadata"]) {
   if (!metadata) return {};
   if (typeof metadata !== "string") return metadata;
@@ -168,6 +632,7 @@ function mapAsset(asset: IndexedAsset): IssuanceAsset {
     underlyingValue: numberValue(metadata.underlyingValue),
     totalSupply: numberValue(metadata.totalSupply),
     tokenContract: asset.tokenContract,
+    factoryAssetId: asset.factoryAssetId ?? null,
     lifecycleState: asset.lifecycleState || "ISSUED",
   };
 }
@@ -184,11 +649,26 @@ export default function IssuancePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { address, connectWallet, isConnecting } = useWallet();
+  const solanaWallet = useSolanaWallet();
+  const provider = useAnchorProvider();
+  const custodyChain = useMemo(() => {
+    if (!provider || !solanaWallet.sendTransaction) return null;
+    return new CustodyChainService(provider, solanaWallet.sendTransaction);
+  }, [provider, solanaWallet.sendTransaction]);
+  const valuationChain = useMemo(() => {
+    if (!provider || !solanaWallet.sendTransaction) return null;
+    return new ValuationChainService(provider, solanaWallet.sendTransaction);
+  }, [provider, solanaWallet.sendTransaction]);
   const [assets, setAssets] = useState<IssuanceAsset[]>([]);
   const [assetRequests, setAssetRequests] = useState<AssetRequest[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<AssetRequest | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("new");
+  const [platformCustodians, setPlatformCustodians] = useState<PlatformCustodian[]>([]);
+  const [selectedCustodianId, setSelectedCustodianId] = useState("");
+  const [custodyReadiness, setCustodyReadiness] = useState<DeploymentReadiness | null>(null);
+  const [custodyLoading, setCustodyLoading] = useState(false);
+  const [custodyBusy, setCustodyBusy] = useState(false);
 
   const loadAssets = useCallback(async () => {
     setLoading(true);
@@ -315,6 +795,139 @@ export default function IssuancePage() {
     [selectedRequest],
   );
 
+  const proposedCustodian = useMemo(
+    () => proposedCustodianFromRequest(selectedRequest),
+    [selectedRequest],
+  );
+
+  const issuerFid = useMemo(
+    () => deriveIssuerFidAddress(selectedRequest?.issuerWallet),
+    [selectedRequest?.issuerWallet],
+  );
+
+  const approvedCustodians = useMemo(
+    () => platformCustodians.filter((custodian) => isValidFinalCustodian(custodian, issuerFid)),
+    [issuerFid, platformCustodians],
+  );
+
+  const selectedCustodian = useMemo(
+    () => approvedCustodians.find((custodian) => custodian.id === selectedCustodianId) || null,
+    [approvedCustodians, selectedCustodianId],
+  );
+
+  const loadCustodyState = useCallback(async () => {
+    if (!selectedRequest) {
+      setPlatformCustodians([]);
+      setSelectedCustodianId("");
+      setCustodyReadiness(null);
+      return;
+    }
+
+    setCustodyLoading(true);
+    try {
+      const [custodianRows, readiness] = await Promise.all([
+        listPlatformCustodians({ status: "APPROVED" }),
+        getDeploymentReadiness(selectedRequest.id),
+      ]);
+      const selectableRows = custodianRows.filter((custodian) => isValidFinalCustodian(custodian, issuerFid));
+      setPlatformCustodians(custodianRows);
+      setCustodyReadiness(readiness);
+      setSelectedCustodianId((current) => {
+        if (current && selectableRows.some((custodian) => custodian.id === current)) return current;
+
+        const mandateWallet = readiness.mandate?.custodianWallet;
+        const proposedWallet = proposedCustodian?.walletAddress;
+        return (
+          selectableRows.find((custodian) => custodian.walletAddress === mandateWallet)?.id ||
+          selectableRows.find((custodian) => custodian.walletAddress === proposedWallet)?.id ||
+          selectableRows[0]?.id ||
+          ""
+        );
+      });
+    } catch (error) {
+      setCustodyReadiness(null);
+      toast.error(error instanceof Error ? error.message : "Failed to load custody status.");
+    } finally {
+      setCustodyLoading(false);
+    }
+  }, [issuerFid, proposedCustodian?.walletAddress, selectedRequest]);
+
+  useEffect(() => {
+    void loadCustodyState();
+  }, [loadCustodyState]);
+
+  const handleCreateCustodyMandate = useCallback(async () => {
+    if (!selectedRequest) return;
+    if (!address || !custodyChain) {
+      toast.error("Connect the platform admin wallet before creating the custody mandate.");
+      return;
+    }
+    if (!issuerFid) {
+      toast.error("Issuer FID could not be derived for this request.");
+      return;
+    }
+    if (!selectedCustodian?.fidAddress) {
+      toast.error("Select an approved custodian with an FID before creating the mandate.");
+      return;
+    }
+
+    const existingMandate = custodyReadiness?.mandate ?? null;
+    if (existingMandate?.createTxHash || custodyReadiness?.blockchainChecks?.mandateExists) {
+      toast.info("Custody mandate already exists for this request.");
+      return;
+    }
+    if (existingMandate && existingMandate.custodianWallet !== selectedCustodian.walletAddress) {
+      toast.error("A different custodian assignment already exists. Use a formal replacement flow before changing it.");
+      return;
+    }
+
+    setCustodyBusy(true);
+    const toastId = toast.loading("Creating custody mandate...");
+    try {
+      const mandate = await createCustodyMandateRecord(selectedRequest.id, {
+        issuerFid,
+        custodianWallet: selectedCustodian.walletAddress,
+        custodianFid: selectedCustodian.fidAddress,
+        metadata: {
+          selectedBy: address,
+          selectedAt: new Date().toISOString(),
+          custodianOrganization: selectedCustodian.organizationName,
+          proposedCustodian,
+        },
+      });
+
+      const { signature, mandateAddress } = await custodyChain.createCustodyMandate({
+        mandateId: mandate.id,
+        assetId: mandate.factoryAssetId,
+        issuerWallet: mandate.issuerWallet,
+        issuerFid: mandate.issuerFid,
+        custodianWallet: mandate.custodianWallet,
+        custodianFid: mandate.custodianFid,
+      });
+
+      try {
+        await recordCustodyMandateCreation(mandate.id, {
+          txHash: signature,
+          mandateAddress,
+          actorWallet: address,
+        });
+      } catch (recordError) {
+        toast.warning("Mandate was created on-chain, but backend recording failed. Use Refresh, then retry backend sync if needed.", {
+          id: toastId,
+          description: recordError instanceof Error ? recordError.message : undefined,
+        });
+        await loadCustodyState();
+        return;
+      }
+
+      await loadCustodyState();
+      toast.success("Custody mandate sent. Awaiting custodian acceptance.", { id: toastId });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to create custody mandate.", { id: toastId });
+    } finally {
+      setCustodyBusy(false);
+    }
+  }, [address, custodyChain, custodyReadiness, issuerFid, loadCustodyState, proposedCustodian, selectedCustodian, selectedRequest]);
   const selectedRequestValues = useMemo<Partial<IssuanceFormValues> | undefined>(() => {
     if (!selectedRequest) return undefined;
     const requestMetadata = parseMetadata(selectedRequest.metadata ?? null);
@@ -433,12 +1046,35 @@ export default function IssuancePage() {
             onDeployed={async () => {
               await loadAssets();
               await loadAssetRequests();
+              if (selectedRequest?.id) {
+                const refreshed = await apiFetch<AssetRequest>(`/asset-requests/${selectedRequest.id}`);
+                setSelectedRequest(refreshed);
+              }
             }}
             initialValues={selectedRequestValues}
             deploymentRequestId={selectedRequest?.id}
             existingDocuments={selectedRequestDocuments}
             documentsReadOnly={!!selectedRequest}
             requireDocumentApproval={!!selectedRequest}
+            deploymentReadiness={selectedRequest ? custodyReadiness : null}
+            deploymentReadinessLoading={selectedRequest ? custodyLoading : false}
+            complianceFooter={
+              selectedRequest ? (
+                <AdminCustodyPanel
+                  proposedCustodian={proposedCustodian}
+                  approvedCustodians={approvedCustodians}
+                  selectedCustodian={selectedCustodian}
+                  selectedCustodianId={selectedCustodianId}
+                  issuerFid={issuerFid}
+                  readiness={custodyReadiness}
+                  loading={custodyLoading}
+                  busy={custodyBusy}
+                  onSelectCustodian={setSelectedCustodianId}
+                  onCreateMandate={() => void handleCreateCustodyMandate()}
+                  onRefresh={() => void loadCustodyState()}
+                />
+              ) : undefined
+            }
           />
         </TabsContent>
 
@@ -612,31 +1248,40 @@ export default function IssuancePage() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-4">
-                  {recentIssuances.map((asset) => (
-                    <div
-                      key={asset.dbId}
-                      className="flex items-center justify-between p-4 rounded-lg border bg-slate-50/30"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600">
-                          <CheckCircle className="h-5 w-5" />
+                  {recentIssuances.map((asset) => {
+                    const request = assetRequests.find(
+                      (row) =>
+                        row.deployedAssetId === asset.tokenContract ||
+                        (asset.factoryAssetId != null && row.factoryAssetId === asset.factoryAssetId),
+                    ) || null;
+                    return (
+                      <div key={asset.dbId} className="space-y-3 rounded-xl border bg-slate-50/30 p-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-4">
+                            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600">
+                              <CheckCircle className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <p className="font-bold">{asset.name}</p>
+                              <p className="text-xs text-muted-foreground mono">
+                                {asset.tokenContract.slice(0, 8)}...
+                                {asset.tokenContract.slice(-8)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold">{formatCurrency(asset.underlyingValue)}</p>
+                            <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
+                              Active
+                            </Badge>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-bold">{asset.name}</p>
-                          <p className="text-xs text-muted-foreground mono">
-                            {asset.tokenContract.slice(0, 8)}...
-                            {asset.tokenContract.slice(-8)}
-                          </p>
+                        <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-3 text-xs text-slate-500">
+                          Valuer assignment and topic 5 trust are managed by the token issuer in the issuer portal after deployment.
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold">{formatCurrency(asset.underlyingValue)}</p>
-                        <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
-                          Active
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -646,3 +1291,19 @@ export default function IssuancePage() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

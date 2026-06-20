@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { type ReactNode, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -59,6 +59,7 @@ import { generateSalt, isValidPublicKey } from "@/lib/utils";
 import { PublicKey, Keypair } from "@solana/web3.js";
 import { queryCache } from "@/lib/query-cache";
 import { apiFetch } from "@/lib/backend";
+import { getDeploymentReadiness, type DeploymentReadiness } from "@/lib/custody";
 import { TransactionToastLink } from "@/lib/solscan";
 
 async function parseApiResponse(response: Response, fallback: string) {
@@ -144,9 +145,14 @@ export type StoredLegalDocument = {
   bucket?: string;
   path?: string;
   publicUrl?: string;
+  fileHash?: string;
+  visibility?: "PUBLIC" | "PRIVATE";
 };
 
 const DOCUMENT_TYPE_OPTIONS = [
+  { value: "FARD", label: "Fard / Ownership Record" },
+  { value: "LEGAL_OPINION", label: "Legal Opinion" },
+  { value: "WHITEPAPER", label: "Whitepaper" },
   { value: "asset_document", label: "Asset Document" },
   { value: "title_deed", label: "Title Deed / Ownership Proof" },
   { value: "valuation_report", label: "Valuation Report" },
@@ -211,7 +217,7 @@ function CountryFlag({ country }: { country: Pick<CountryOption, "alpha2" | "nam
   return (
     <span
       aria-label={`${country.name} flag`}
-      className="inline-block h-3.5 w-5 shrink-0 overflow-hidden rounded-[2px] bg-slate-100 bg-cover bg-center shadow-sm ring-1 ring-slate-900/10"
+      className="inline-block h-3.5 w-5 shrink-0 overflow-hidden rounded-xs bg-slate-100 bg-cover bg-center shadow-sm ring-1 ring-slate-900/10"
       role="img"
       style={{ backgroundImage: `url("${countryFlagUrl(country.alpha2)}")` }}
     />
@@ -473,6 +479,17 @@ function formatFileSize(size?: number) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function deriveFactoryAssetId(seed?: string | null) {
+  const source = seed && seed.trim().length > 0 ? seed : `${Date.now()}`;
+  let hash = 2166136261;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  const positive = hash >>> 0;
+  return String((positive % 2147483646) + 1);
+}
+
 export function IssuanceForm({
   onSubmitOverride,
   onUploadDocuments,
@@ -484,6 +501,10 @@ export function IssuanceForm({
   existingDocuments = [],
   documentsReadOnly = false,
   requireDocumentApproval = false,
+  assetDetailsFooter,
+  complianceFooter,
+  deploymentReadiness,
+  deploymentReadinessLoading = false,
 }: {
   onSubmitOverride?: (
     data: IssuanceFormValues,
@@ -502,6 +523,10 @@ export function IssuanceForm({
   existingDocuments?: StoredLegalDocument[];
   documentsReadOnly?: boolean;
   requireDocumentApproval?: boolean;
+  assetDetailsFooter?: ReactNode;
+  complianceFooter?: ReactNode;
+  deploymentReadiness?: DeploymentReadiness | null;
+  deploymentReadinessLoading?: boolean;
 } = {}) {
   const { address } = useWallet();
   const router = useRouter();
@@ -843,6 +868,26 @@ export function IssuanceForm({
     }
 
     const salt = generateSalt();
+    let factoryAssetId = deriveFactoryAssetId(deploymentRequestId ?? data.assetDetails.isin);
+    if (deploymentRequestId) {
+      try {
+        const custodyReadiness = await getDeploymentReadiness(deploymentRequestId);
+        factoryAssetId = String(custodyReadiness.factoryAssetId);
+        if (!custodyReadiness.ready) {
+          toast.error("Custody is not ready for deployment.", {
+            description:
+              custodyReadiness.reasons.map((reason) => reason.message).join(" ") ||
+              "Create and accept the custody mandate, then submit a valid custody attestation.",
+          });
+          return;
+        }
+      } catch (error) {
+        toast.error("Unable to verify custody readiness.", {
+          description: error instanceof Error ? error.message : "Check the custodian workflow before deployment.",
+        });
+        return;
+      }
+    }
     const priceScale = 10 ** data.tokenDetails.decimals;
     const pricePerToken = BigInt(
       Math.round(data.tokenDetails.initialPrice * priceScale)
@@ -887,6 +932,7 @@ export function IssuanceForm({
       {
         mintKeypair,
         issuer: data.assetDetails.issuerWallet,
+        assetId: factoryAssetId,
         tokenMint: mintKeypair.publicKey.toBase58(),
         tokenName: data.assetDetails.name,
         tokenSymbol: data.assetDetails.symbol,
@@ -906,6 +952,7 @@ export function IssuanceForm({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               tokenContract: mintKeypair.publicKey.toBase58(),
+              factoryAssetId: Number(factoryAssetId),
               name: data.assetDetails.name,
               symbol: data.assetDetails.symbol,
               description: data.assetDetails.description,
@@ -915,6 +962,7 @@ export function IssuanceForm({
               deployedAt: new Date().toISOString(),
               lifecycleState: "ISSUED",
               metadata: {
+                factoryAssetId,
                 assetType: data.assetDetails.assetType,
                 currency: data.assetDetails.currency,
                 location: data.assetDetails.location,
@@ -1135,7 +1183,7 @@ export function IssuanceForm({
           <div className="absolute top-0 left-0 w-1 h-full"/>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-3 text-slate-900">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#172E7F] to-[#2A5FA6] text-white shadow-md">
+              <div className="p-2.5 rounded-xl bg-linear-to-br from-[#172E7F] to-[#2A5FA6] text-white shadow-md">
                 <Shield className="h-5 w-5" />
               </div>
               Platform Authority Verification
@@ -1211,7 +1259,7 @@ export function IssuanceForm({
                   <div
                     className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
                       isDone || isActive
-                        ? "bg-gradient-to-br from-[#172E7F] to-[#2A5FA6] text-white shadow-[0_4px_12px_rgba(23,46,127,0.18)]"
+                        ? "bg-linear-to-br from-[#172E7F] to-[#2A5FA6] text-white shadow-[0_4px_12px_rgba(23,46,127,0.18)]"
                         : "border border-slate-300 bg-white text-slate-400"
                     }`}
                   >
@@ -1239,7 +1287,7 @@ export function IssuanceForm({
                   <div
                     className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300 ${
                       step.id <= currentStep
-                        ? "bg-gradient-to-br from-[#172E7F] to-[#2A5FA6] text-white shadow-[0_4px_12px_rgba(23,46,127,0.25)]"
+                        ? "bg-linear-to-br from-[#172E7F] to-[#2A5FA6] text-white shadow-[0_4px_12px_rgba(23,46,127,0.25)]"
                         : "bg-slate-100 text-slate-400 border-2 border-slate-200"
                     }`}
                   >
@@ -1255,7 +1303,7 @@ export function IssuanceForm({
                     <div
                       className={`h-full rounded-full transition-all duration-300 ${
                         step.id < currentStep
-                          ? "bg-gradient-to-r from-[#172E7F] to-[#2A5FA6]"
+                          ? "bg-linear-to-r from-[#172E7F] to-[#2A5FA6]"
                           : "bg-slate-200"
                       }`}
                     />
@@ -1414,6 +1462,8 @@ export function IssuanceForm({
                 />
               </div>
 
+              {assetDetailsFooter}
+
               <FormField
                 control={form.control}
                 name="assetDetails.description"
@@ -1423,7 +1473,7 @@ export function IssuanceForm({
                     <FormControl>
                       <Textarea
                         placeholder="Provide a high-level summary of the investment..."
-                        className="min-h-[120px] resize-none"
+                        className="min-h-30 resize-none"
                         {...field}
                       />
                     </FormControl>
@@ -1526,7 +1576,7 @@ export function IssuanceForm({
             >
               <h3 className="text-lg font-bold flex items-center gap-2 text-slate-900">
                 <Shield className="h-5 w-5 text-[#172E7F]" />
-                {isApplicationMode ? "Compliance Modules" : "Compliance & Trusted Framework"}
+                {isApplicationMode ? "Compliance Modules" : deploymentRequestId ? "Compliance & Custody" : "Compliance & Trusted Framework"}
               </h3>
 
               <div className="space-y-6">
@@ -1618,7 +1668,7 @@ export function IssuanceForm({
                               </div>
                             </div>
                             <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3 md:border-l md:border-t-0 md:pl-4 md:pt-0">
-                              <div className="text-[10px] font-mono text-slate-400 truncate max-w-[200px]">
+                              <div className="text-[10px] font-mono text-slate-400 truncate max-w-50">
                                 FID: {issuer.issuerFid || "Pending derivation"}
                               </div>
                               <Button
@@ -1774,6 +1824,8 @@ export function IssuanceForm({
                     })}
                   </div>
                 </div>
+                {complianceFooter}
+
               </div>
             </motion.div>
           )}
@@ -1952,7 +2004,7 @@ export function IssuanceForm({
                           <div className="p-2 bg-slate-50 rounded-lg text-slate-400">
                             <FileText className="h-4 w-4" />
                           </div>
-                          <div className="text-xs font-medium text-slate-700 truncate max-w-[250px]">
+                          <div className="text-xs font-medium text-slate-700 truncate max-w-62.5">
                             {document.file.name}
                           </div>
                         </div>
@@ -2073,7 +2125,7 @@ export function IssuanceForm({
             {currentStep < finalStep ? (
               <Button 
                 type="button" 
-                className="h-11 px-8 bg-gradient-to-r from-[#172E7F] to-[#2A5FA6] text-white hover:shadow-lg transition-all"
+                className="h-11 px-8 bg-linear-to-r from-[#172E7F] to-[#2A5FA6] text-white hover:shadow-lg transition-all"
                 onClick={() => void nextStep()}
                 disabled={uploadingDocuments}
               >
@@ -2083,11 +2135,12 @@ export function IssuanceForm({
             ) : (
               <Button 
                 type="submit" 
-                className="h-11 px-10 bg-gradient-to-r from-[#172E7F] to-[#2A5FA6] text-white hover:shadow-lg transition-all"
+                className="h-11 px-10 bg-linear-to-r from-[#172E7F] to-[#2A5FA6] text-white hover:shadow-lg transition-all"
                 disabled={
                   deploying ||
                   uploadingDocuments ||
                   (!isPlatformAdmin && !isApplicationMode) ||
+                  (!isApplicationMode && Boolean(deploymentRequestId) && (deploymentReadinessLoading || !deploymentReadiness?.ready)) ||
                   (isApplicationMode &&
                     Boolean(onUploadDocuments) &&
                     storedUploadedDocuments.length === 0)
@@ -2112,3 +2165,5 @@ export function IssuanceForm({
     </motion.div>
   );
 }
+
+

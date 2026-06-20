@@ -70,6 +70,9 @@ export const TIR_PROGRAM_ID = new PublicKey(
 export const CTR_PROGRAM_ID = new PublicKey(
   process.env.NEXT_PUBLIC_CTR_PROGRAM_ID ?? "8MuWrtbZ1zPzrDhSKPjDd78SMQAMtBuprPnc1Zam1Gig"
 );
+export const ASSET_REGISTRY_PROGRAM_ID = new PublicKey(
+  process.env.NEXT_PUBLIC_ASSET_REGISTRY_PROGRAM_ID ?? "3xoAnJ9DqMxj22XfeUYQdwAy6dbKXHHeXxcLBxAY2Pdx"
+);
 
 // ─── Governance / Deployment PDAs ────────────────────────────────────────────
 

@@ -9,6 +9,7 @@ import { UpdateTokenPurchaseRequestDto } from './dto/update-token-purchase-reque
 import { BlockchainTransactionsService } from '../blockchain-transactions/blockchain-transactions.service';
 import { getIndexerConfig } from '../indexer/indexer.config';
 import { WorkflowsService } from '../workflows/workflows.service';
+import { ValuationsService } from '../valuations/valuations.service';
 
 const CLOSED_STATUSES = ['REJECTED', 'CANCELLED', 'MINTED'];
 const ACTIVE_STATUSES = [
@@ -123,6 +124,7 @@ export class TokenPurchaseRequestsService {
     private readonly prisma: PrismaService,
     private readonly blockchainTransactions: BlockchainTransactionsService,
     private readonly workflows: WorkflowsService,
+    private readonly valuations: ValuationsService,
   ) {}
 
   private getInitialStatus(data: CreateTokenPurchaseRequestDto) {
@@ -500,10 +502,16 @@ export class TokenPurchaseRequestsService {
     if (!data.tokenContract || !data.investorWallet) {
       throw new BadRequestException('tokenContract and investorWallet are required.');
     }
-    return this.calculateCompliance(data);
+    const valuationReadiness = await this.valuations.getReadiness({ tokenContract: data.tokenContract });
+    const compliance = await this.calculateCompliance(data);
+    if (!valuationReadiness.ready) {
+      return { ...compliance, ok: false, canOpenForm: false, blockingReasons: [...compliance.blockingReasons, ...(valuationReadiness.reasons || []).map((reason) => reason.message)] };
+    }
+    return { ...compliance, valuationReadiness };
   }
 
   private async validateCompliance(data: CreateTokenPurchaseRequestDto) {
+    await this.valuations.assertInvestmentReady(data.tokenContract);
     const result = await this.calculateCompliance({
       tokenContract: data.tokenContract,
       investorWallet: data.investorWallet,

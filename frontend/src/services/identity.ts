@@ -705,7 +705,7 @@ export class IdentityService {
   async ensureOwnFid(
     country = 0,
     isIssuer = false,
-    ownerType: "investor" | "issuer" | "provider" = isIssuer ? "issuer" : "investor",
+    ownerType: "investor" | "issuer" | "provider" | "custodian" | "valuer" = isIssuer ? "issuer" : "investor",
   ): Promise<string | null> {
     const ids = await this.getProgramIds();
     const fidProgram = this.getFidProgram(ids.fid);
@@ -1347,3 +1347,5 @@ export class IdentityService {
     return new Uint8Array(digest);
   }
 }
+
+

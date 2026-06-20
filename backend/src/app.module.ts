@@ -24,6 +24,10 @@ import { AuthorityBindingsModule } from './authority-bindings/authority-bindings
 import { WorkflowsModule } from './workflows/workflows.module';
 import { AuditModule } from './audit/audit.module';
 import { OutboxModule } from './outbox/outbox.module';
+import { CustodyModule } from './custody/custody.module';
+import { PlatformCustodiansModule } from './platform-custodians/platform-custodians.module';
+import { AssetDocumentsModule } from './asset-documents/asset-documents.module';
+import { ValuationsModule } from './valuations/valuations.module';
 import { StartupValidationService } from './common/services/startup-validation.service';
 
 @Module({
@@ -52,8 +56,11 @@ import { StartupValidationService } from './common/services/startup-validation.s
     WorkflowsModule,
     AuditModule,
     OutboxModule,
+    CustodyModule,
+    PlatformCustodiansModule,
+    AssetDocumentsModule,
+    ValuationsModule,
   ],
   providers: [StartupValidationService],
 })
 export class AppModule {}
-
