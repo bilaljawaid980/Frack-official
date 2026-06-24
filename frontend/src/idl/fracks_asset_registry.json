@@ -1,0 +1,3066 @@
+{
+  "address": "3xoAnJ9DqMxj22XfeUYQdwAy6dbKXHHeXxcLBxAY2Pdx",
+  "metadata": {
+    "name": "fracks_asset_registry",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "accept_custody_mandate",
+      "discriminator": [
+        42,
+        105,
+        124,
+        166,
+        212,
+        48,
+        135,
+        19
+      ],
+      "accounts": [
+        {
+          "name": "custodian",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "asset_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asset_registry.asset_id",
+                "account": "AssetRegistry"
+              }
+            ]
+          }
+        },
+        {
+          "name": "custodian_fid_account",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "custodian"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                216,
+                187,
+                119,
+                80,
+                47,
+                4,
+                68,
+                176,
+                232,
+                243,
+                235,
+                214,
+                199,
+                114,
+                250,
+                248,
+                212,
+                91,
+                16,
+                233,
+                236,
+                175,
+                195,
+                252,
+                230,
+                88,
+                49,
+                103,
+                142,
+                11,
+                49,
+                231
+              ]
+            }
+          }
+        },
+        {
+          "name": "tir_state"
+        },
+        {
+          "name": "custodian_issuer_entry"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "approve_succession",
+      "discriminator": [
+        173,
+        88,
+        205,
+        156,
+        226,
+        79,
+        140,
+        125
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "succession_claim",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "approval_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "attest_custody",
+      "discriminator": [
+        254,
+        29,
+        125,
+        248,
+        142,
+        129,
+        59,
+        82
+      ],
+      "accounts": [
+        {
+          "name": "custodian",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "asset_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asset_registry.asset_id",
+                "account": "AssetRegistry"
+              }
+            ]
+          }
+        },
+        {
+          "name": "custodian_fid_account",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "custodian"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                216,
+                187,
+                119,
+                80,
+                47,
+                4,
+                68,
+                176,
+                232,
+                243,
+                235,
+                214,
+                199,
+                114,
+                250,
+                248,
+                212,
+                91,
+                16,
+                233,
+                236,
+                175,
+                195,
+                252,
+                230,
+                88,
+                49,
+                103,
+                142,
+                11,
+                49,
+                231
+              ]
+            }
+          }
+        },
+        {
+          "name": "tir_state"
+        },
+        {
+          "name": "custodian_issuer_entry"
+        }
+      ],
+      "args": [
+        {
+          "name": "document_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "attestation_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "validity_seconds",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "attest_milestone",
+      "discriminator": [
+        229,
+        167,
+        0,
+        150,
+        64,
+        211,
+        237,
+        151
+      ],
+      "accounts": [
+        {
+          "name": "certifier",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "asset_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asset_registry.asset_id",
+                "account": "AssetRegistry"
+              }
+            ]
+          }
+        },
+        {
+          "name": "certifier_fid_account",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "certifier"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                216,
+                187,
+                119,
+                80,
+                47,
+                4,
+                68,
+                176,
+                232,
+                243,
+                235,
+                214,
+                199,
+                114,
+                250,
+                248,
+                212,
+                91,
+                16,
+                233,
+                236,
+                175,
+                195,
+                252,
+                230,
+                88,
+                49,
+                103,
+                142,
+                11,
+                49,
+                231
+              ]
+            }
+          }
+        },
+        {
+          "name": "tir_state"
+        },
+        {
+          "name": "certifier_issuer_entry"
+        }
+      ],
+      "args": [
+        {
+          "name": "milestone_id",
+          "type": "u16"
+        },
+        {
+          "name": "cert_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "completion_bps",
+          "type": "u16"
+        },
+        {
+          "name": "updated_nav",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "attest_reserve",
+      "discriminator": [
+        67,
+        148,
+        114,
+        40,
+        247,
+        214,
+        157,
+        238
+      ],
+      "accounts": [
+        {
+          "name": "custodian",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "asset_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asset_registry.asset_id",
+                "account": "AssetRegistry"
+              }
+            ]
+          }
+        },
+        {
+          "name": "custodian_fid_account",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "custodian"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                216,
+                187,
+                119,
+                80,
+                47,
+                4,
+                68,
+                176,
+                232,
+                243,
+                235,
+                214,
+                199,
+                114,
+                250,
+                248,
+                212,
+                91,
+                16,
+                233,
+                236,
+                175,
+                195,
+                252,
+                230,
+                88,
+                49,
+                103,
+                142,
+                11,
+                49,
+                231
+              ]
+            }
+          }
+        },
+        {
+          "name": "tir_state"
+        },
+        {
+          "name": "custodian_issuer_entry"
+        }
+      ],
+      "args": [
+        {
+          "name": "reserve_ratio_bps",
+          "type": "u16"
+        },
+        {
+          "name": "attestation_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "validity_seconds",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "attest_valuation",
+      "discriminator": [
+        159,
+        133,
+        54,
+        104,
+        148,
+        203,
+        2,
+        179
+      ],
+      "accounts": [
+        {
+          "name": "valuer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "asset_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asset_registry.asset_id",
+                "account": "AssetRegistry"
+              }
+            ]
+          }
+        },
+        {
+          "name": "valuer_fid_account",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "valuer"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                216,
+                187,
+                119,
+                80,
+                47,
+                4,
+                68,
+                176,
+                232,
+                243,
+                235,
+                214,
+                199,
+                114,
+                250,
+                248,
+                212,
+                91,
+                16,
+                233,
+                236,
+                175,
+                195,
+                252,
+                230,
+                88,
+                49,
+                103,
+                142,
+                11,
+                49,
+                231
+              ]
+            }
+          }
+        },
+        {
+          "name": "tir_state"
+        },
+        {
+          "name": "valuer_issuer_entry"
+        }
+      ],
+      "args": [
+        {
+          "name": "nav",
+          "type": "u64"
+        },
+        {
+          "name": "methodology_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "nav_validity_days",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "create_succession_claim",
+      "discriminator": [
+        21,
+        98,
+        248,
+        160,
+        221,
+        64,
+        127,
+        217
+      ],
+      "accounts": [
+        {
+          "name": "claimant",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "succession_claim",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  117,
+                  99,
+                  99,
+                  101,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "deceased_wallet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "deceased_wallet",
+          "type": "pubkey"
+        },
+        {
+          "name": "death_cert_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "wirasat_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "court_ref_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "declare_total_loss",
+      "discriminator": [
+        145,
+        2,
+        239,
+        233,
+        88,
+        114,
+        93,
+        53
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "asset_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asset_registry.asset_id",
+                "account": "AssetRegistry"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "insurance_claim_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "distribute_apartment_tokens",
+      "discriminator": [
+        133,
+        179,
+        144,
+        134,
+        60,
+        34,
+        18,
+        160
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "asset_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asset_registry.asset_id",
+                "account": "AssetRegistry"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "child_asset_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "distribution_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "execute_succession_transfer",
+      "discriminator": [
+        163,
+        224,
+        9,
+        76,
+        25,
+        181,
+        1,
+        255
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "succession_claim",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "heirs_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "transfer_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "initialize_asset_registry",
+      "discriminator": [
+        9,
+        159,
+        48,
+        18,
+        28,
+        225,
+        108,
+        176
+      ],
+      "accounts": [
+        {
+          "name": "issuer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "asset_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "args.asset_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "issuer_fid_account",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "issuer"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                216,
+                187,
+                119,
+                80,
+                47,
+                4,
+                68,
+                176,
+                232,
+                243,
+                235,
+                214,
+                199,
+                114,
+                250,
+                248,
+                212,
+                91,
+                16,
+                233,
+                236,
+                175,
+                195,
+                252,
+                230,
+                88,
+                49,
+                103,
+                142,
+                11,
+                49,
+                231
+              ]
+            }
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "InitializeAssetRegistryArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "lift_dispute_freeze",
+      "discriminator": [
+        147,
+        28,
+        114,
+        65,
+        134,
+        66,
+        130,
+        87
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "asset_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asset_registry.asset_id",
+                "account": "AssetRegistry"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "release_custody_mandate",
+      "discriminator": [
+        29,
+        50,
+        152,
+        59,
+        221,
+        125,
+        111,
+        101
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "asset_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asset_registry.asset_id",
+                "account": "AssetRegistry"
+              }
+            ]
+          }
+        },
+        {
+          "name": "custodian_fid_account"
+        }
+      ],
+      "args": [
+        {
+          "name": "reason_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "notice_seconds",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "release_escrow_tranche",
+      "discriminator": [
+        90,
+        67,
+        91,
+        154,
+        25,
+        73,
+        98,
+        134
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "asset_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asset_registry.asset_id",
+                "account": "AssetRegistry"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "milestone_id",
+          "type": "u16"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "developer_wallet",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_title_flags",
+      "discriminator": [
+        231,
+        116,
+        166,
+        237,
+        31,
+        230,
+        30,
+        52
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "asset_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asset_registry.asset_id",
+                "account": "AssetRegistry"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "title_dispute_flag",
+          "type": "bool"
+        },
+        {
+          "name": "encumbrance_flag",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "sign_redemption_event",
+      "discriminator": [
+        235,
+        238,
+        140,
+        90,
+        52,
+        127,
+        109,
+        155
+      ],
+      "accounts": [
+        {
+          "name": "custodian",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "asset_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asset_registry.asset_id",
+                "account": "AssetRegistry"
+              }
+            ]
+          }
+        },
+        {
+          "name": "custodian_fid_account",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "custodian"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                216,
+                187,
+                119,
+                80,
+                47,
+                4,
+                68,
+                176,
+                232,
+                243,
+                235,
+                214,
+                199,
+                114,
+                250,
+                248,
+                212,
+                91,
+                16,
+                233,
+                236,
+                175,
+                195,
+                252,
+                230,
+                88,
+                49,
+                103,
+                142,
+                11,
+                49,
+                231
+              ]
+            }
+          }
+        },
+        {
+          "name": "tir_state"
+        },
+        {
+          "name": "custodian_issuer_entry"
+        }
+      ],
+      "args": [
+        {
+          "name": "redemption_id",
+          "type": "u64"
+        },
+        {
+          "name": "redemption_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "title_dispute_freeze",
+      "discriminator": [
+        151,
+        36,
+        101,
+        231,
+        159,
+        95,
+        234,
+        119
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "asset_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asset_registry.asset_id",
+                "account": "AssetRegistry"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "court_order_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "transition_lifecycle",
+      "discriminator": [
+        39,
+        246,
+        230,
+        127,
+        245,
+        195,
+        120,
+        50
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "asset_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asset_registry.asset_id",
+                "account": "AssetRegistry"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "lifecycle_state",
+          "type": {
+            "defined": {
+              "name": "AssetLifecycleState"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "AssetRegistry",
+      "discriminator": [
+        60,
+        94,
+        213,
+        134,
+        205,
+        170,
+        175,
+        68
+      ]
+    },
+    {
+      "name": "FidAccount",
+      "discriminator": [
+        25,
+        188,
+        177,
+        154,
+        173,
+        195,
+        222,
+        72
+      ]
+    },
+    {
+      "name": "IssuerEntry",
+      "discriminator": [
+        11,
+        211,
+        245,
+        253,
+        249,
+        156,
+        104,
+        93
+      ]
+    },
+    {
+      "name": "SuccessionClaim",
+      "discriminator": [
+        194,
+        212,
+        203,
+        15,
+        232,
+        253,
+        198,
+        43
+      ]
+    },
+    {
+      "name": "TrustedIssuersState",
+      "discriminator": [
+        100,
+        131,
+        84,
+        52,
+        143,
+        57,
+        230,
+        207
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "ApartmentTokensDistributed",
+      "discriminator": [
+        78,
+        31,
+        89,
+        87,
+        14,
+        28,
+        133,
+        51
+      ]
+    },
+    {
+      "name": "AssetRegistryInitialized",
+      "discriminator": [
+        135,
+        146,
+        247,
+        104,
+        209,
+        159,
+        244,
+        215
+      ]
+    },
+    {
+      "name": "CustodyAttested",
+      "discriminator": [
+        170,
+        95,
+        72,
+        234,
+        38,
+        141,
+        147,
+        208
+      ]
+    },
+    {
+      "name": "CustodyMandateAccepted",
+      "discriminator": [
+        195,
+        13,
+        195,
+        60,
+        84,
+        165,
+        1,
+        159
+      ]
+    },
+    {
+      "name": "CustodyMandateReleased",
+      "discriminator": [
+        135,
+        191,
+        154,
+        132,
+        56,
+        222,
+        37,
+        87
+      ]
+    },
+    {
+      "name": "EscrowTrancheReleased",
+      "discriminator": [
+        32,
+        156,
+        167,
+        24,
+        112,
+        6,
+        110,
+        209
+      ]
+    },
+    {
+      "name": "LifecycleTransitioned",
+      "discriminator": [
+        114,
+        36,
+        142,
+        76,
+        92,
+        216,
+        39,
+        165
+      ]
+    },
+    {
+      "name": "MilestoneAttested",
+      "discriminator": [
+        69,
+        239,
+        93,
+        123,
+        76,
+        100,
+        157,
+        101
+      ]
+    },
+    {
+      "name": "RedemptionEventSigned",
+      "discriminator": [
+        153,
+        214,
+        78,
+        135,
+        5,
+        215,
+        239,
+        38
+      ]
+    },
+    {
+      "name": "ReserveAttested",
+      "discriminator": [
+        223,
+        244,
+        97,
+        196,
+        46,
+        168,
+        163,
+        229
+      ]
+    },
+    {
+      "name": "SuccessionApproved",
+      "discriminator": [
+        166,
+        5,
+        57,
+        215,
+        211,
+        56,
+        72,
+        123
+      ]
+    },
+    {
+      "name": "SuccessionClaimCreated",
+      "discriminator": [
+        105,
+        121,
+        34,
+        209,
+        18,
+        118,
+        69,
+        178
+      ]
+    },
+    {
+      "name": "SuccessionExecuted",
+      "discriminator": [
+        23,
+        36,
+        180,
+        94,
+        171,
+        48,
+        110,
+        127
+      ]
+    },
+    {
+      "name": "TitleDisputeFrozen",
+      "discriminator": [
+        51,
+        110,
+        132,
+        74,
+        70,
+        27,
+        6,
+        5
+      ]
+    },
+    {
+      "name": "TitleDisputeLifted",
+      "discriminator": [
+        63,
+        101,
+        0,
+        28,
+        224,
+        91,
+        85,
+        251
+      ]
+    },
+    {
+      "name": "TitleFlagsUpdated",
+      "discriminator": [
+        53,
+        121,
+        89,
+        121,
+        209,
+        202,
+        69,
+        95
+      ]
+    },
+    {
+      "name": "TotalLossDeclared",
+      "discriminator": [
+        253,
+        20,
+        216,
+        46,
+        234,
+        133,
+        237,
+        51
+      ]
+    },
+    {
+      "name": "ValuationAttested",
+      "discriminator": [
+        175,
+        178,
+        158,
+        234,
+        63,
+        223,
+        109,
+        230
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "FardRefTooLong",
+      "msg": "Fard reference is too long."
+    },
+    {
+      "code": 6001,
+      "name": "SpvRegTooLong",
+      "msg": "SPV SECP registration reference is too long."
+    },
+    {
+      "code": 6002,
+      "name": "InvalidIssuerFid",
+      "msg": "Issuer FID is invalid."
+    },
+    {
+      "code": 6003,
+      "name": "InvalidCustodianFid",
+      "msg": "Custodian FID is invalid."
+    },
+    {
+      "code": 6004,
+      "name": "InvalidValuerFid",
+      "msg": "Valuer FID is invalid."
+    },
+    {
+      "code": 6005,
+      "name": "CustodianCannotEqualIssuer",
+      "msg": "Custodian cannot be the same FID as issuer."
+    },
+    {
+      "code": 6006,
+      "name": "UnauthorizedCustodian",
+      "msg": "Custodian signer is not authorized."
+    },
+    {
+      "code": 6007,
+      "name": "UnauthorizedValuer",
+      "msg": "Valuer signer is not authorized."
+    },
+    {
+      "code": 6008,
+      "name": "RoleNotTrusted",
+      "msg": "Role FID is not trusted in TIR."
+    },
+    {
+      "code": 6009,
+      "name": "RoleTopicMissing",
+      "msg": "Role FID is missing the required claim topic."
+    },
+    {
+      "code": 6010,
+      "name": "InvalidValidityWindow",
+      "msg": "Validity window is invalid."
+    },
+    {
+      "code": 6011,
+      "name": "InvalidReserveRatio",
+      "msg": "Reserve ratio is invalid."
+    },
+    {
+      "code": 6012,
+      "name": "InvalidNav",
+      "msg": "NAV must be greater than zero."
+    },
+    {
+      "code": 6013,
+      "name": "InvalidNavValidity",
+      "msg": "NAV validity days must be greater than zero."
+    },
+    {
+      "code": 6014,
+      "name": "UnauthorizedAssetAuthority",
+      "msg": "Only the asset issuer can mutate this asset."
+    },
+    {
+      "code": 6015,
+      "name": "InvalidCertifierFid",
+      "msg": "Certifier FID is invalid."
+    },
+    {
+      "code": 6016,
+      "name": "UnauthorizedCertifier",
+      "msg": "Certifier signer is not authorized."
+    },
+    {
+      "code": 6017,
+      "name": "InvalidMilestone",
+      "msg": "Milestone is invalid."
+    },
+    {
+      "code": 6018,
+      "name": "InvalidCompletionRatio",
+      "msg": "Completion ratio is invalid."
+    },
+    {
+      "code": 6019,
+      "name": "InvalidEscrowAmount",
+      "msg": "Escrow amount is invalid."
+    },
+    {
+      "code": 6020,
+      "name": "MilestoneNotAttested",
+      "msg": "Milestone has not been attested yet."
+    },
+    {
+      "code": 6021,
+      "name": "InvalidSuccessionStatus",
+      "msg": "Succession claim is not in the required status."
+    },
+    {
+      "code": 6022,
+      "name": "ArithmeticOverflow",
+      "msg": "Arithmetic overflow."
+    }
+  ],
+  "types": [
+    {
+      "name": "ApartmentTokensDistributed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "child_asset_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "distribution_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AssetLifecycleState",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "PendingCustody"
+          },
+          {
+            "name": "Active"
+          },
+          {
+            "name": "Paused"
+          },
+          {
+            "name": "Matured"
+          },
+          {
+            "name": "Redeemed"
+          },
+          {
+            "name": "TotalLoss"
+          },
+          {
+            "name": "LandOnly"
+          },
+          {
+            "name": "DevelopmentInitiated"
+          },
+          {
+            "name": "UnderConstruction"
+          },
+          {
+            "name": "Milestone1"
+          },
+          {
+            "name": "Milestone2"
+          },
+          {
+            "name": "Milestone3"
+          },
+          {
+            "name": "Milestone4"
+          },
+          {
+            "name": "Milestone5"
+          },
+          {
+            "name": "ConstructionComplete"
+          },
+          {
+            "name": "ApartmentDistribution"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AssetRegistry",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "issuer_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "fard_ref",
+            "type": "string"
+          },
+          {
+            "name": "spv_secp_reg",
+            "type": "string"
+          },
+          {
+            "name": "province",
+            "type": "u16"
+          },
+          {
+            "name": "whitepaper_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "legal_opinion_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "custodian_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "custody_document_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "custody_attestation_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "custody_attestation_date",
+            "type": "i64"
+          },
+          {
+            "name": "custody_attestation_expiry",
+            "type": "i64"
+          },
+          {
+            "name": "valuer_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "current_nav",
+            "type": "u64"
+          },
+          {
+            "name": "nav_date",
+            "type": "i64"
+          },
+          {
+            "name": "nav_validity_days",
+            "type": "u16"
+          },
+          {
+            "name": "lifecycle_state",
+            "type": "u8"
+          },
+          {
+            "name": "title_dispute_flag",
+            "type": "bool"
+          },
+          {
+            "name": "encumbrance_flag",
+            "type": "bool"
+          },
+          {
+            "name": "insurance_policy_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "beneficial_owner_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "valuation_methodology_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "reserve_attestation_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "reserve_ratio_bps",
+            "type": "u16"
+          },
+          {
+            "name": "last_reserve_attestation",
+            "type": "i64"
+          },
+          {
+            "name": "insurance_claim_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "mandate_status",
+            "type": "u8"
+          },
+          {
+            "name": "mandate_accepted_at",
+            "type": "i64"
+          },
+          {
+            "name": "mandate_released_at",
+            "type": "i64"
+          },
+          {
+            "name": "release_notice_expiry",
+            "type": "i64"
+          },
+          {
+            "name": "release_reason_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "current_milestone_id",
+            "type": "u16"
+          },
+          {
+            "name": "current_milestone_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "current_completion_bps",
+            "type": "u16"
+          },
+          {
+            "name": "escrow_released_total",
+            "type": "u64"
+          },
+          {
+            "name": "apartment_distribution_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "title_dispute_order_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "last_redemption_event_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AssetRegistryInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "issuer_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "custodian_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CustodyAttested",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "custodian",
+            "type": "pubkey"
+          },
+          {
+            "name": "custodian_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CustodyMandateAccepted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "custodian",
+            "type": "pubkey"
+          },
+          {
+            "name": "custodian_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "accepted_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CustodyMandateReleased",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "reason_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "release_notice_expiry",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowTrancheReleased",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "milestone_id",
+            "type": "u16"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "developer_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FidAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "management_key",
+            "type": "pubkey"
+          },
+          {
+            "name": "signer_key",
+            "type": "pubkey"
+          },
+          {
+            "name": "claim_count",
+            "type": "u32"
+          },
+          {
+            "name": "is_issuer",
+            "type": "bool"
+          },
+          {
+            "name": "country",
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "InitializeAssetRegistryArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "issuer_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "custodian_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "fard_ref",
+            "type": "string"
+          },
+          {
+            "name": "spv_secp_reg",
+            "type": "string"
+          },
+          {
+            "name": "province",
+            "type": "u16"
+          },
+          {
+            "name": "whitepaper_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "legal_opinion_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "insurance_policy_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "beneficial_owner_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "nav_validity_days",
+            "type": "u16"
+          },
+          {
+            "name": "encumbrance_flag",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "IssuerEntry",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "issuer_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "tir",
+            "type": "pubkey"
+          },
+          {
+            "name": "allowed_topics",
+            "type": {
+              "vec": "u64"
+            }
+          },
+          {
+            "name": "is_active",
+            "type": "bool"
+          },
+          {
+            "name": "label",
+            "type": "string"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LifecycleTransitioned",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "lifecycle_state",
+            "type": "u8"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MilestoneAttested",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "milestone_id",
+            "type": "u16"
+          },
+          {
+            "name": "certifier",
+            "type": "pubkey"
+          },
+          {
+            "name": "certifier_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "completion_bps",
+            "type": "u16"
+          },
+          {
+            "name": "updated_nav",
+            "type": "u64"
+          },
+          {
+            "name": "cert_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "RedemptionEventSigned",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "redemption_id",
+            "type": "u64"
+          },
+          {
+            "name": "custodian",
+            "type": "pubkey"
+          },
+          {
+            "name": "redemption_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReserveAttested",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "custodian",
+            "type": "pubkey"
+          },
+          {
+            "name": "reserve_ratio_bps",
+            "type": "u16"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SuccessionApproved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "succession_claim",
+            "type": "pubkey"
+          },
+          {
+            "name": "deceased_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "approval_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "SuccessionClaim",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "deceased_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "claimant",
+            "type": "pubkey"
+          },
+          {
+            "name": "approver",
+            "type": "pubkey"
+          },
+          {
+            "name": "death_cert_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "wirasat_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "court_ref_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "approval_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "heirs_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "transfer_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "approved_at",
+            "type": "i64"
+          },
+          {
+            "name": "executed_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SuccessionClaimCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "succession_claim",
+            "type": "pubkey"
+          },
+          {
+            "name": "deceased_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "claimant",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SuccessionExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "succession_claim",
+            "type": "pubkey"
+          },
+          {
+            "name": "deceased_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "heirs_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "transfer_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "TitleDisputeFrozen",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "court_order_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TitleDisputeLifted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TitleFlagsUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "title_dispute_flag",
+            "type": "bool"
+          },
+          {
+            "name": "encumbrance_flag",
+            "type": "bool"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TotalLossDeclared",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "insurance_claim_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TrustedIssuersState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "issuer_count",
+            "type": "u32"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ValuationAttested",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_id",
+            "type": "u64"
+          },
+          {
+            "name": "valuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "valuer_fid",
+            "type": "pubkey"
+          },
+          {
+            "name": "nav",
+            "type": "u64"
+          },
+          {
+            "name": "nav_validity_days",
+            "type": "u16"
+          }
+        ]
+      }
+    }
+  ]
+}

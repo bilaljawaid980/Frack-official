@@ -617,6 +617,7 @@ pub struct InitializeAssetRegistry<'info> {
     pub asset_registry: Account<'info, AssetRegistry>,
     #[account(
         seeds = [b"fid", issuer.key().as_ref()],
+        seeds::program = fracks_fid::ID,
         bump = issuer_fid_account.bump,
         constraint = issuer_fid_account.owner == issuer.key() @ FracksAssetRegistryError::InvalidIssuerFid
     )]
@@ -636,6 +637,7 @@ pub struct CustodyAttestation<'info> {
     pub asset_registry: Account<'info, AssetRegistry>,
     #[account(
         seeds = [b"fid", custodian.key().as_ref()],
+        seeds::program = fracks_fid::ID,
         bump = custodian_fid_account.bump,
         constraint = custodian_fid_account.owner == custodian.key() @ FracksAssetRegistryError::InvalidCustodianFid
     )]
@@ -659,6 +661,7 @@ pub struct ValuationAttestation<'info> {
     pub asset_registry: Account<'info, AssetRegistry>,
     #[account(
         seeds = [b"fid", valuer.key().as_ref()],
+        seeds::program = fracks_fid::ID,
         bump = valuer_fid_account.bump,
         constraint = valuer_fid_account.owner == valuer.key() @ FracksAssetRegistryError::InvalidValuerFid
     )]
@@ -682,6 +685,7 @@ pub struct ConstructionAttestation<'info> {
     pub asset_registry: Account<'info, AssetRegistry>,
     #[account(
         seeds = [b"fid", certifier.key().as_ref()],
+        seeds::program = fracks_fid::ID,
         bump = certifier_fid_account.bump,
         constraint = certifier_fid_account.owner == certifier.key() @ FracksAssetRegistryError::InvalidCertifierFid
     )]
