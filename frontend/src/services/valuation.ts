@@ -152,7 +152,39 @@ export class ValuationChainService {
     const existing = await this.provider.connection.getAccountInfo(assetRegistry, 'confirmed');
     if (existing) return { signature: null, assetRegistry: assetRegistry.toBase58(), alreadyInitialized: true };
 
-    const issuerFid = new PublicKey(input.issuerFid);
+    // The program constraint seeds = [b"fid", issuer.key()] uses the connected wallet (this.payer)
+    // as the seed. Derive the FID PDA from this.payer directly — this is the ONLY valid value
+    // for the seeds check regardless of what the custody mandate DB record stored.
+    const issuerFid = deriveValuerFid(this.payer.toBase58());
+
+    // Guard: if the mandate recorded a different issuer FID, the wrong wallet is connected.
+    if (input.issuerFid && issuerFid.toBase58() !== input.issuerFid) {
+      throw new Error(
+        `Connected wallet ${this.payer.toBase58()} is not the issuer wallet for this asset. ` +
+        `The custody mandate expects issuer FID ${input.issuerFid}. ` +
+        `Switch to the correct issuer wallet and try again.`,
+      );
+    }
+
+    // Pre-flight: verify the issuer's FID account actually exists on-chain.
+    // The program requires Account<FidAccount> which must be owned by the FID program.
+    // If the FID does not exist, the on-chain constraint would fire with a cryptic seeds error.
+    const fidAccountInfo = await this.provider.connection.getAccountInfo(issuerFid, 'confirmed');
+    if (!fidAccountInfo) {
+      throw new Error(
+        `Issuer FID account not found on-chain for wallet ${this.payer.toBase58()} ` +
+        `(expected at ${issuerFid.toBase58()}). ` +
+        `The issuer must create their FID (fracks-fid.create_fid) before initializing the asset registry.`,
+      );
+    }
+    if (fidAccountInfo.owner.toBase58() !== FID_PROGRAM_ID.toBase58()) {
+      throw new Error(
+        `Account at FID address ${issuerFid.toBase58()} is owned by ${fidAccountInfo.owner.toBase58()}, ` +
+        `not the FID program ${FID_PROGRAM_ID.toBase58()}. ` +
+        `The issuer FID account may be corrupt or from an incompatible program version.`,
+      );
+    }
+
     const custodianFid = new PublicKey(input.custodianFid);
     const tokenMint = new PublicKey(input.tokenContract);
     const province = Number.isInteger(input.province) && input.province !== undefined ? input.province : 0;

@@ -245,13 +245,16 @@ export class CustodyService {
 
     const mandateAddress = this.deriveCustodyMandate(factoryAssetId).toBase58();
     const metadata = JSON.stringify({ ...(dto.metadata || {}), expectedMandateAddress: mandateAddress });
+    const now = new Date();
     const rows = await this.prisma.$queryRaw<CustodyMandateRow[]>`
       INSERT INTO "custody_mandates" (
         "id", "asset_request_id", "factory_asset_id", "issuer_wallet", "issuer_fid",
-        "custodian_wallet", "custodian_fid", "mandate_address", "status", "metadata"
+        "custodian_wallet", "custodian_fid", "mandate_address", "status", "metadata",
+        "created_at", "updated_at"
       ) VALUES (
         ${randomUUID()}, ${assetRequestId}, ${factoryAssetId}, ${request.issuerWallet}, ${dto.issuerFid},
-        ${dto.custodianWallet}, ${dto.custodianFid}, ${mandateAddress}, 'ASSIGNED', ${metadata}::jsonb
+        ${dto.custodianWallet}, ${dto.custodianFid}, ${mandateAddress}, 'ASSIGNED', ${metadata}::jsonb,
+        ${now}, ${now}
       )
       ON CONFLICT ("asset_request_id", "custodian_wallet") DO UPDATE SET
         "issuer_fid" = EXCLUDED."issuer_fid",
@@ -385,14 +388,17 @@ export class CustodyService {
 
     const status = decoded.active && decoded.expiresAt > BigInt(Math.floor(Date.now() / 1000)) ? 'READY' : 'ATTESTATION_EXPIRED';
     const metadata = JSON.stringify(dto.metadata || {});
+    const attestNow = new Date();
     const attestationRows = await this.prisma.$queryRaw<CustodyAttestationRow[]>`
       INSERT INTO "custody_attestations" (
         "id", "mandate_id", "factory_asset_id", "attestation_address", "document_hash",
-        "attestation_hash", "reserve_ratio_bps", "status", "tx_hash", "attested_at", "expires_at", "metadata"
+        "attestation_hash", "reserve_ratio_bps", "status", "tx_hash", "attested_at", "expires_at", "metadata",
+        "created_at", "updated_at"
       ) VALUES (
         ${randomUUID()}, ${id}, ${mandate.factoryAssetId}, ${dto.attestationAddress}, ${documentHash},
         ${attestationHash}, ${decoded.reserveRatioBps}, ${status === 'READY' ? 'ACTIVE' : 'EXPIRED'}, ${dto.txHash},
-        ${i64ToDate(decoded.attestedAt)}, ${i64ToDate(decoded.expiresAt)}, ${metadata}::jsonb
+        ${i64ToDate(decoded.attestedAt)}, ${i64ToDate(decoded.expiresAt)}, ${metadata}::jsonb,
+        ${attestNow}, ${attestNow}
       )
       ON CONFLICT ("attestation_address", "tx_hash") DO UPDATE SET
         "document_hash" = EXCLUDED."document_hash",

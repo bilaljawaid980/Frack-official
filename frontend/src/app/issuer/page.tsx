@@ -59,7 +59,11 @@ import {
   Info,
   ArrowRight,
   ShieldCheck,
+  Fingerprint,
+  IdCard,
 } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { CountryCodeSelect } from "@/components/identity/country-code-select";
 import { apiFetch } from "@/lib/backend";
 import { buildAdminWalletHeaders } from "@/lib/admin-wallet-auth";
 import { listAssetDocuments, type AssetDocument } from "@/lib/asset-documents";
@@ -329,6 +333,7 @@ function IssuerValuationPanel({
   signMessage,
   chain,
   onRefresh,
+  issuerFidReady,
 }: {
   asset: IndexedAsset;
   request: AssetRequest | null;
@@ -336,6 +341,7 @@ function IssuerValuationPanel({
   signMessage?: (message: Uint8Array) => Promise<Uint8Array>;
   chain: ValuationChainService | null;
   onRefresh: () => Promise<void> | void;
+  issuerFidReady?: boolean;
 }) {
   const [valuers, setValuers] = useState<PlatformValuer[]>([]);
   const [assignments, setAssignments] = useState<AssetValuerAssignment[]>([]);
@@ -564,10 +570,10 @@ function IssuerValuationPanel({
         <Button variant="outline" onClick={() => void assignValuer()} disabled={busy || loading || Boolean(activeAssignment) || !selectedValuerId}>
           Assign Valuer
         </Button>
-        <Button variant="outline" onClick={() => void initializeAssetRegistry()} disabled={busy || loading || !activeAssignment || registryInitialized === true}>
+        <Button variant="outline" onClick={() => void initializeAssetRegistry()} disabled={busy || loading || !activeAssignment || registryInitialized === true || issuerFidReady !== true}>
           Init Registry
         </Button>
-        <Button className="bg-[#172E7F] hover:bg-[#21439B]" onClick={() => void trustValuer()} disabled={busy || loading || !activeAssignment || Boolean(activeAssignment.tirTrustTxHash)}>
+        <Button className="bg-[#172E7F] hover:bg-[#21439B]" onClick={() => void trustValuer()} disabled={busy || loading || !activeAssignment || Boolean(activeAssignment.tirTrustTxHash) || issuerFidReady !== true}>
           Trust Topic 5
         </Button>
       </div>
@@ -926,6 +932,11 @@ export default function IssuerPage() {
   >({});
   const [expandedAssets, setExpandedAssets] = useState<Set<string>>(new Set());
 
+  // Issuer FID State
+  const [issuerFidExists, setIssuerFidExists] = useState<boolean | null>(null);
+  const [fidCountryCode, setFidCountryCode] = useState('586');
+  const [fidBusy, setFidBusy] = useState(false);
+
   const toggleAssetExpanded = (tokenContract: string) => {
     setExpandedAssets((current) => {
       const next = new Set(current);
@@ -951,6 +962,54 @@ export default function IssuerPage() {
       return null;
     }
   }, [connection, publicKey, signTransaction, signAllTransactions]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!identityService || !walletAddress) {
+      setIssuerFidExists(null);
+      return;
+    }
+    (async () => {
+      try {
+        const fid = await identityService.fetchFid(new PublicKey(walletAddress));
+        if (!cancelled) {
+          setIssuerFidExists(Boolean(fid));
+        }
+      } catch {
+        if (!cancelled) {
+          setIssuerFidExists(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [identityService, walletAddress]);
+
+  const handleCreateIssuerFid = async () => {
+    if (!identityService || !walletAddress) {
+      toast.error("Connect your issuer wallet first.");
+      return;
+    }
+    const country = Number(fidCountryCode);
+    if (!Number.isInteger(country) || country <= 0 || country > 999) {
+      toast.error("Select a valid country code (1–999).");
+      return;
+    }
+    setFidBusy(true);
+    const toastId = toast.loading("Creating issuer FID...");
+    try {
+      const txHash = await identityService.ensureOwnFid(country, true, "issuer");
+      const fid = await identityService.fetchFid(new PublicKey(walletAddress));
+      if (!fid) throw new Error("FID transaction confirmed, but the FID account could not be fetched yet. Refresh and try again.");
+      setIssuerFidExists(true);
+      toast.success(txHash ? "Issuer FID created successfully." : "Existing issuer FID recorded.", { id: toastId });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to create issuer FID.", { id: toastId });
+    } finally {
+      setFidBusy(false);
+    }
+  };
 
   const valuationChain = useMemo(() => {
     if (!publicKey || !signTransaction || !signAllTransactions || !sendTransaction) return null;
@@ -1579,6 +1638,47 @@ Send this request back to KYC, then have the KYC provider approve it again so th
         </div>
       </motion.div>
 
+      {issuerFidExists === false && (
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.02 }}>
+          <Card className="border-amber-200 bg-gradient-to-r from-amber-50 to-white shadow-sm mb-6">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100">
+                  <Fingerprint className="h-5 w-5 text-amber-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">Create Issuer Identity (FID)</CardTitle>
+                  <CardDescription>
+                    Your wallet requires an on-chain identity before you can initialize asset registries or perform token operations.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="w-full max-w-[240px] space-y-1.5">
+                  <Label htmlFor="issuer-fid-country" className="text-xs text-amber-800">Country code</Label>
+                  <CountryCodeSelect
+                    id="issuer-fid-country"
+                    value={fidCountryCode}
+                    onValueChange={setFidCountryCode}
+                    disabled={fidBusy}
+                  />
+                </div>
+                <Button
+                  onClick={() => void handleCreateIssuerFid()}
+                  disabled={fidBusy || !fidCountryCode}
+                  className="bg-[#172E7F] hover:bg-[#21439B]"
+                >
+                  {fidBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <IdCard className="mr-2 h-4 w-4" />}
+                  Create FID
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
       {/* Main Content Tabs */}
       <Tabs defaultValue="requests" className="space-y-6">
         <TabsList className="h-auto w-fit flex-wrap gap-1.5">
@@ -2174,6 +2274,7 @@ Send this request back to KYC, then have the KYC provider approve it again so th
                           signMessage={signMessage}
                           chain={valuationChain}
                           onRefresh={refreshAssetRequests}
+                          issuerFidReady={issuerFidExists === true}
                         />
                         <IssuerAssetHoldersTable
                           tokenContract={asset.tokenContract}
