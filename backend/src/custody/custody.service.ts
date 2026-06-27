@@ -454,16 +454,55 @@ export class CustodyService {
     };
     const reasons: Array<{ code: string; message: string }> = [];
     const documentChecks = await this.assetDocuments.getDeploymentDocumentReadiness(assetRequestId, request.documents);
+    const valuationRows = await this.prisma.$queryRaw<Array<{
+      assignmentId: string;
+      valuationId: string | null;
+      navRaw: string | null;
+      validUntil: Date | null;
+      status: string | null;
+    }>>`
+      SELECT
+        ava."id" AS "assignmentId",
+        av."id" AS "valuationId",
+        av."nav_raw" AS "navRaw",
+        av."valid_until" AS "validUntil",
+        av."status" AS "status"
+      FROM "asset_valuer_assignments" ava
+      LEFT JOIN LATERAL (
+        SELECT "id", "nav_raw", "valid_until", "status"
+        FROM "asset_valuations"
+        WHERE "assignment_id" = ava."id"
+          AND "status" IN ('PENDING_ON_CHAIN', 'CONFIRMED')
+        ORDER BY CASE WHEN "status" = 'CONFIRMED' THEN 0 ELSE 1 END, "created_at" DESC
+        LIMIT 1
+      ) av ON true
+      WHERE ava."asset_request_id" = ${assetRequestId}
+        AND ava."status" IN ('ASSIGNED', 'ACCEPTED', 'ATTESTATION_PENDING', 'CONFIRMED')
+      ORDER BY ava."created_at" DESC
+      LIMIT 1
+    `;
+    const valuationRow = valuationRows[0] || null;
+    const valuationChecks = {
+      valuerAssigned: Boolean(valuationRow),
+      valuationExists: Boolean(valuationRow?.valuationId),
+      navPresent: Boolean(valuationRow?.navRaw && BigInt(valuationRow.navRaw) > 0n),
+      valuationNotExpired: Boolean(valuationRow?.validUntil && valuationRow.validUntil.getTime() > Date.now()),
+      valuationStatus: valuationRow?.status || null,
+    };
     if (!documentChecks.requiredDocumentsPresent) {
       reasons.push({
         code: 'REQUIRED_DOCUMENTS_MISSING',
         message: `Required deployment documents are missing: ${documentChecks.missingTypes.join(', ')}.`,
       });
     }
+    if (!valuationChecks.valuerAssigned) reasons.push({ code: 'VALUER_NOT_ASSIGNED', message: 'Assign a platform-approved valuer before deployment.' });
+    if (valuationChecks.valuerAssigned && !valuationChecks.valuationExists) reasons.push({ code: 'VALUATION_MISSING', message: 'The assigned valuer must submit NAV and a valuation report before deployment.' });
+    if (valuationChecks.valuationExists && !valuationChecks.navPresent) reasons.push({ code: 'VALUATION_NAV_MISSING', message: 'The valuation NAV is missing.' });
+    if (valuationChecks.valuationExists && !valuationChecks.valuationNotExpired) reasons.push({ code: 'VALUATION_EXPIRED', message: 'The latest valuation has expired.' });
 
     if (!mandate) {
       reasons.push({ code: 'CUSTODY_MANDATE_NOT_ASSIGNED', message: 'Assign a custodian before deployment.' });
-      return { ready: false, factoryAssetId, expectedMandate, expectedAttestation, backendChecks: { mandateAssigned: false, documentChecks }, blockchainChecks, documentChecks, reasons };
+      return { ready: false, factoryAssetId, expectedMandate, expectedAttestation, backendChecks: { mandateAssigned: false, documentChecks, valuationChecks }, blockchainChecks, documentChecks, valuationChecks, reasons };
     }
 
     const platformAuthority = this.derivePlatformAuthority(mandate.custodianFid).toBase58();
@@ -523,6 +562,10 @@ export class CustodyService {
       blockchainChecks.custodyAttestationValid &&
       !blockchainChecks.custodyAttestationExpired &&
       documentChecks.requiredDocumentsPresent &&
+      valuationChecks.valuerAssigned &&
+      valuationChecks.valuationExists &&
+      valuationChecks.navPresent &&
+      valuationChecks.valuationNotExpired &&
       reasons.length === 0;
     return {
       ready,
@@ -537,9 +580,11 @@ export class CustodyService {
         backendStatus: mandate.status,
         mandateAddressRecorded: mandate.mandateAddress === expectedMandate,
         documentChecks,
+        valuationChecks,
       },
       blockchainChecks,
       documentChecks,
+      valuationChecks,
       reasons,
     };
   }

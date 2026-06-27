@@ -220,7 +220,7 @@ export default function ValuerPortalPage() {
     }
   };
   const submitValuation = async (assignment: AssetValuerAssignment) => {
-    if (!chain || !walletAddress) {
+    if (!walletAddress) {
       toast.error("Connect the assigned valuer wallet first.");
       return;
     }
@@ -240,20 +240,30 @@ export default function ValuerPortalPage() {
     }
 
     updateForm(assignment.id, { busy: true });
-    const toastId = toast.loading("Submitting valuation attestation...");
+    const toastId = toast.loading(assignment.tokenContract ? "Submitting valuation..." : "Recording pre-deployment valuation...");
     try {
-      const { signature } = await chain.attestValuation({
-        assignmentId: assignment.id,
-        factoryAssetId: assignment.factoryAssetId,
-        tokenContract: assignment.tokenContract,
-        valuerFid: assignment.valuerFid,
-        assetRegistryAddress: assignment.assetRegistryAddress,
-        navRaw: form.navRaw,
-        methodologyHash: form.uploadedDoc.hash,
-        navValidityDays: validity,
-      });
+      let signature: string | undefined;
+      if (assignment.tokenContract && chain) {
+        const registry = await chain.isAssetRegistryInitialized({
+          factoryAssetId: assignment.factoryAssetId,
+          assetRegistryAddress: assignment.assetRegistryAddress || undefined,
+        }).catch(() => null);
+        if (registry?.initialized) {
+          const result = await chain.attestValuation({
+            assignmentId: assignment.id,
+            factoryAssetId: assignment.factoryAssetId,
+            tokenContract: assignment.tokenContract,
+            valuerFid: assignment.valuerFid,
+            assetRegistryAddress: registry.assetRegistry,
+            navRaw: form.navRaw,
+            methodologyHash: form.uploadedDoc.hash,
+            navValidityDays: validity,
+          });
+          signature = result.signature;
+        }
+      }
       await recordAssetValuation(assignment.id, {
-        txHash: signature,
+        ...(signature ? { txHash: signature } : {}),
         navRaw: form.navRaw,
         navValidityDays: validity,
         methodologyHash: form.uploadedDoc.hash,
@@ -261,7 +271,7 @@ export default function ValuerPortalPage() {
         actorWallet: walletAddress,
       });
       await loadAssignments();
-      toast.success("Valuation confirmed and recorded.", { id: toastId });
+      toast.success(signature ? "Valuation confirmed on-chain and recorded." : "Pre-deployment valuation recorded. It will be finalized on-chain after deployment and asset registry initialization.", { id: toastId });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to submit valuation.", { id: toastId });
     } finally {
@@ -315,7 +325,7 @@ export default function ValuerPortalPage() {
               <Badge className={statusClass(profile.status)}>{profile.status}</Badge>
             </CardTitle>
             <CardDescription>
-              Valuer FID is used for token-specific TIR topic 5 trust. It does not make this wallet a global platform custodian.
+Valuer FID is used as the platform-approved valuation authority. Token Topic 5 trust is only needed later for post-deployment housekeeping.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -354,7 +364,7 @@ export default function ValuerPortalPage() {
             ) : (
               <Alert className="border-emerald-200 bg-emerald-50">
                 <AlertDescription className="text-emerald-900">
-                  This valuer profile is approved. Admin must still trust this FID with topic 5 in each token TIR before valuation attestation works.
+This valuer profile is approved. You can submit NAV and valuation report before token deployment; on-chain finalization happens after asset registry initialization.
                 </AlertDescription>
               </Alert>
             )}
@@ -378,7 +388,7 @@ export default function ValuerPortalPage() {
                     <div>
                       <CardTitle>Asset #{assignment.factoryAssetId}</CardTitle>
                       <CardDescription>
-                        Token {shortAddress(assignment.tokenContract)} | Asset registry {shortAddress(assignment.assetRegistryAddress)}
+                        {assignment.tokenContract ? `Token ${shortAddress(assignment.tokenContract)} | Asset registry ${shortAddress(assignment.assetRegistryAddress)}` : "Pre-deployment asset request"}
                       </CardDescription>
                     </div>
                     <Badge className={statusClass(assignment.status)}>{assignment.status}</Badge>
@@ -392,11 +402,11 @@ export default function ValuerPortalPage() {
                     </div>
                     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                       <div className="text-xs font-semibold uppercase text-slate-500">TIR State</div>
-                      <div className="mt-1 break-all font-mono text-xs text-slate-700">{assignment.tirStateAddress}</div>
+                      <div className="mt-1 break-all font-mono text-xs text-slate-700">{assignment.tirStateAddress || "Created after deployment"}</div>
                     </div>
                     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                       <div className="text-xs font-semibold uppercase text-slate-500">Topic 5 Trust</div>
-                      <div className="mt-1 text-sm font-semibold text-slate-900">{assignment.tirTrustTxHash ? "Recorded" : "Pending admin"}</div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">{assignment.tokenContract ? (assignment.tirTrustTxHash ? "Recorded" : "Post-deploy pending") : "Not required pre-deploy"}</div>
                     </div>
                   </div>
 
@@ -457,7 +467,7 @@ export default function ValuerPortalPage() {
                       <Label>Validity days</Label>
                       <Input value={form.navValidityDays} onChange={(event) => updateForm(assignment.id, { navValidityDays: event.target.value })} />
                     </div>
-                    <Button disabled={!canAttest || form.busy || form.uploadBusy || !assignment.tirTrustTxHash || !form.uploadedDoc || !form.navRaw || !form.navValidityDays} onClick={() => void submitValuation(assignment)} className="bg-[#172E7F] hover:bg-[#21439B]">
+                    <Button disabled={!canAttest || form.busy || form.uploadBusy || !form.uploadedDoc || !form.navRaw || !form.navValidityDays} onClick={() => void submitValuation(assignment)} className="bg-[#172E7F] hover:bg-[#21439B]">
                       {form.busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                       Attest
                     </Button>

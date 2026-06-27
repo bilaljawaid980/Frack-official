@@ -45,9 +45,9 @@ type AssignmentRow = {
   assetRequestId: string;
   deployedAssetId: string | null;
   factoryAssetId: number;
-  tokenContract: string;
-  assetRegistryAddress: string;
-  tirStateAddress: string;
+  tokenContract: string | null;
+  assetRegistryAddress: string | null;
+  tirStateAddress: string | null;
   valuerProfileId: string;
   valuerWallet: string;
   valuerFid: string;
@@ -315,10 +315,9 @@ export class ValuationsService {
   async assignValuer(assetRequestId: string, dto: AssignValuerDto) {
     const request = await this.prisma.assetRequest.findUnique({ where: { id: assetRequestId } });
     if (!request) throw new NotFoundException('Asset request not found.');
-    if (request.status !== 'DEPLOYED') throw new BadRequestException('Valuer can be assigned only after token deployment.');
     const actorWallet = this.assertIssuerActor(dto.assignedBy, request.issuerWallet, 'assign a valuer');
     if (!request.factoryAssetId) throw new BadRequestException('Asset request is missing factory asset id.');
-    const tokenContract = normalizePubkey(dto.tokenContract || request.deployedAssetId || '', 'Token contract');
+    const tokenContract = dto.tokenContract || request.deployedAssetId ? normalizePubkey(dto.tokenContract || request.deployedAssetId || '', 'Token contract') : null;
     const valuer = await this.findValuer(dto.valuerProfileId);
     if (valuer.status !== 'APPROVED' || !valuer.fidAddress) throw new BadRequestException('Select an approved valuer with a recorded FID.');
 
@@ -331,8 +330,8 @@ export class ValuationsService {
       );
     }
 
-    const assetRegistryAddress = this.deriveAssetRegistry(request.factoryAssetId).toBase58();
-    const tirStateAddress = this.deriveTirState(tokenContract).toBase58();
+    const assetRegistryAddress = tokenContract ? this.deriveAssetRegistry(request.factoryAssetId).toBase58() : null;
+    const tirStateAddress = tokenContract ? this.deriveTirState(tokenContract).toBase58() : null;
     const rows = await this.prisma.$queryRawUnsafe<AssignmentRow[]>(
       `INSERT INTO "asset_valuer_assignments" (
         "id", "asset_request_id", "deployed_asset_id", "factory_asset_id", "token_contract",
@@ -383,18 +382,20 @@ export class ValuationsService {
     const actorWallet = this.assertIssuerActor(dto.actorWallet, request.issuerWallet, 'record valuer topic 5 trust');
     await this.assertConfirmedSignature(dto.txHash);
     const issuerEntryAddress = normalizePubkey(dto.issuerEntryAddress, 'IssuerEntry address');
-    const expected = this.deriveIssuerEntry(assignment.tirStateAddress, assignment.valuerFid).toBase58();
+    if (!assignment.tokenContract) throw new BadRequestException('Token TIR is not available before deployment. Topic 5 trust is a post-deployment housekeeping step.');
+    const tirStateAddress = assignment.tirStateAddress || this.deriveTirState(assignment.tokenContract).toBase58();
+    const expected = this.deriveIssuerEntry(tirStateAddress, assignment.valuerFid).toBase58();
     if (issuerEntryAddress !== expected) throw new BadRequestException('IssuerEntry PDA does not match assigned valuer and token TIR.');
     const entry = await this.fetchIssuerEntry(issuerEntryAddress);
-    if (entry.issuerFid !== assignment.valuerFid || entry.tir !== assignment.tirStateAddress || !entry.active || !entry.topics.includes(TOPIC_VALUATION)) {
+    if (entry.issuerFid !== assignment.valuerFid || entry.tir !== tirStateAddress || !entry.active || !entry.topics.includes(TOPIC_VALUATION)) {
       throw new BadRequestException('Valuer FID is not active in this token TIR for topic 5.');
     }
     const nextStatus = assignment.status === 'ASSIGNED' ? 'ATTESTATION_PENDING' : assignment.status;
     const rows = await this.prisma.$queryRawUnsafe<AssignmentRow[]>(
       `UPDATE "asset_valuer_assignments"
-       SET "tir_trust_tx_hash" = $1, "tir_trusted_at" = CURRENT_TIMESTAMP, "status" = $2, "updated_at" = CURRENT_TIMESTAMP
-       WHERE "id" = $3 RETURNING ${this.assignmentSelect()}`,
-      dto.txHash, nextStatus, id,
+       SET "tir_trust_tx_hash" = $1, "tir_trusted_at" = CURRENT_TIMESTAMP, "tir_state_address" = $2, "status" = $3, "updated_at" = CURRENT_TIMESTAMP
+       WHERE "id" = $4 RETURNING ${this.assignmentSelect()}`,
+      dto.txHash, tirStateAddress, nextStatus, id,
     );
     await this.recordTransitionAndTx(assignment, rows[0], dto.txHash, actorWallet, 'VALUER_TIR_TRUSTED');
     return rows[0];
@@ -428,8 +429,8 @@ export class ValuationsService {
     const metadata: Prisma.InputJsonObject = {
       source: 'VALUER_PORTAL',
       assignmentId: assignment.id,
-      tokenContract: assignment.tokenContract,
-      assetRegistryAddress: assignment.assetRegistryAddress,
+      tokenContract: assignment.tokenContract || null,
+      assetRegistryAddress: assignment.assetRegistryAddress || null,
       valuerWallet: assignment.valuerWallet,
       valuerFid: assignment.valuerFid,
     };
@@ -508,7 +509,14 @@ export class ValuationsService {
   }
   async recordValuation(id: string, dto: RecordAssetValuationDto) {
     const assignment = await this.findAssignment(id);
-    if (!assignment.tirTrustTxHash) throw new BadRequestException('Record token TIR topic 5 trust before recording valuation.');
+    const actorWallet = dto.actorWallet ? normalizePubkey(dto.actorWallet, 'Actor wallet') : assignment.valuerWallet;
+    if (actorWallet !== assignment.valuerWallet) throw new BadRequestException('Only the assigned valuer wallet can record this valuation.');
+
+    const valuer = await this.findValuer(assignment.valuerProfileId);
+    if (valuer.status !== 'APPROVED' || !valuer.fidAddress || valuer.fidAddress !== assignment.valuerFid) {
+      throw new BadRequestException('Assigned valuer must be approved and have the expected FID recorded.');
+    }
+
     const nav = BigInt(dto.navRaw);
     if (nav <= 0n) throw new BadRequestException('NAV must be greater than zero.');
     const methodologyHash = hex32(dto.methodologyHash, 'methodologyHash');
@@ -524,10 +532,47 @@ export class ValuationsService {
         select: { id: true, fileHash: true, metadata: true },
       });
       if (!reportDocument) throw new BadRequestException('Valuation report document was not found for this assignment.');
-      if (reportDocument.fileHash.toLowerCase() !== methodologyHash) throw new BadRequestException('Valuation report hash does not match the on-chain methodology hash.');
+      if (reportDocument.fileHash.toLowerCase() !== methodologyHash) throw new BadRequestException('Valuation report hash does not match the methodology hash.');
     }
+
+    const submittedAt = new Date();
+    const requestedValidUntil = addDays(submittedAt, dto.navValidityDays);
+    const baseMetadata = { ...(dto.metadata || {}), navConvention: { currency: 'PKR', scale: 2, meaning: 'total_asset_nav_minor_units' } };
+
+    if (!dto.txHash) {
+      const metadata = JSON.stringify({ ...baseMetadata, phase: 'PRE_DEPLOYMENT_PENDING_ON_CHAIN' });
+      await this.prisma.$queryRawUnsafe(
+        `UPDATE "asset_valuations" SET "status" = 'SUPERSEDED', "updated_at" = CURRENT_TIMESTAMP WHERE "assignment_id" = $1 AND "status" = 'PENDING_ON_CHAIN'`,
+        assignment.id,
+      );
+      const rows = await this.prisma.$queryRawUnsafe<ValuationRow[]>(
+        `INSERT INTO "asset_valuations" (
+          "id", "assignment_id", "asset_request_id", "deployed_asset_id", "factory_asset_id", "token_contract",
+          "asset_registry_address", "valuer_wallet", "valuer_fid", "nav_raw", "nav_currency", "nav_scale",
+          "nav_date", "nav_validity_days", "valid_until", "methodology_hash", "report_document_id",
+          "tx_hash", "confirmed_slot", "status", "metadata", "created_at", "updated_at"
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'PKR',2,$11,$12,$13,$14,$15,NULL,NULL,'PENDING_ON_CHAIN',$16::jsonb,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+        RETURNING ${this.valuationSelect()}`,
+        randomUUID(), assignment.id, assignment.assetRequestId, assignment.deployedAssetId, assignment.factoryAssetId,
+        assignment.tokenContract, assignment.assetRegistryAddress, assignment.valuerWallet, assignment.valuerFid,
+        nav.toString(), submittedAt, dto.navValidityDays, requestedValidUntil, methodologyHash, dto.reportDocumentId || null,
+        metadata,
+      );
+      const updatedAssignments = await this.prisma.$queryRawUnsafe<AssignmentRow[]>(
+        `UPDATE "asset_valuer_assignments" SET "status" = 'ATTESTATION_PENDING', "updated_at" = CURRENT_TIMESTAMP WHERE "id" = $1 RETURNING ${this.assignmentSelect()}`,
+        assignment.id,
+      );
+      await this.workflows.record({ entityType: 'AssetValuation', entityId: String(rows[0].id), toStatus: 'PENDING_ON_CHAIN', actorWallet, metadata: { assetRequestId: assignment.assetRequestId, factoryAssetId: assignment.factoryAssetId } });
+      await this.workflows.record({ entityType: 'AssetValuerAssignment', entityId: assignment.id, fromStatus: assignment.status, toStatus: updatedAssignments[0].status, actorWallet });
+      return rows[0];
+    }
+
+    if (!assignment.tokenContract) {
+      throw new BadRequestException('Token must exist before finalizing valuation on-chain. Submit without txHash for the pre-deployment pending valuation.');
+    }
+    const assetRegistryAddress = assignment.assetRegistryAddress || this.deriveAssetRegistry(assignment.factoryAssetId).toBase58();
     await this.assertConfirmedSignature(dto.txHash);
-    const registry = await this.fetchAssetRegistry(assignment.assetRegistryAddress);
+    const registry = await this.fetchAssetRegistry(assetRegistryAddress);
     if (registry.assetId !== BigInt(assignment.factoryAssetId)) throw new BadRequestException('Asset registry asset id does not match assignment.');
     if (registry.tokenMint !== assignment.tokenContract) throw new BadRequestException('Asset registry token mint does not match assignment.');
     if (registry.valuerFid !== assignment.valuerFid) throw new BadRequestException('Asset registry valuer FID does not match assignment.');
@@ -539,10 +584,10 @@ export class ValuationsService {
     const validUntil = addDays(navDate, registry.navValidityDays);
     const status = await this.connection.getSignatureStatus(dto.txHash, { searchTransactionHistory: true });
     const confirmedSlot = status.value?.slot ? String(status.value.slot) : null;
-    const metadata = JSON.stringify({ ...(dto.metadata || {}), navConvention: { currency: 'PKR', scale: 2, meaning: 'total_asset_nav_minor_units' } });
+    const metadata = JSON.stringify({ ...baseMetadata, phase: 'POST_DEPLOYMENT_ON_CHAIN_CONFIRMED' });
 
     await this.prisma.$queryRawUnsafe(
-      `UPDATE "asset_valuations" SET "status" = 'SUPERSEDED', "updated_at" = CURRENT_TIMESTAMP WHERE "factory_asset_id" = $1 AND "status" = 'CONFIRMED' AND "tx_hash" <> $2`,
+      `UPDATE "asset_valuations" SET "status" = 'SUPERSEDED', "updated_at" = CURRENT_TIMESTAMP WHERE "factory_asset_id" = $1 AND "status" = 'CONFIRMED' AND ("tx_hash" IS NULL OR "tx_hash" <> $2)`,
       assignment.factoryAssetId, dto.txHash,
     );
 
@@ -562,12 +607,19 @@ export class ValuationsService {
         "report_document_id" = EXCLUDED."report_document_id",
         "confirmed_slot" = EXCLUDED."confirmed_slot",
         "metadata" = EXCLUDED."metadata",
+        "status" = 'CONFIRMED',
         "updated_at" = CURRENT_TIMESTAMP
       RETURNING ${this.valuationSelect()}`,
       randomUUID(), assignment.id, assignment.assetRequestId, assignment.deployedAssetId, assignment.factoryAssetId,
-      assignment.tokenContract, assignment.assetRegistryAddress, assignment.valuerWallet, assignment.valuerFid,
+      assignment.tokenContract, assetRegistryAddress, assignment.valuerWallet, assignment.valuerFid,
       nav.toString(), navDate, registry.navValidityDays, validUntil, methodologyHash, dto.reportDocumentId || null,
       dto.txHash, confirmedSlot, metadata,
+    );
+
+    await this.prisma.$queryRawUnsafe(
+      `UPDATE "asset_valuations" SET "status" = 'CONFIRMED', "tx_hash" = $1, "confirmed_slot" = $2::bigint, "nav_date" = $3, "valid_until" = $4, "updated_at" = CURRENT_TIMESTAMP
+       WHERE "assignment_id" = $5 AND "status" = 'PENDING_ON_CHAIN' AND "methodology_hash" = $6`,
+      dto.txHash, confirmedSlot, navDate, validUntil, assignment.id, methodologyHash,
     );
 
     const updatedAssignments = await this.prisma.$queryRawUnsafe<AssignmentRow[]>(`UPDATE "asset_valuer_assignments" SET "status" = 'CONFIRMED', "updated_at" = CURRENT_TIMESTAMP WHERE "id" = $1 RETURNING ${this.assignmentSelect()}`, assignment.id);
@@ -595,7 +647,11 @@ export class ValuationsService {
       );
     }
     await this.prisma.asset.updateMany({ where: { tokenContract: assignment.tokenContract }, data: { lifecycleState: 'INVESTMENT_READY' } });
-    await this.recordTransitionAndTx(assignment, updatedAssignments[0], dto.txHash, dto.actorWallet || assignment.valuerWallet, 'ASSET_VALUATION_ATTESTED');
+    if (!assignment.assetRegistryAddress) {
+      await this.prisma.$executeRawUnsafe(`UPDATE "asset_valuer_assignments" SET "asset_registry_address" = $1, "updated_at" = CURRENT_TIMESTAMP WHERE "id" = $2`, assetRegistryAddress, assignment.id);
+      await this.prisma.$executeRawUnsafe(`UPDATE "asset_valuations" SET "asset_registry_address" = $1, "updated_at" = CURRENT_TIMESTAMP WHERE "assignment_id" = $2`, assetRegistryAddress, assignment.id);
+    }
+    await this.recordTransitionAndTx(assignment, updatedAssignments[0], dto.txHash, actorWallet, 'ASSET_VALUATION_ATTESTED');
     return rows[0];
   }
 
@@ -617,21 +673,44 @@ export class ValuationsService {
     const assignments = await this.listAssignments({ assetRequestId: query.assetRequestId, tokenContract: query.tokenContract });
     assignment = assignments.find((row) => ACTIVE_ASSIGNMENT_STATUSES.includes(row.status)) || assignments[0] || null;
     if (!assignment) {
-      return { ready: false, assignment: null, valuation: null, reasons: [{ code: 'VALUER_NOT_ASSIGNED', message: 'Assign a valuer before opening investor purchases.' }] };
+      return { ready: false, assignment: null, valuation: null, tirTrusted: false, checks: { valuerAssigned: false, valuationExists: false, navPresent: false, valuationNotExpired: false }, reasons: [{ code: 'VALUER_NOT_ASSIGNED', message: 'Assign a platform-approved valuer before deployment.' }] };
     }
 
     const valuations = await this.listValuations({ assignmentId: assignment.id });
-    const latest = valuations.find((row) => row.status === 'CONFIRMED') || null;
+    const confirmed = valuations.find((row) => row.status === 'CONFIRMED') || null;
+    const pending = valuations.find((row) => row.status === 'PENDING_ON_CHAIN') || null;
+    const latest = confirmed || pending;
     const reasons: Array<{ code: string; message: string }> = [];
-    const tirTrusted = await this.checkTirTrust(assignment);
-    if (!tirTrusted) reasons.push({ code: 'VALUER_TIR_TOPIC_5_MISSING', message: 'Assigned valuer FID is not trusted in this token TIR for topic 5.' });
-    if (!latest) reasons.push({ code: 'VALUATION_MISSING', message: 'The assigned valuer has not submitted a confirmed valuation.' });
-    if (latest && new Date(String(latest.validUntil)).getTime() <= Date.now()) reasons.push({ code: 'VALUATION_EXPIRED', message: 'The latest valuation has expired.' });
-    return { ready: reasons.length === 0, assignment, valuation: latest, tirTrusted, reasons };
+    const valuationExists = Boolean(latest);
+    const navPresent = Boolean(latest?.navRaw && BigInt(String(latest.navRaw)) > 0n);
+    const valuationNotExpired = Boolean(latest?.validUntil && new Date(String(latest.validUntil)).getTime() > Date.now());
+    if (!valuationExists) reasons.push({ code: 'VALUATION_MISSING', message: 'The assigned valuer has not submitted NAV and a valuation report.' });
+    if (valuationExists && !navPresent) reasons.push({ code: 'VALUATION_NAV_MISSING', message: 'The valuation NAV is missing.' });
+    if (valuationExists && !valuationNotExpired) reasons.push({ code: 'VALUATION_EXPIRED', message: 'The latest valuation has expired.' });
+    const tirTrusted = assignment.tokenContract && assignment.tirStateAddress ? await this.checkTirTrust(assignment).catch(() => false) : false;
+    return {
+      ready: reasons.length === 0,
+      assignment,
+      valuation: latest,
+      confirmedValuation: confirmed,
+      pendingValuation: pending,
+      tirTrusted,
+      checks: {
+        valuerAssigned: true,
+        valuationExists,
+        navPresent,
+        valuationNotExpired,
+        onChainConfirmed: Boolean(confirmed),
+      },
+      reasons,
+    };
   }
 
   async assertInvestmentReady(tokenContract: string) {
     const readiness = await this.getReadiness({ tokenContract });
+    if (!readiness.confirmedValuation) {
+      throw new BadRequestException('Asset valuation has not been confirmed on-chain yet.');
+    }
     if (!readiness.ready) {
       throw new BadRequestException(readiness.reasons[0]?.message || 'Asset valuation is not investment-ready.');
     }
@@ -680,9 +759,11 @@ export class ValuationsService {
 
   private async checkTirTrust(assignment: AssignmentRow) {
     try {
-      const entryAddress = this.deriveIssuerEntry(assignment.tirStateAddress, assignment.valuerFid).toBase58();
+      const tirStateAddress = assignment.tirStateAddress || (assignment.tokenContract ? this.deriveTirState(assignment.tokenContract).toBase58() : null);
+      if (!tirStateAddress) return false;
+      const entryAddress = this.deriveIssuerEntry(tirStateAddress, assignment.valuerFid).toBase58();
       const entry = await this.fetchIssuerEntry(entryAddress);
-      return entry.active && entry.issuerFid === assignment.valuerFid && entry.tir === assignment.tirStateAddress && entry.topics.includes(TOPIC_VALUATION);
+      return entry.active && entry.issuerFid === assignment.valuerFid && entry.tir === tirStateAddress && entry.topics.includes(TOPIC_VALUATION);
     } catch {
       return false;
     }

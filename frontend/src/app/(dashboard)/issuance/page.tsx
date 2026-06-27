@@ -305,6 +305,10 @@ function AdminValuationPanel({
       toast.error("Connect the platform admin wallet before trusting a valuer in TIR.");
       return;
     }
+    if (!activeAssignment.tokenContract) {
+      toast.error("Topic 5 trust can only be added after token deployment.");
+      return;
+    }
     setBusy(true);
     const toastId = toast.loading("Adding valuer topic 5 trust...");
     try {
@@ -353,7 +357,7 @@ function AdminValuationPanel({
             </Badge>
           </div>
           <p className="mt-1 text-xs text-slate-500">
-            One approved valuer must be assigned, trusted in this token TIR with topic 5, and submit NAV attestation.
+            One approved valuer must be assigned and submit NAV/report before deployment. Token TIR topic 5 is only post-deployment housekeeping.
           </p>
           {readiness?.reasons?.length ? (
             <div className="mt-2 flex flex-wrap gap-2">
@@ -390,7 +394,7 @@ function AdminValuationPanel({
         <Button variant="outline" onClick={() => void assignValuer()} disabled={busy || loading || Boolean(activeAssignment) || !selectedValuerId}>
           Assign Valuer
         </Button>
-        <Button className="bg-[#172E7F] hover:bg-[#21439B]" onClick={() => void trustValuer()} disabled={busy || loading || !activeAssignment || Boolean(activeAssignment.tirTrustTxHash)}>
+        <Button className="bg-[#172E7F] hover:bg-[#21439B]" onClick={() => void trustValuer()} disabled={busy || loading || !activeAssignment || !activeAssignment.tokenContract || Boolean(activeAssignment.tirTrustTxHash)}>
           Trust Topic 5
         </Button>
       </div>

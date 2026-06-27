@@ -21,9 +21,9 @@ export type AssetValuerAssignment = {
   assetRequestId: string;
   deployedAssetId: string | null;
   factoryAssetId: number;
-  tokenContract: string;
-  assetRegistryAddress: string;
-  tirStateAddress: string;
+  tokenContract: string | null;
+  assetRegistryAddress: string | null;
+  tirStateAddress: string | null;
   valuerProfileId: string;
   valuerWallet: string;
   valuerFid: string;
@@ -65,8 +65,8 @@ export type AssetValuation = {
   assetRequestId: string;
   deployedAssetId: string | null;
   factoryAssetId: number;
-  tokenContract: string;
-  assetRegistryAddress: string;
+  tokenContract: string | null;
+  assetRegistryAddress: string | null;
   valuerWallet: string;
   valuerFid: string;
   navRaw: string;
@@ -77,7 +77,7 @@ export type AssetValuation = {
   validUntil: string;
   methodologyHash: string;
   reportDocumentId: string | null;
-  txHash: string;
+  txHash: string | null;
   status: string;
 };
 
@@ -129,7 +129,7 @@ export function recordValuerTirTrust(id: string, body: { txHash: string; issuerE
   return apiFetch<AssetValuerAssignment>(`/asset-valuer-assignments/${id}/tir-trust`, { method: 'POST', body: JSON.stringify(body), headers });
 }
 
-export function recordAssetValuation(id: string, body: { txHash: string; navRaw: string; navValidityDays: number; methodologyHash: string; reportDocumentId?: string; actorWallet?: string; metadata?: Record<string, unknown> }) {
+export function recordAssetValuation(id: string, body: { txHash?: string; navRaw: string; navValidityDays: number; methodologyHash: string; reportDocumentId?: string; actorWallet?: string; metadata?: Record<string, unknown> }) {
   return apiFetch<AssetValuation>(`/asset-valuer-assignments/${id}/valuations`, { method: 'POST', body: JSON.stringify(body) });
 }
 
@@ -137,7 +137,7 @@ export function getValuationReadiness(params: { assetRequestId?: string; tokenCo
   const search = new URLSearchParams();
   if (params.assetRequestId) search.set('assetRequestId', params.assetRequestId);
   if (params.tokenContract) search.set('tokenContract', params.tokenContract);
-  return apiFetch<{ ready: boolean; assignment: AssetValuerAssignment | null; valuation: AssetValuation | null; tirTrusted?: boolean; reasons: Array<{ code: string; message: string }> }>(`/valuation-readiness?${search}`);
+  return apiFetch<{ ready: boolean; assignment: AssetValuerAssignment | null; valuation: AssetValuation | null; pendingValuation?: AssetValuation | null; confirmedValuation?: AssetValuation | null; tirTrusted?: boolean; checks?: Record<string, unknown>; reasons: Array<{ code: string; message: string }> }>(`/valuation-readiness?${search}`);
 }
 export async function uploadValuationReport(assignmentId: string, file: File, headers?: HeadersInit) {
   const url = `${getBackendUrl()}/asset-valuer-assignments/${assignmentId}/valuation-report`;

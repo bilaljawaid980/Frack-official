@@ -94,6 +94,27 @@ export class AssetRequestsService {
           txHash: dto.txHash,
         },
       });
+      if (dto.status === "DEPLOYED" && dto.deployedAssetId && updated.factoryAssetId) {
+        await tx.$executeRaw`
+          UPDATE "asset_valuer_assignments"
+          SET
+            "deployed_asset_id" = ${dto.deployedAssetId},
+            "token_contract" = ${dto.deployedAssetId},
+            "asset_registry_address" = ${null},
+            "updated_at" = CURRENT_TIMESTAMP
+          WHERE "asset_request_id" = ${id}
+            AND "token_contract" IS NULL
+        `;
+        await tx.$executeRaw`
+          UPDATE "asset_valuations"
+          SET
+            "deployed_asset_id" = ${dto.deployedAssetId},
+            "token_contract" = ${dto.deployedAssetId},
+            "updated_at" = CURRENT_TIMESTAMP
+          WHERE "asset_request_id" = ${id}
+            AND "token_contract" IS NULL
+        `;
+      }
       await this.workflows.recordWithClient(tx, {
         entityType: "AssetRequest",
         entityId: id,

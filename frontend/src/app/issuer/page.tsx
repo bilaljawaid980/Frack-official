@@ -117,6 +117,8 @@ type AssetRequest = {
   assetType: string;
   underlyingValue: number | null;
   createdAt: string;
+  documents?: unknown;
+  assetDocuments?: AssetDocument[];
 };
 
 type TokenTransferRequest = {
@@ -316,14 +318,45 @@ function EmptyState({
 
 
 type ValuationReadiness = Awaited<ReturnType<typeof getValuationReadiness>>;
+type RegistryDocument = Pick<AssetDocument, "type" | "fileHash" | "fileName">;
 
-function registryDocument(documents: AssetDocument[], type: string) {
-  return documents.find((document) => document.type === type && /^[0-9a-fA-F]{64}$/.test(document.fileHash));
+function normalizeRegistryDocumentType(value: unknown) {
+  const raw = typeof value === "string" ? value : "";
+  const normalized = raw.trim().toUpperCase();
+  if (["FARD", "TITLE_DEED", "TITLE", "OWNERSHIP_PROOF"].includes(normalized)) return "FARD";
+  if (normalized === "LEGAL_OPINION") return "LEGAL_OPINION";
+  if (normalized === "WHITEPAPER") return "WHITEPAPER";
+  if (normalized === "INSURANCE_POLICY") return "INSURANCE_POLICY";
+  if (normalized === "SPV_REGISTRATION") return "SPV_REGISTRATION";
+  return normalized || raw;
 }
 
-function registryRef(document: AssetDocument | undefined, fallback: string) {
+function registryDocument(documents: RegistryDocument[], type: string) {
+  return documents.find((document) => normalizeRegistryDocumentType(document.type) === type && /^[0-9a-fA-F]{64}$/.test(document.fileHash));
+}
+
+function registryRef(document: RegistryDocument | undefined, fallback: string) {
   const value = (document?.fileName || fallback).trim() || fallback;
   return value.length > 64 ? value.slice(0, 64) : value;
+}
+
+function requestRegistryDocuments(request: AssetRequest): RegistryDocument[] {
+  const rows: RegistryDocument[] = [];
+  const pushDocument = (entry: unknown) => {
+    if (!entry || typeof entry !== "object") return;
+    const record = entry as Record<string, unknown>;
+    const fileHash = typeof record.fileHash === "string" ? record.fileHash : typeof record.hash === "string" ? record.hash : "";
+    const type = normalizeRegistryDocumentType(record.documentType || record.type);
+    if (!fileHash || !type) return;
+    rows.push({
+      type,
+      fileHash,
+      fileName: String(record.fileName || record.name || type),
+    });
+  };
+  if (Array.isArray(request.assetDocuments)) request.assetDocuments.forEach(pushDocument);
+  if (Array.isArray(request.documents)) request.documents.forEach(pushDocument);
+  return rows;
 }
 
 function IssuerValuationPanel({
@@ -347,7 +380,7 @@ function IssuerValuationPanel({
   const [assignments, setAssignments] = useState<AssetValuerAssignment[]>([]);
   const [readiness, setReadiness] = useState<ValuationReadiness | null>(null);
   const [custodyMandate, setCustodyMandate] = useState<CustodyMandate | null>(null);
-  const [assetDocuments, setAssetDocuments] = useState<AssetDocument[]>([]);
+  const [assetDocuments, setAssetDocuments] = useState<RegistryDocument[]>([]);
   const [registryInitialized, setRegistryInitialized] = useState<boolean | null>(null);
   const [selectedValuerId, setSelectedValuerId] = useState("");
   const [loading, setLoading] = useState(false);
@@ -375,11 +408,14 @@ function IssuerValuationPanel({
       setAssignments(assignmentRows);
       setReadiness(readinessRow);
       setCustodyMandate(mandateRows[0] || null);
-      setAssetDocuments(documentRows);
+      setAssetDocuments([
+        ...documentRows.map((document) => ({ type: document.type, fileHash: document.fileHash, fileName: document.fileName })),
+        ...requestRegistryDocuments(request),
+      ]);
       if (chain && currentAssignment) {
         const registry = await chain.isAssetRegistryInitialized({
           factoryAssetId: currentAssignment.factoryAssetId,
-          assetRegistryAddress: currentAssignment.assetRegistryAddress,
+          assetRegistryAddress: currentAssignment.assetRegistryAddress || undefined,
         }).catch(() => null);
         setRegistryInitialized(registry?.initialized ?? null);
       } else {
@@ -430,6 +466,10 @@ function IssuerValuationPanel({
       toast.error("Assign a valuer and connect the issuer wallet first.");
       return;
     }
+    if (!activeAssignment.tokenContract) {
+      toast.error("Deploy the token before initializing the asset registry.");
+      return;
+    }
     if (request.issuerWallet.toLowerCase() !== walletAddress.toLowerCase()) {
       toast.error(`Connect the issuer wallet ${shortAddress(request.issuerWallet)} to initialize the asset registry.`);
       return;
@@ -458,7 +498,7 @@ function IssuerValuationPanel({
       const result = await chain.initializeAssetRegistry({
         assignmentId: activeAssignment.id,
         factoryAssetId: activeAssignment.factoryAssetId,
-        assetRegistryAddress: activeAssignment.assetRegistryAddress,
+        assetRegistryAddress: activeAssignment.assetRegistryAddress || undefined,
         tokenContract: activeAssignment.tokenContract,
         issuerFid: custodyMandate.issuerFid,
         custodianFid: custodyMandate.custodianFid,
@@ -483,6 +523,10 @@ function IssuerValuationPanel({
   const trustValuer = async () => {
     if (!activeAssignment || !walletAddress || !chain) {
       toast.error("Connect the issuer wallet that owns this token TIR.");
+      return;
+    }
+    if (!activeAssignment.tokenContract) {
+      toast.error("Topic 5 trust can only be added after token deployment.");
       return;
     }
     setBusy(true);
@@ -533,7 +577,7 @@ function IssuerValuationPanel({
             </Badge>
           </div>
           <p className="mt-1 text-xs text-slate-500">
-            Assign a platform-approved valuer, initialize the asset registry, trust the valuer FID in this token TIR for topic 5, then wait for NAV attestation.
+            Pre-deployment requires a platform-approved valuer and submitted NAV/report. After deployment, initialize the asset registry so the valuer can finalize the attestation on-chain.
           </p>
           {readiness?.reasons?.length ? (
             <div className="mt-2 flex flex-wrap gap-2">
@@ -570,10 +614,10 @@ function IssuerValuationPanel({
         <Button variant="outline" onClick={() => void assignValuer()} disabled={busy || loading || Boolean(activeAssignment) || !selectedValuerId}>
           Assign Valuer
         </Button>
-        <Button variant="outline" onClick={() => void initializeAssetRegistry()} disabled={busy || loading || !activeAssignment || registryInitialized === true || issuerFidReady !== true}>
+        <Button variant="outline" onClick={() => void initializeAssetRegistry()} disabled={busy || loading || !activeAssignment || !activeAssignment.tokenContract || registryInitialized === true || issuerFidReady !== true}>
           Init Registry
         </Button>
-        <Button className="bg-[#172E7F] hover:bg-[#21439B]" onClick={() => void trustValuer()} disabled={busy || loading || !activeAssignment || Boolean(activeAssignment.tirTrustTxHash) || issuerFidReady !== true}>
+        <Button className="bg-[#172E7F] hover:bg-[#21439B]" onClick={() => void trustValuer()} disabled={busy || loading || !activeAssignment || !activeAssignment.tokenContract || Boolean(activeAssignment.tirTrustTxHash) || issuerFidReady !== true}>
           Trust Topic 5
         </Button>
       </div>

@@ -61,8 +61,9 @@ export class AcceptValuerAssignmentDto {
 }
 
 export class RecordAssetValuationDto {
+  @IsOptional()
   @IsString()
-  txHash!: string;
+  txHash?: string;
 
   @IsString()
   navRaw!: string;
